@@ -524,20 +524,6 @@ input {
   cursor: pointer;
 }
 
-/* ─── Footer ────────────────────────────────────────────────────────────── */
-
-.footer {
-  margin-top: 20px;
-  text-align: center;
-  font-size: 0.8125rem;
-  color: var(--text-faint);
-}
-
-.footer code {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-}
-
 @media (max-width: 480px) {
   .page {
     padding-top: 40px;

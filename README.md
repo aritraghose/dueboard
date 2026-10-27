@@ -8,7 +8,7 @@ A full-stack app on Cloudflare, built with [Alchemy](https://alchemy.run) and [E
 - **Atom RPC** (`effect/reactivity/AtomRpc` + `@effect/atom-react`): reactive queries and mutations in the browser.
 - **Better Auth** ([`@alchemy.run/better-auth`](https://alchemy.run/better-auth/)): Google sign-in, plus a unique username chosen at `/onboarding`. Each user sees only their own todos.
 
-It starts from the same structure as the `alchemy-effect-on-cloudflare` todo app, so the app itself is still the todo list for now. The app code follows Alchemy's [cloudflare-tanstack-rpc-drizzle example](https://github.com/alchemy-run/alchemy/tree/main/examples/cloudflare-tanstack-rpc-drizzle) ([guide](https://alchemy.run/cloudflare/frontend/full-stack-tanstack-rpc-drizzle/)). It's split into two stacks, following the [monorepo-multi-stack example](https://github.com/alchemy-run/alchemy/tree/main/examples/monorepo-multi-stack).
+The app is still a starter todo list for now. The code follows Alchemy's [cloudflare-tanstack-rpc-drizzle example](https://github.com/alchemy-run/alchemy/tree/main/examples/cloudflare-tanstack-rpc-drizzle) ([guide](https://alchemy.run/cloudflare/frontend/full-stack-tanstack-rpc-drizzle/)). It's split into two stacks, following the [monorepo-multi-stack example](https://github.com/alchemy-run/alchemy/tree/main/examples/monorepo-multi-stack).
 
 ## Architecture
 
@@ -73,6 +73,7 @@ The browser can't use a Cloudflare service binding directly. So the `AtomRpc` cl
 
 - **Deployed:** not yet.
 - **Hyperdrive:** enabled (see [Hyperdrive](#hyperdrive)).
+- **Database names:** each stage gets a Neon project `dueboard-<stage>`, with the app's data on a branch named after the stage, in a database called `dueboard`. `pr-*` stages put their branch in the `dueboard-staging` project instead.
 - **Database region:** the Neon project is in `aws-us-east-1` (Virginia). With Hyperdrive, requests reuse warm connections instead of opening a new one each time. Moving the project closer (e.g. `aws-ap-southeast-1`, Singapore) would cut latency further, but changing the region replaces the Neon project and its data.
 
 ## Dependencies and version pins

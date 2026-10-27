@@ -42,9 +42,8 @@ function SignIn() {
   return (
     <main className="page page-narrow">
       <header className="hero">
-        <p className="eyebrow">Alchemy on Cloudflare</p>
-        <h1 className="title">Todos</h1>
-        <p className="subtitle">Sign in to keep your own list of todos.</p>
+        <h1 className="title">Dueboard</h1>
+        <p className="subtitle">Sign in to see what's due.</p>
       </header>
 
       <section className="card panel">

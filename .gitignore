@@ -43,6 +43,3 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # amp orb portals
 .amp/portals/*
-
-# temporary reference example (not tracked)
-temp/

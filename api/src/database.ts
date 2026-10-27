@@ -31,11 +31,11 @@ export const NeonDatabase = Effect.gen(function* () {
     : yield* Neon.Project("Database", {
         // Each stage gets its own project, so the name includes the stage —
         // a fixed name would collide with the project another stage created.
-        name: `dueboard_db_${stage}`,
+        name: `dueboard-${stage}`,
         region: "aws-us-east-1",
         // The Postgres database inside the project (Neon's default is `neondb`).
         // Only settable at creation: changing it later replaces the project.
-        databaseName: "dueboard_db",
+        databaseName: "dueboard",
         // Point-in-time restore window. Alchemy defaults to 24h (86400s), but
         // Neon's free plan allows at most 6h, so cap it there.
         historyRetentionSeconds: 21600,
@@ -43,6 +43,10 @@ export const NeonDatabase = Effect.gen(function* () {
 
   const branch = yield* Neon.Branch("Branch", {
     project,
+    // Named after the stage instead of a generated name, so the Neon console
+    // shows which stage each branch belongs to. Unique within the project:
+    // each stage has its own project, and `pr-*` stages share `staging`'s.
+    name: stage,
     migrations: schema,
   });
 

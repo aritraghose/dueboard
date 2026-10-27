@@ -82,19 +82,11 @@ function Home() {
       </div>
 
       <header className="hero">
-        <p className="eyebrow">Alchemy on Cloudflare</p>
-        <h1 className="title">Todos</h1>
-        <p className="subtitle">
-          A small example of full-stack app built with Tanstack Start + Effect RPC + Neon Postgres + Drizzle +
-          Monorepo + Hyperdrive
-        </p>
+        <h1 className="title">Dueboard</h1>
+        <p className="subtitle">Everything that's due, on one board.</p>
       </header>
 
       <TodoApp />
-
-      <p className="footer">
-        Browser &rarr; <code>/rpc</code> &rarr; ApiWorker &rarr; Drizzle &rarr; Neon
-      </p>
     </main>
   );
 }
