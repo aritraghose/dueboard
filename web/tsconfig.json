@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "include": ["alchemy.run.ts", "vite.config.ts", "src"],
+  "references": [{ "path": "../api" }],
+  "compilerOptions": {
+    "types": ["bun", "vite/client", "@cloudflare/workers-types"],
+    "composite": true,
+    "noEmit": true
+  }
+}

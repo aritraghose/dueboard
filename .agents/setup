@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Prepares a fresh Amp orb: Bun, workspace dependencies, and the api/lib build
+# that web's Vite bundling resolves. Idempotent and non-interactive.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+step() {
+  local name="$1"
+  shift
+  echo "==> $name"
+  local start=$SECONDS
+  "$@"
+  echo "<== $name ($((SECONDS - start))s)"
+}
+
+# bun.lock uses lockfileVersion 2, which the orb image's Bun 1.3.x can't read.
+BUN_VERSION=1.4.4
+
+install_bun() {
+  if [[ "$(bun --version 2>/dev/null || true)" == "$BUN_VERSION" ]]; then
+    echo "bun $BUN_VERSION already installed"
+    return
+  fi
+  curl -fsSL https://bun.com/install | bash -s "bun-v$BUN_VERSION"
+  # Replace the image's /usr/local/bin/bun so every shell and service gets this version.
+  sudo ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun
+  sudo ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bunx
+  bun --version
+}
+
+step "install bun" install_bun
+step "bun install" bun install --frozen-lockfile
+# Builds api/lib/, which web resolves outside Bun (e.g. Vite for dev and deploy).
+step "bun run build" bun run build

@@ -1,0 +1,48 @@
+# dependencies (bun install)
+node_modules
+
+# output
+out
+dist
+lib
+*.tgz
+
+# tanstack start / vite build output
+.tanstack
+.nitro
+.output
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+_.log
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+# (all of them, e.g. api/.env and api/.env.live, except the committed template)
+.env*
+!.env.example
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# alchemy local state
+.alchemy
+.wrangler
+
+# amp orb portals
+.amp/portals/*
+
+# temporary reference example (not tracked)
+temp/

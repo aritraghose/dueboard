@@ -1,0 +1,723 @@
+/* ─── Design tokens ─────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #f4f1ea;
+  --bg-glow: #fbe6c8;
+  --surface: #fffdf9;
+  --surface-muted: #f7f3ec;
+  --border: #e7e0d4;
+  --border-strong: #d6ccbc;
+  --text: #1f1b16;
+  --text-muted: #6f675c;
+  --text-faint: #a39a8c;
+  --accent: #d9622b;
+  --accent-strong: #b84d1c;
+  --accent-soft: #fbe3d6;
+  --success: #2f8f5b;
+  --danger: #c2412d;
+  --danger-soft: #fbe4df;
+  --shadow: 0 1px 2px rgb(31 27 22 / 0.04), 0 12px 32px -12px rgb(31 27 22 / 0.18);
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15130f;
+    --bg-glow: #2a1d12;
+    --surface: #1e1b17;
+    --surface-muted: #25221d;
+    --border: #322d26;
+    --border-strong: #463f35;
+    --text: #f3eee6;
+    --text-muted: #b2a999;
+    --text-faint: #7a7266;
+    --accent: #f07a3e;
+    --accent-strong: #ff9459;
+    --accent-soft: #3a2416;
+    --success: #4cbf80;
+    --danger: #f06b55;
+    --danger-soft: #3a1d18;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -16px rgb(0 0 0 / 0.6);
+  }
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background:
+    radial-gradient(60rem 30rem at 50% -10rem, var(--bg-glow), transparent 70%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Page layout ───────────────────────────────────────────────────────── */
+
+.page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 72px 16px 48px;
+}
+
+.hero {
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(2.25rem, 6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 750;
+}
+
+.subtitle {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+}
+
+/* ─── Card ──────────────────────────────────────────────────────────────── */
+
+.card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.card-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.summary strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: width 300ms ease;
+}
+
+/* ─── New-todo form ─────────────────────────────────────────────────────── */
+
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.composer-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.composer-input::placeholder {
+  color: var(--text-faint);
+}
+
+.composer-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.button-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    transform 100ms ease;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.button-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.button-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ─── Filters ───────────────────────────────────────────────────────────── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filters {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.filter {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.filter:hover {
+  color: var(--text);
+}
+
+.filter[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+
+.filter-count {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-faint);
+}
+
+/* ─── Todo list ─────────────────────────────────────────────────────────── */
+
+.list {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  transition:
+    background 150ms ease,
+    opacity 200ms ease;
+}
+
+.item:hover {
+  background: var(--surface-muted);
+}
+
+.item[data-pending="true"] {
+  opacity: 0.6;
+}
+
+.item[data-pending="delete"] {
+  opacity: 0.35;
+}
+
+.item-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: color 150ms ease;
+}
+
+.item[data-done="true"] .item-text {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.item-meta {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* Custom checkbox: a native input with its look rebuilt in CSS. The tick is a
+   rotated, two-sided border on a pseudo-element, so no image is needed. */
+.check {
+  position: relative;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  appearance: none;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.check:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.check:checked {
+  border-color: var(--success);
+  background: var(--success);
+}
+
+.check::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 150ms ease;
+}
+
+.check:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.check:disabled {
+  cursor: progress;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.item:hover .icon-button,
+.icon-button:focus-visible {
+  opacity: 1;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Touch screens have no hover, so keep the delete button visible there. */
+@media (hover: none) {
+  .icon-button {
+    opacity: 1;
+  }
+}
+
+/* ─── Spinner ───────────────────────────────────────────────────────────── */
+
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Empty, loading and error states ───────────────────────────────────── */
+
+.empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 1.5rem;
+}
+
+.empty-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.empty-hint {
+  margin: 4px 0 0;
+  font-size: 0.875rem;
+}
+
+.skeleton {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+}
+
+.skeleton-box,
+.skeleton-line {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-muted) 0%,
+    var(--border) 50%,
+    var(--surface-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-box {
+  width: 22px;
+  height: 22px;
+}
+
+.skeleton-line {
+  height: 12px;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.alert button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ─── Footer ────────────────────────────────────────────────────────────── */
+
+.footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-faint);
+}
+
+.footer code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding-top: 40px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters {
+    justify-content: space-between;
+  }
+
+  .sync {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Auth: sign-in, onboarding and account bar ─────────────────────────── */
+
+.page-narrow {
+  max-width: 440px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px 20px;
+}
+
+.button-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.button-google:hover:not(:disabled) {
+  background: var(--surface-muted);
+  border-color: var(--text-faint);
+}
+
+.button-google:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.button-block {
+  justify-content: center;
+  padding: 12px 18px;
+}
+
+.button-ghost {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.button-ghost:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.field-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* An input with an inline "@" prefix: the row is styled as the field. */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.field-row:focus-within {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.field-row:has([aria-invalid="true"]) {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px var(--danger-soft);
+}
+
+.field-row .composer-input,
+.field-row .composer-input:focus {
+  padding-left: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.field-prefix {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.field-hint {
+  margin: -4px 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.field-hint[data-state="error"] {
+  color: var(--danger);
+}
+
+.field-hint[data-state="available"] {
+  color: var(--success);
+}
+
+.form-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  object-fit: cover;
+}
+
+.account-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
