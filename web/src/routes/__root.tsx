@@ -1,6 +1,15 @@
 import { RegistryProvider } from "@effect/atom-react";
-import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Outlet,
+  ScriptOnce,
+  Scripts,
+  createRootRoute,
+} from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { ThemeProvider, themeScript } from "../components/theme-provider.tsx";
+import { ThemeSwitcher } from "../components/theme-switcher.tsx";
+import { Toaster } from "../components/toaster.tsx";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -21,7 +30,11 @@ function RootComponent() {
       {/* One AtomRegistry for the whole app — every AtomRpc query/mutation
           atom resolves against this registry. */}
       <RegistryProvider>
-        <Outlet />
+        <ThemeProvider>
+          <ThemeSwitcher className="fixed top-4 right-4 z-50" />
+          <Outlet />
+          <Toaster />
+        </ThemeProvider>
       </RegistryProvider>
     </Document>
   );
@@ -29,9 +42,11 @@ function RootComponent() {
 
 function Document(props: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    // The theme script adds `light`/`dark` to <html> before React hydrates.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <ScriptOnce>{themeScript}</ScriptOnce>
       </head>
       <body>
         {props.children}

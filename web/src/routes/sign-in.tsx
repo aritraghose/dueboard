@@ -1,5 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "../auth-client.ts";
 import { getSessionUser } from "../session.ts";
 
@@ -40,30 +44,31 @@ function SignIn() {
   };
 
   return (
-    <main className="page page-narrow">
-      <header className="hero">
-        <h1 className="title">Dueboard</h1>
-        <p className="subtitle">Sign in to see what's due.</p>
-      </header>
-
-      <section className="card panel">
-        <button type="button" className="button-google" onClick={signIn} disabled={pending}>
-          {pending ? <span className="spinner" aria-hidden="true" /> : <GoogleMark />}
-          Continue with Google
-        </button>
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
+    <main className="flex min-h-svh items-center justify-center p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
+          <CardTitle className="font-heading text-2xl">Dueboard</CardTitle>
+          <CardDescription>Sign in to see what's due.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <Button variant="outline" size="lg" onClick={signIn} disabled={pending}>
+            {pending ? <Spinner /> : <GoogleMark />}
+            Continue with Google
+          </Button>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
     </main>
   );
 }
 
 function GoogleMark() {
   return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+    <svg viewBox="0 0 48 48" aria-hidden="true">
       <path
         fill="#FFC107"
         d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"

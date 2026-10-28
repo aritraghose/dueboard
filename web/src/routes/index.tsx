@@ -1,5 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { authClient } from "../auth-client.ts";
 import { getSessionUser } from "../session.ts";
 
@@ -27,24 +29,21 @@ function Home() {
   };
 
   return (
-    <main className="page">
-      <div className="account">
-        {user.image ? (
-          <img className="avatar" src={user.image} alt="" referrerPolicy="no-referrer" />
-        ) : (
-          <span className="avatar" aria-hidden="true">
-            {user.username.slice(0, 1).toUpperCase()}
-          </span>
-        )}
-        <span className="account-name">@{user.username}</span>
-        <button type="button" className="button-ghost" onClick={signOut} disabled={signingOut}>
+    <main className="mx-auto max-w-2xl px-4 pt-20 pb-12">
+      <div className="mb-10 flex items-center justify-end gap-3">
+        <Avatar size="sm">
+          {user.image && <AvatarImage src={user.image} alt="" referrerPolicy="no-referrer" />}
+          <AvatarFallback>{user.username.slice(0, 1).toUpperCase()}</AvatarFallback>
+        </Avatar>
+        <span className="text-sm font-medium">@{user.username}</span>
+        <Button variant="ghost" size="sm" onClick={signOut} disabled={signingOut}>
           {signingOut ? "Signing out…" : "Sign out"}
-        </button>
+        </Button>
       </div>
 
-      <header className="hero">
-        <h1 className="title">Dueboard</h1>
-        <p className="subtitle">Everything that's due, on one board.</p>
+      <header className="flex flex-col gap-2">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight">Dueboard</h1>
+        <p className="text-muted-foreground">Everything that's due, on one board.</p>
       </header>
     </main>
   );

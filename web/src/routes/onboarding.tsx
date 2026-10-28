@@ -1,5 +1,11 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
+import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "../auth-client.ts";
 import { getSessionUser } from "../session.ts";
 
@@ -72,69 +78,70 @@ function Onboarding() {
     await navigate({ to: "/" });
   };
 
+  const fieldError = invalid ?? (availability === "taken" ? "That username is taken." : null);
   const hint =
-    invalid ??
-    (availability === "taken"
-      ? "That username is taken."
-      : availability === "available"
-        ? "That username is available."
-        : availability === "checking"
-          ? "Checking…"
-          : `${MIN}–${MAX} characters: letters, numbers, underscores and dots.`);
+    availability === "available"
+      ? "That username is available."
+      : availability === "checking"
+        ? "Checking…"
+        : `${MIN}–${MAX} characters: letters, numbers, underscores and dots.`;
 
   return (
-    <main className="page page-narrow">
-      <header className="hero">
-        <p className="eyebrow">Welcome, {user.name}</p>
-        <h1 className="title">Choose a username</h1>
-        <p className="subtitle">This is how you'll appear in the app. It must be unique.</p>
-      </header>
-
-      <form className="card panel" onSubmit={submit}>
-        <label className="field-label" htmlFor="username">
-          Username
-        </label>
-        <div className="field-row">
-          <span className="field-prefix" aria-hidden="true">
-            @
-          </span>
-          <input
-            id="username"
-            className="composer-input"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            placeholder="your_name"
-            autoComplete="username"
-            autoCapitalize="none"
-            spellCheck={false}
-            maxLength={MAX}
-            autoFocus
-            aria-invalid={Boolean(invalid) || availability === "taken"}
-            aria-describedby="username-hint"
-          />
-        </div>
-        <p
-          id="username-hint"
-          className="field-hint"
-          data-state={invalid || availability === "taken" ? "error" : availability ?? undefined}
-          aria-live="polite"
-        >
-          {hint}
-        </p>
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button
-          type="submit"
-          className="button-primary button-block"
-          disabled={!trimmed || Boolean(invalid) || availability === "taken" || saving}
-        >
-          {saving && <span className="spinner" aria-hidden="true" />}
-          Continue
-        </button>
-      </form>
+    <main className="flex min-h-svh items-center justify-center p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardDescription>Welcome, {user.name}</CardDescription>
+          <CardTitle className="font-heading text-2xl">Choose a username</CardTitle>
+          <CardDescription>This is how you'll appear in the app. It must be unique.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="flex flex-col gap-4" onSubmit={submit}>
+            <Field data-invalid={Boolean(fieldError)}>
+              <FieldLabel htmlFor="username">Username</FieldLabel>
+              <InputGroup>
+                <InputGroupAddon>
+                  <InputGroupText>@</InputGroupText>
+                </InputGroupAddon>
+                <InputGroupInput
+                  id="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="your_name"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  maxLength={MAX}
+                  autoFocus
+                  aria-invalid={Boolean(fieldError)}
+                  aria-describedby="username-hint"
+                />
+              </InputGroup>
+              {/* Announced politely: FieldError's own role="alert" would
+                  interrupt on every keystroke. */}
+              <div id="username-hint" aria-live="polite">
+                {fieldError ? (
+                  <FieldError role={undefined}>{fieldError}</FieldError>
+                ) : (
+                  <FieldDescription>{hint}</FieldDescription>
+                )}
+              </div>
+            </Field>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <Button
+              type="submit"
+              size="lg"
+              disabled={!trimmed || Boolean(invalid) || availability === "taken" || saving}
+            >
+              {saving && <Spinner />}
+              Continue
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   );
 }
