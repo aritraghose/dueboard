@@ -5,6 +5,9 @@
   "compilerOptions": {
     "types": ["bun", "vite/client", "@cloudflare/workers-types"],
     "composite": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   }
 }

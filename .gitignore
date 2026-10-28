@@ -4,7 +4,8 @@ node_modules
 # output
 out
 dist
-lib
+# tsc output of each workspace (api/lib), not source folders like web/src/lib
+/*/lib
 *.tgz
 
 # tanstack start / vite build output
