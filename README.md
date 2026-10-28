@@ -110,6 +110,8 @@ Most entries are caret ranges. A few versions have to match each other or are pi
 
 Bump each group together.
 
+**Patched: `@alchemy.run/cloudflare@2.0.0-beta.84`** (`patches/`, listed under `patchedDependencies` in the root `package.json`). Under Bun, beta.84 starts the Vite dev server on Node with a loader file it doesn't publish, so `bun run dev:web` fails with `Cannot find module …/alchemy/bin/register-dev-mode.js` ([alchemy-run/alchemy#1868](https://github.com/alchemy-run/alchemy/issues/1868)). The patch is the upstream fix from [alchemy-run/alchemy#2525](https://github.com/alchemy-run/alchemy/pull/2525), unchanged; it's merged on `main` but not yet released. When upgrading past beta.84, check the release includes that PR, then delete the patch file and its `patchedDependencies` entry and run `bun install`.
+
 Since `alchemy@2.0.0-beta.84`, the Cloudflare, Drizzle and Neon modules live in their own packages: import `@alchemy.run/cloudflare`, `@alchemy.run/drizzle` (and `@alchemy.run/drizzle/Postgres`) and `@alchemy.run/neon`, not `alchemy/Cloudflare`, `alchemy/Drizzle` or `alchemy/Neon`.
 
 ## Setup
