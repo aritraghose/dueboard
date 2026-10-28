@@ -1,5 +1,4 @@
 import * as Context from "effect/Context";
-import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
@@ -16,20 +15,6 @@ import * as Schema from "effect/Schema";
  * fully typed against the same shapes the Postgres-backed handlers return.
  */
 
-/** A single todo item, encoded over the wire and decoded back into this class. */
-export class Todo extends Schema.Class<Todo>("Todo")({
-  id: Schema.Number,
-  text: Schema.String,
-  done: Schema.Boolean,
-  createdAt: Schema.Date,
-}) {}
-
-/** Raised when a mutation targets a todo id that no longer exists. */
-export class TodoNotFound extends Schema.TaggedError<TodoNotFound>()("TodoNotFound", {
-  message: Schema.String,
-  id: Schema.Number,
-}) {}
-
 /** The signed-in, onboarded user an RPC runs as. Provided by {@link Authentication}. */
 export class CurrentUser extends Context.Service<
   CurrentUser,
@@ -41,14 +26,14 @@ export class Unauthorized extends Schema.TaggedError<Unauthorized>()("Unauthoriz
   message: Schema.String,
 }) {}
 
-/** Raised when a user sends more todo RPCs than their per-minute budget allows. */
+/** Raised when a user sends more RPCs than their per-minute budget allows. */
 export class TooManyRequests extends Schema.TaggedError<TooManyRequests>()("TooManyRequests", {
   message: Schema.String,
 }) {}
 
 /**
  * Resolves the Better Auth session from the request's cookies, applies the
- * user's rate limit, and provides {@link CurrentUser} to every todo RPC.
+ * user's rate limit, and provides {@link CurrentUser} to every RPC.
  * Implemented in `./api.ts`.
  */
 export class Authentication extends RpcMiddleware.Service<
@@ -56,33 +41,9 @@ export class Authentication extends RpcMiddleware.Service<
   { provides: CurrentUser }
 >()("api/Authentication", { error: Schema.Union([Unauthorized, TooManyRequests]) }) {}
 
-/** The longest todo text the API stores. Matches the composer's `maxLength`. */
-export const TODO_TEXT_MAX_LENGTH = 200;
-
-export class TodoRpcs extends RpcGroup.make(
-  Rpc.make("listTodos", {
-    success: Schema.Array(Todo),
-  }),
-  Rpc.make("createTodo", {
-    payload: {
-      // Trimmed and non-empty, so a blank todo is rejected even when the API
-      // is called directly. The composer trims before sending.
-      text: Schema.String.check(
-        Schema.isTrimmed(),
-        Schema.isMinLength(1),
-        Schema.isMaxLength(TODO_TEXT_MAX_LENGTH),
-      ),
-    },
-    success: Todo,
-  }),
-  Rpc.make("toggleTodo", {
-    payload: { id: Schema.Number, done: Schema.Boolean },
-    success: Todo,
-    error: TodoNotFound,
-  }),
-  Rpc.make("deleteTodo", {
-    payload: { id: Schema.Number },
-    success: Schema.Number,
-    error: TodoNotFound,
-  }),
-).middleware(Authentication) {}
+/**
+ * Every RPC the API serves. Empty for now: add each new procedure here with
+ * `Rpc.make(...)` and implement it in `./api.ts`. The middleware runs every
+ * RPC as the signed-in, onboarded user.
+ */
+export class ApiRpcs extends RpcGroup.make().middleware(Authentication) {}

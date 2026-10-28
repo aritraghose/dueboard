@@ -61,7 +61,7 @@ const makeAuth = Effect.gen(function* () {
     plugins: [username()],
     session: {
       // Keep a signed copy of the session in a cookie for 5 minutes, so most
-      // session checks (route guards, todo RPCs) skip the database. Signing
+      // session checks (the route guards) skip the database. Signing
       // out clears it at once; a session revoked from another device stays
       // usable there until the copy expires.
       cookieCache: { enabled: true, maxAge: 5 * 60 },
@@ -101,7 +101,7 @@ const makeAuth = Effect.gen(function* () {
 
 export class Auth extends Context.Service<Auth, Effect.Success<typeof makeAuth>>()("api/Auth") {
   /**
-   * Auth over the same Hyperdrive pool as the todos. Hyperdrive's connection
+   * Auth over the same Hyperdrive pool as the RPC handlers. Hyperdrive's connection
    * string only exists inside the Worker, so deploy-time schema migrations
    * connect to the Neon branch directly.
    */

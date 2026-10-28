@@ -1,19 +1,9 @@
 import { defineRelations } from "drizzle-orm";
-import { boolean, index, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
-export const Todos = pgTable(
-  "todos",
-  {
-    id: serial("id").primaryKey(),
-    // Better Auth's `user.id`. Better Auth owns (and migrates) its own tables,
-    // so there's no foreign key: Drizzle's migrations run before Better Auth's.
-    userId: text("user_id").notNull(),
-    text: text("text").notNull(),
-    done: boolean("done").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [index("todos_user_id_idx").on(table.userId)],
-);
-export type TodoRow = typeof Todos.$inferSelect;
+// The app's Drizzle tables. Empty for now: define each table here with
+// `pgTable(...)` and add it to `defineRelations` below. Better Auth owns (and
+// migrates) its own tables, so they aren't declared here; reference its
+// `user.id` as a plain text column, without a foreign key, because Drizzle's
+// migrations run before Better Auth's.
 
-export const relations = defineRelations({ Todos }, () => ({}));
+export const relations = defineRelations({}, () => ({}));

@@ -1,4 +1,4 @@
-import { TodoRpcs } from "@dueboard/api/rpc";
+import { ApiRpcs } from "@dueboard/api/rpc";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as AtomRpc from "effect/reactivity/AtomRpc";
@@ -12,23 +12,16 @@ import { RpcClient, RpcSerialization } from "effect/rpc";
  * The transport (`protocol`) is a plain HTTP client over `fetch`, pointed at
  * the same-origin `/rpc` route which proxies to the API service binding.
  * Serialization MUST match the ApiWorker (`RpcSerialization.layerJson`).
+ *
+ * Create query/mutation atoms at module scope, so their identity is stable
+ * across renders, e.g. `ApiClient.query("listThings", undefined, {
+ * reactivityKeys: ["things"] })` with `ApiClient.mutation("createThing")`. A
+ * mutation run with the same reactivity key refetches the query.
  */
-export class TodoClient extends AtomRpc.Service<TodoClient>()("TodoClient", {
-  group: TodoRpcs,
+export class ApiClient extends AtomRpc.Service<ApiClient>()("ApiClient", {
+  group: ApiRpcs,
   protocol: RpcClient.layerProtocolHttp({ url: "/rpc" }).pipe(
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(RpcSerialization.layerJson),
   ),
 }) {}
-
-/**
- * Query/mutation atoms, created once at module scope so their identity is stable
- * across renders. `reactivityKeys: ["todos"]` ties the list query to the
- * mutations below — when a mutation runs with the same key, the list refetches.
- */
-export const listTodosAtom = TodoClient.query("listTodos", undefined, {
-  reactivityKeys: ["todos"],
-});
-export const createTodoAtom = TodoClient.mutation("createTodo");
-export const toggleTodoAtom = TodoClient.mutation("toggleTodo");
-export const deleteTodoAtom = TodoClient.mutation("deleteTodo");
