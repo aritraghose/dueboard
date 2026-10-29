@@ -4,17 +4,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { authClient } from "../auth-client.ts";
-import { getSessionUser } from "../session.ts";
+import { authClient } from "../../auth-client.ts";
+import { getSessionUser } from "../../session.ts";
 
-export const Route = createFileRoute("/sign-in")({
+export const Route = createFileRoute("/_auth/auth")({
   // Better Auth sends the browser back here with `?error=...` when the
   // Google callback fails (`errorCallbackURL` below).
   validateSearch: (search: Record<string, unknown>): { error?: string } =>
     typeof search.error === "string" ? { error: search.error } : {},
   beforeLoad: async () => {
     const user = await getSessionUser();
-    if (user) throw redirect({ to: user.username ? "/" : "/onboarding" });
+    if (user) throw redirect({ to: user.username ? "/glance" : "/onboarding" });
   },
   component: SignIn,
 });
@@ -31,10 +31,10 @@ function SignIn() {
     setError(null);
     const { error } = await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
+      callbackURL: "/glance",
       // First sign-in creates the account; send new users to pick a username.
       newUserCallbackURL: "/onboarding",
-      errorCallbackURL: "/sign-in",
+      errorCallbackURL: "/auth",
     });
     // On success the browser is already navigating to Google.
     if (error) {
@@ -44,25 +44,23 @@ function SignIn() {
   };
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="font-heading text-2xl">Dueboard</CardTitle>
-          <CardDescription>Sign in to see what's due.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Button variant="outline" size="lg" onClick={signIn} disabled={pending}>
-            {pending ? <Spinner /> : <GoogleMark />}
-            Continue with Google
-          </Button>
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-    </main>
+    <Card className="w-full max-w-sm">
+      <CardHeader className="text-center">
+        <CardTitle className="font-heading text-2xl">Dueboard</CardTitle>
+        <CardDescription>Sign in to see what's due.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Button variant="outline" size="lg" onClick={signIn} disabled={pending}>
+          {pending ? <Spinner /> : <GoogleMark />}
+          Continue with Google
+        </Button>
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

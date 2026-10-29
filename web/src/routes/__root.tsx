@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { ThemeProvider, themeScript } from "../components/theme-provider.tsx";
-import { ThemeSwitcher } from "../components/theme-switcher.tsx";
 import { Toaster } from "../components/toaster.tsx";
 import appCss from "../styles.css?url";
 
@@ -31,7 +30,6 @@ function RootComponent() {
           atom resolves against this registry. */}
       <RegistryProvider>
         <ThemeProvider>
-          <ThemeSwitcher className="fixed top-4 right-4 z-50" />
           <Outlet />
           <Toaster />
         </ThemeProvider>

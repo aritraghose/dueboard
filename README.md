@@ -6,7 +6,7 @@ A full-stack app on Cloudflare, built with [Alchemy](https://alchemy.run) and [E
 - **Effect RPC**: the API, a private `RpcWorker`.
 - **Drizzle + Neon Postgres** over Cloudflare Hyperdrive. Migrations are generated on deploy.
 - **Atom RPC**: reactive queries and mutations in the browser.
-- **Better Auth**: Google sign-in plus a unique username chosen at `/onboarding`.
+- **Better Auth**: Google sign-in at `/auth` plus a unique username chosen at `/onboarding`.
 
 Based on Alchemy's [cloudflare-tanstack-rpc-drizzle](https://github.com/alchemy-run/alchemy/tree/main/examples/cloudflare-tanstack-rpc-drizzle) and [monorepo-multi-stack](https://github.com/alchemy-run/alchemy/tree/main/examples/monorepo-multi-stack) examples.
 
@@ -23,6 +23,13 @@ The browser calls same-origin routes and the web Worker forwards them over a pri
 
 - `api/` (`DueboardApi` stack): `src/rpc.ts` is the RPC contract shared with web, `src/api.ts` the handlers, `src/auth.ts` Better Auth, `src/database.ts` Neon + Hyperdrive, `src/schema.ts` the Drizzle tables.
 - `web/` (`DueboardWeb` stack): routes in `src/routes/`, RPC client in `src/rpc-client.ts`. Read bindings via `src/env.ts`, not `cloudflare:workers` directly (breaks in dev).
+
+Web routes are grouped by pathless layouts (the `_` folder doesn't add to the URL):
+
+- `_public/`: anyone (`/`, later `/pricing`, `/about`).
+- `_auth/`: `/auth` for signed-out users, `/onboarding` for signed-in users without a username.
+- `_app/`: the app (`/glance`, …), only for signed-in users with a username. Sign-in lands on `/glance`.
+- `api/auth/$.ts` and `rpc.ts`: proxies to the API, so app routes can't use `/api` or `/rpc`.
 
 Stack names and the rate limit `namespaceId`s (`1003`, `1004`) must be unique on the Cloudflare account.
 

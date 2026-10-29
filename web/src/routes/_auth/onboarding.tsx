@@ -6,14 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
-import { authClient } from "../auth-client.ts";
-import { getSessionUser } from "../session.ts";
+import { authClient } from "../../auth-client.ts";
+import { getSessionUser } from "../../session.ts";
 
-export const Route = createFileRoute("/onboarding")({
+export const Route = createFileRoute("/_auth/onboarding")({
   beforeLoad: async () => {
     const user = await getSessionUser();
-    if (!user) throw redirect({ to: "/sign-in" });
-    if (user.username) throw redirect({ to: "/" });
+    if (!user) throw redirect({ to: "/auth" });
+    if (user.username) throw redirect({ to: "/glance" });
     return { user };
   },
   component: Onboarding,
@@ -75,7 +75,7 @@ function Onboarding() {
       if (error.code === "USERNAME_IS_ALREADY_TAKEN") setAvailability("taken");
       return;
     }
-    await navigate({ to: "/" });
+    await navigate({ to: "/glance" });
   };
 
   const fieldError = invalid ?? (availability === "taken" ? "That username is taken." : null);
@@ -87,61 +87,59 @@ function Onboarding() {
         : `${MIN}–${MAX} characters: letters, numbers, underscores and dots.`;
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardDescription>Welcome, {user.name}</CardDescription>
-          <CardTitle className="font-heading text-2xl">Choose a username</CardTitle>
-          <CardDescription>This is how you'll appear in the app. It must be unique.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={submit}>
-            <Field data-invalid={Boolean(fieldError)}>
-              <FieldLabel htmlFor="username">Username</FieldLabel>
-              <InputGroup>
-                <InputGroupAddon>
-                  <InputGroupText>@</InputGroupText>
-                </InputGroupAddon>
-                <InputGroupInput
-                  id="username"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  placeholder="your_name"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  maxLength={MAX}
-                  autoFocus
-                  aria-invalid={Boolean(fieldError)}
-                  aria-describedby="username-hint"
-                />
-              </InputGroup>
-              {/* Announced politely: FieldError's own role="alert" would
-                  interrupt on every keystroke. */}
-              <div id="username-hint" aria-live="polite">
-                {fieldError ? (
-                  <FieldError role={undefined}>{fieldError}</FieldError>
-                ) : (
-                  <FieldDescription>{hint}</FieldDescription>
-                )}
-              </div>
-            </Field>
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <Button
-              type="submit"
-              size="lg"
-              disabled={!trimmed || Boolean(invalid) || availability === "taken" || saving}
-            >
-              {saving && <Spinner />}
-              Continue
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+    <Card className="w-full max-w-sm">
+      <CardHeader>
+        <CardDescription>Welcome, {user.name}</CardDescription>
+        <CardTitle className="font-heading text-2xl">Choose a username</CardTitle>
+        <CardDescription>This is how you'll appear in the app. It must be unique.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="flex flex-col gap-4" onSubmit={submit}>
+          <Field data-invalid={Boolean(fieldError)}>
+            <FieldLabel htmlFor="username">Username</FieldLabel>
+            <InputGroup>
+              <InputGroupAddon>
+                <InputGroupText>@</InputGroupText>
+              </InputGroupAddon>
+              <InputGroupInput
+                id="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="your_name"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={MAX}
+                autoFocus
+                aria-invalid={Boolean(fieldError)}
+                aria-describedby="username-hint"
+              />
+            </InputGroup>
+            {/* Announced politely: FieldError's own role="alert" would
+                interrupt on every keystroke. */}
+            <div id="username-hint" aria-live="polite">
+              {fieldError ? (
+                <FieldError role={undefined}>{fieldError}</FieldError>
+              ) : (
+                <FieldDescription>{hint}</FieldDescription>
+              )}
+            </div>
+          </Field>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <Button
+            type="submit"
+            size="lg"
+            disabled={!trimmed || Boolean(invalid) || availability === "taken" || saving}
+          >
+            {saving && <Spinner />}
+            Continue
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
