@@ -13,4 +13,7 @@ Important:
 - Confirm with me before each deploy. Don't batch.
 - Do NOT instruct me to export CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN. Alchemy stores credentials in profiles — `alchemy profile edit` (or the first `alchemy deploy`) prompts interactively for OAuth or an API token and saves it to ~/.alchemy/profiles.json.
 - This project uses Bun.
-- Add dependencies with `bun add <pkg> --catalog` (add `-d` for dev dependencies), run from the workspace that needs them (`api/` or `web/`). It puts the version in the root `package.json` catalog and writes `"catalog:"` in the workspace's `package.json`. Never pin a version directly in a workspace's `package.json`. `bun remove` doesn't remove catalog entries, so delete those from the root `package.json` by hand.
+- Add dependencies with `bun add <pkg> --catalog` (add `-d` for dev dependencies), run from the workspace that needs them (`api/` or `web/`).
+- Follow centralized styling conventions from `web/src/styles.css`, and update it accordingly if needed.
+- Do not use external assets or dependencies in UI code or anywhere (no external SVGs, images, fonts, or links/CDNs); use only local/project resources.
+- For design-oriented tasks, AI agents must follow the `frontend-design` skill.
