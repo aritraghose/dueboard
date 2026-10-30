@@ -1,5 +1,5 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
-import { ApiWorker } from "@dueboard/api";
+import { AgentWorker, ApiWorker } from "@dueboard/api";
 import * as Alchemy from "alchemy";
 import * as Effect from "effect/Effect";
 
@@ -7,7 +7,8 @@ import * as Effect from "effect/Effect";
  * The TanStack Start frontend. Deployed as a Cloudflare Worker + static assets
  * by `Cloudflare.Website.Vite`. The Api stack's `ApiWorker` RPC worker is
  * injected by reference as a private `API` service binding; the `/rpc`
- * server route proxies the browser's `AtomRpc` traffic to it.
+ * server route proxies the browser's `AtomRpc` traffic to it. Its
+ * `AgentWorker` is bound the same way as `AGENT`, for the chat agent.
  */
 export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
   compatibility: {
@@ -16,6 +17,9 @@ export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
   },
   env: {
     API: ApiWorker,
+    // The Api stack's chat agent, reached through `src/server.ts`'s
+    // `/agents/*` proxy.
+    AGENT: AgentWorker,
     // Per-client-IP budget for Better Auth's routes (`/api/auth/*`), checked
     // in `src/routes/api/auth/$.ts`. Counting is approximate and per
     // Cloudflare location: abuse protection, not an exact quota.
@@ -27,7 +31,11 @@ export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
   },
 }) {}
 
-export type WebsiteEnv = Cloudflare.InferEnv<typeof Website>;
+// `InferEnv` has no case for a plain Worker, so it types `AGENT` as the Worker
+// resource. At runtime it's a service binding.
+export type WebsiteEnv = Omit<Cloudflare.InferEnv<typeof Website>, "AGENT"> & {
+  AGENT: Fetcher;
+};
 
 export default Alchemy.Stack(
   "DueboardWeb",

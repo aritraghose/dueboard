@@ -9,6 +9,7 @@ import {
 import type { ReactNode } from "react";
 import { ThemeProvider, themeScript } from "../components/theme-provider.tsx";
 import { Toaster } from "../components/toaster.tsx";
+import { TooltipProvider } from "../components/ui/tooltip.tsx";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -30,8 +31,10 @@ function RootComponent() {
           atom resolves against this registry. */}
       <RegistryProvider>
         <ThemeProvider>
-          <Outlet />
-          <Toaster />
+          <TooltipProvider>
+            <Outlet />
+            <Toaster />
+          </TooltipProvider>
         </ThemeProvider>
       </RegistryProvider>
     </Document>

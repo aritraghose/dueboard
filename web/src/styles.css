@@ -5,6 +5,27 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Streamdown renders the agent's markdown replies with Tailwind classes. */
+@source "../node_modules/streamdown/dist/*.js";
+
+/*
+ * Scrollbar utilities the Message Scroller (components/ui/message-scroller.tsx)
+ * uses. Newer `shadcn/tailwind.css` releases ship them; this version doesn't.
+ */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, var(--color-border)) var(--scrollbar-track, transparent);
+}
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+@utility scrollbar-thumb-transparent {
+  --scrollbar-thumb: transparent;
+}
+@utility scrollbar-track-transparent {
+  --scrollbar-track: transparent;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

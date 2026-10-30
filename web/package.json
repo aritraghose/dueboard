@@ -14,14 +14,19 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@ai-sdk/react": "catalog:",
     "@alchemy.run/cloudflare": "catalog:",
+    "@cloudflare/ai-chat": "catalog:",
     "@dueboard/api": "workspace:*",
     "@effect/atom-react": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@effect/platform-node": "catalog:",
     "@fontsource-variable/geist": "catalog:",
+    "@shadcn/react": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
+    "agents": "catalog:",
+    "ai": "catalog:",
     "alchemy": "catalog:",
     "better-auth": "catalog:",
     "class-variance-authority": "catalog:",
@@ -33,7 +38,9 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "shadcn": "catalog:",
+    "shiki": "catalog:",
     "sonner": "catalog:",
+    "streamdown": "catalog:",
     "tw-animate-css": "catalog:"
   },
   "devDependencies": {

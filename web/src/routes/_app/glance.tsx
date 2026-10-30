@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { AgentChat } from "@/components/agent-chat";
 import { authClient } from "../../auth-client.ts";
 
 /** Where users land after signing in (and after onboarding). */
@@ -17,6 +18,12 @@ function Glance() {
         <h1 className="font-heading text-3xl font-semibold tracking-tight">Hi, {user.name}</h1>
         <p className="text-muted-foreground">Everything that's due, on one board.</p>
       </header>
+      {/* The chat opens a WebSocket, so it renders in the browser only. */}
+      <ClientOnly
+        fallback={<div className="h-[min(40rem,75dvh)] rounded-xl border bg-card" />}
+      >
+        <AgentChat userId={user.id} />
+      </ClientOnly>
       <ProfileCard />
     </main>
   );

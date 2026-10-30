@@ -11,6 +11,7 @@ export class Api extends Alchemy.Stack<
   {
     branchId: string;
     hyperdriveId: string;
+    aiGatewayId: string;
   }
 >()("DueboardApi") {}
 
@@ -29,3 +30,13 @@ export class Api extends Alchemy.Stack<
 export const ApiWorker = Cloudflare.Worker.ref("ApiWorker", {
   stack: "DueboardApi",
 }) as unknown as typeof ApiWorkerClass;
+
+/**
+ * A reference to the deployed `AgentWorker` (`./AgentWorker.ts`) in the Api
+ * stack, for the current stage. The web stack binds it as a private service
+ * binding and proxies `/agents/*` to it. `Cloudflare.InferEnv` has no case
+ * for a plain Worker, so the web stack types that binding itself.
+ */
+export const AgentWorker = Cloudflare.Worker.ref("AgentWorker", {
+  stack: "DueboardApi",
+});
