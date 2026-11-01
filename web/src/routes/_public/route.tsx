@@ -29,7 +29,7 @@ function PublicLayout() {
         <ThemeSwitcher className="ml-auto" />
         {user ? (
           <Button asChild size="sm">
-            <Link to={user.username ? "/glance" : "/onboarding"}>Open Dueboard</Link>
+            <Link to={user.username ? "/now" : "/onboarding"}>Open Dueboard</Link>
           </Button>
         ) : (
           <Button asChild size="sm" variant="outline">

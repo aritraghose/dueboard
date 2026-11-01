@@ -12,8 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as PublicRouteRouteImport } from './routes/_public/route'
+import { Route as GlanceRouteImport } from './routes/glance'
 import { Route as RpcRouteImport } from './routes/rpc'
-import { Route as AppGlanceRouteImport } from './routes/_app/glance'
+import { Route as AppNowRouteImport } from './routes/_app/now'
 import { Route as AuthAuthRouteImport } from './routes/_auth/auth'
 import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
 import { Route as PublicIndexRouteImport } from './routes/_public/index'
@@ -31,14 +32,19 @@ const PublicRouteRoute = PublicRouteRouteImport.update({
   id: '/_public',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GlanceRoute = GlanceRouteImport.update({
+  id: '/glance',
+  path: '/glance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RpcRoute = RpcRouteImport.update({
   id: '/rpc',
   path: '/rpc',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppGlanceRoute = AppGlanceRouteImport.update({
-  id: '/glance',
-  path: '/glance',
+const AppNowRoute = AppNowRouteImport.update({
+  id: '/now',
+  path: '/now',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AuthAuthRoute = AuthAuthRouteImport.update({
@@ -64,16 +70,18 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof PublicIndexRoute
+  '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
-  '/glance': typeof AppGlanceRoute
+  '/now': typeof AppNowRoute
   '/auth': typeof AuthAuthRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof PublicIndexRoute
+  '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
-  '/glance': typeof AppGlanceRoute
+  '/now': typeof AppNowRoute
   '/auth': typeof AuthAuthRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -83,8 +91,9 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteRouteWithChildren
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_public': typeof PublicRouteRouteWithChildren
+  '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
-  '/_app/glance': typeof AppGlanceRoute
+  '/_app/now': typeof AppNowRoute
   '/_auth/auth': typeof AuthAuthRoute
   '/_auth/onboarding': typeof AuthOnboardingRoute
   '/_public/': typeof PublicIndexRoute
@@ -92,16 +101,19 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/rpc' | '/glance' | '/auth' | '/onboarding' | '/api/auth/$'
+  fullPaths:
+    '/' | '/glance' | '/rpc' | '/now' | '/auth' | '/onboarding' | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/rpc' | '/glance' | '/auth' | '/onboarding' | '/api/auth/$'
+  to:
+    '/' | '/glance' | '/rpc' | '/now' | '/auth' | '/onboarding' | '/api/auth/$'
   id:
     | '__root__'
     | '/_app'
     | '/_auth'
     | '/_public'
+    | '/glance'
     | '/rpc'
-    | '/_app/glance'
+    | '/_app/now'
     | '/_auth/auth'
     | '/_auth/onboarding'
     | '/_public/'
@@ -112,6 +124,7 @@ export interface RootRouteChildren {
   AppRouteRoute: typeof AppRouteRouteWithChildren
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   PublicRouteRoute: typeof PublicRouteRouteWithChildren
+  GlanceRoute: typeof GlanceRoute
   RpcRoute: typeof RpcRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -139,6 +152,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/glance': {
+      id: '/glance'
+      path: '/glance'
+      fullPath: '/glance'
+      preLoaderRoute: typeof GlanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rpc': {
       id: '/rpc'
       path: '/rpc'
@@ -146,11 +166,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RpcRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/glance': {
-      id: '/_app/glance'
-      path: '/glance'
-      fullPath: '/glance'
-      preLoaderRoute: typeof AppGlanceRouteImport
+    '/_app/now': {
+      id: '/_app/now'
+      path: '/now'
+      fullPath: '/now'
+      preLoaderRoute: typeof AppNowRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_auth/auth': {
@@ -185,11 +205,11 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteRouteChildren {
-  AppGlanceRoute: typeof AppGlanceRoute
+  AppNowRoute: typeof AppNowRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
-  AppGlanceRoute: AppGlanceRoute,
+  AppNowRoute: AppNowRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
@@ -226,6 +246,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRouteRoute: AppRouteRouteWithChildren,
   AuthRouteRoute: AuthRouteRouteWithChildren,
   PublicRouteRoute: PublicRouteRouteWithChildren,
+  GlanceRoute: GlanceRoute,
   RpcRoute: RpcRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

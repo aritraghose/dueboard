@@ -10,8 +10,18 @@ import type * as Scope from "effect/Scope";
 import { RpcSerialization, RpcServer } from "effect/rpc";
 import { Auth } from "./auth.ts";
 import { Hyperdrive } from "./database.ts";
+import { Database } from "./domain/database.ts";
+import * as SettingsService from "./domain/settings.ts";
+import * as TagsService from "./domain/tags.ts";
 // import { NeonDatabase } from "./database.ts"; // Neon.Connect alternative
-import { ApiRpcs, Authentication, CurrentUser, TooManyRequests, Unauthorized } from "./rpc.ts";
+import {
+  ApiRpcs,
+  Authentication,
+  BootstrapResult,
+  CurrentUser,
+  TooManyRequests,
+  Unauthorized,
+} from "./rpc.ts";
 import { relations } from "./schema.ts";
 
 /**
@@ -108,10 +118,43 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         ),
     );
 
-    // One handler per RPC in `ApiRpcs`, each running as `CurrentUser`. Query
-    // through `db`, scoped to the user, and `orDie` database errors into
-    // defects so each handler's error channel matches its RPC schema.
-    const handlers = ApiRpcs.toLayer({});
+    // One handler per RPC in `ApiRpcs`, each running as `CurrentUser`.
+    // Handlers stay thin: the rules live in the domain services
+    // (`./domain/`), which take the acting user id explicitly, query through
+    // `Database`, and turn database errors into defects, so each handler's
+    // error channel matches its RPC schema.
+    const handlers = ApiRpcs.toLayer({
+      Bootstrap: ({ timeZone }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return new BootstrapResult(yield* SettingsService.bootstrap(user.id, timeZone));
+        }),
+      UpdateSettings: (patch) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SettingsService.updateSettings(user.id, patch);
+        }),
+      ListTags: () =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TagsService.listTags(user.id);
+        }),
+      CreateTag: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TagsService.createTag(user.id, input);
+        }),
+      UpdateTag: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TagsService.updateTag(user.id, input);
+        }),
+      DeleteTag: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TagsService.deleteTag(user.id, id);
+        }),
+    }).pipe(Layer.provide(Layer.succeed(Database, db)));
 
     // One Worker serves two things: Better Auth's routes (proxied by the web
     // stack's `/api/auth/*` route) and the RPCs (proxied by `/rpc`).

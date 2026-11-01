@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_auth/auth")({
     typeof search.error === "string" ? { error: search.error } : {},
   beforeLoad: async () => {
     const user = await getSessionUser();
-    if (user) throw redirect({ to: user.username ? "/glance" : "/onboarding" });
+    if (user) throw redirect({ to: user.username ? "/now" : "/onboarding" });
   },
   component: SignIn,
 });
@@ -31,7 +31,7 @@ function SignIn() {
     setError(null);
     const { error } = await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/glance",
+      callbackURL: "/now",
       // First sign-in creates the account; send new users to pick a username.
       newUserCallbackURL: "/onboarding",
       errorCallbackURL: "/auth",

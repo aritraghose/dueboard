@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_auth/onboarding")({
   beforeLoad: async () => {
     const user = await getSessionUser();
     if (!user) throw redirect({ to: "/auth" });
-    if (user.username) throw redirect({ to: "/glance" });
+    if (user.username) throw redirect({ to: "/now" });
     return { user };
   },
   component: Onboarding,
@@ -75,7 +75,7 @@ function Onboarding() {
       if (error.code === "USERNAME_IS_ALREADY_TAKEN") setAvailability("taken");
       return;
     }
-    await navigate({ to: "/glance" });
+    await navigate({ to: "/now" });
   };
 
   const fieldError = invalid ?? (availability === "taken" ? "That username is taken." : null);

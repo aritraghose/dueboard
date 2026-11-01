@@ -3,13 +3,16 @@ import { useState } from "react";
 import { AgentChat } from "@/components/agent-chat";
 import { authClient } from "../../auth-client.ts";
 
-/** Where users land after signing in (and after onboarding). */
-export const Route = createFileRoute("/_app/glance")({
-  head: () => ({ meta: [{ title: "Glance · Dueboard" }] }),
-  component: Glance,
+/**
+ * Where users land after signing in (and after onboarding). For now it keeps
+ * the demo chat and the temporary profile card; step 2 replaces the layout.
+ */
+export const Route = createFileRoute("/_app/now")({
+  head: () => ({ meta: [{ title: "Now · Dueboard" }] }),
+  component: Now,
 });
 
-function Glance() {
+function Now() {
   const { user } = Route.useRouteContext();
 
   return (

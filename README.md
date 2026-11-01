@@ -21,14 +21,14 @@ Browser ── POST /rpc, /api/auth/* ──▶ web (TanStack Start)
 
 The browser calls same-origin routes and the web Worker forwards them over a private service binding, so the API has no public URL and needs no CORS.
 
-- `api/` (`DueboardApi` stack): `src/rpc.ts` is the RPC contract shared with web, `src/api.ts` the handlers, `src/auth.ts` Better Auth, `src/database.ts` Neon + Hyperdrive, `src/schema.ts` the Drizzle tables.
+- `api/` (`DueboardApi` stack): `src/rpc.ts` is the RPC contract shared with web, `src/api.ts` the handlers, `src/domain/` the domain services that hold every business rule, `src/auth.ts` Better Auth, `src/database.ts` Neon + Hyperdrive, `src/schema.ts` the Drizzle tables.
 - `web/` (`DueboardWeb` stack): routes in `src/routes/`, RPC client in `src/rpc-client.ts`. Read bindings via `src/env.ts`, not `cloudflare:workers` directly (breaks in dev).
 
 Web routes are grouped by pathless layouts (the `_` folder doesn't add to the URL):
 
 - `_public/`: anyone (`/`, later `/pricing`, `/about`).
 - `_auth/`: `/auth` for signed-out users, `/onboarding` for signed-in users without a username.
-- `_app/`: the app (`/glance`, …), only for signed-in users with a username. Sign-in lands on `/glance`.
+- `_app/`: the app (`/now`, …), only for signed-in users with a username. Sign-in lands on `/now`; the old `/glance` redirects there. The layout calls the `Bootstrap` RPC on every load to set up the user and sync their time zone.
 - `api/auth/$.ts` and `rpc.ts`: proxies to the API, so app routes can't use `/api` or `/rpc`.
 
 Stack names and the rate limit `namespaceId`s (`1003`, `1004`) must be unique on the Cloudflare account.
@@ -44,12 +44,12 @@ bun run dev:web   # terminal 2, open the printed websiteUrl
 - `dev:web` runs `tsc -b` first, since web imports `@dueboard/api` from `api/lib/`. Restart it after changing `api/src/rpc.ts`.
 - Dev uses a real Neon branch (stage `dev_$USER`) and no Hyperdrive. Commit generated files in `api/migrations/`.
 - Remove dev resources with `alchemy destroy --stage dev_$USER` in `web`, then `api`.
-- `bun run build` type-checks both workspaces.
+- `bun run build` type-checks both workspaces. `cd api && bun test` runs the domain unit tests.
 
 ## Google auth setup
 
 1. In Google Cloud console → Google Auth platform, create a **Web application** client with scopes `openid`, `email`, `profile`.
-2. Add redirect URIs `http://localhost:1338/api/auth/callback/google` and `<websiteUrl>/api/auth/callback/google` per deployed stage.
+2. Add redirect URIs `http://localhost:1339/api/auth/callback/google` (the website's dev port when `api/` is started first: each dev server asks for 1337 and takes the next free port, so the AgentWorker gets 1337 and the ApiWorker 1338) and `<websiteUrl>/api/auth/callback/google` per deployed stage.
 3. Copy `api/.env.example` to:
    - `api/.env` (dev): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
    - `api/.env.live` (deploy): the same, plus `AUTH_BASE_URL` set to the website origin.

@@ -16,7 +16,7 @@ const sample = [
 
 function Landing() {
   const { user } = Route.useRouteContext();
-  const destination = !user ? "/auth" : user.username ? "/glance" : "/onboarding";
+  const destination = !user ? "/auth" : user.username ? "/now" : "/onboarding";
 
   return (
     <main className="mx-auto grid w-full max-w-5xl flex-1 items-center gap-12 px-4 py-16 md:grid-cols-[1.2fr_1fr]">

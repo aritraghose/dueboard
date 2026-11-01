@@ -83,9 +83,10 @@ tests. `bun test` is built in, so no test dependency is needed.
 
 ## 4. Data model (Postgres)
 
-IDs are `text` (UUIDv7 or nanoid, chosen in prompt 1 and then used
-everywhere). Every user-owned table has `user_id text not null` plus an index
-that starts with it. Timestamps are `timestamptz` in UTC. **Calendar fields are
+IDs are `text` holding `crypto.randomUUID()` (UUIDv4), made by the domain
+services through `newId()` in `api/src/domain/database.ts`: no dependency, and
+nothing reads order from an id (lists sort by a timestamp column). Every
+user-owned table has `user_id text not null` plus an index that starts with it. Timestamps are `timestamptz` in UTC. **Calendar fields are
 plain `date`**, interpreted in the owner's time zone.
 
 ### Shared enums
@@ -98,7 +99,7 @@ plain `date`**, interpreted in the owner's time zone.
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `user_settings` | `user_id` PK, `time_zone`, `default_privacy`, `default_share_to_timeline`, `relay_policy` (`connections`\|`anyone`\|`none`, default `connections`), `ai_quota_override` (nullable) | Created on first sign-in or onboarding. `time_zone` is IANA (`America/New_York`). |
+| `user_settings` | `user_id` PK, `time_zone`, `color`, `default_privacy`, `default_share_to_timeline`, `relay_policy` (`connections`\|`anyone`\|`none`, default `connections`), `ai_quota_override` (nullable) | Created on first sign-in or onboarding. `time_zone` is IANA (`America/New_York`). `color` is a random tag-palette key (never gray), assigned once when the row is created; the timeline shows the username in it. |
 | `tags` | `id`, `user_id`, `name`, `color`, `system_kind` (`default`\|`habit`\|`goal`\|null) | Unique `(user_id, lower(name))`. System tags are seeded at onboarding. They can be recolored but not renamed or deleted. |
 | `tasks` | `id`, `user_id`, `title`, `description?`, `assigned_date?`, `deadline_date?`, `tag_id`, `status` (`idle`\|`working`\|`settled`, default `idle`), `settled_at?`, `privacy`, `share_to_timeline`, `importance?` (1–5), `expected_minutes?` | `CHECK (assigned_date <= deadline_date)`. `tag_id` defaults to the user's `default` tag. `working` is only a label. |
 | `habits` | `id`, `user_id`, `title`, `description?`, `schedule_kind` (`flexible`\|`specific_days`), `target_count`, `period_unit` (`day`\|`week`\|`month`), `period_length`, `weekdays int[]?`, `month_days int[]?`, `start_date`, `status` (`active`\|`paused`\|`archived`), `privacy`, `share_to_timeline` | Stores the **rule**. Nothing is generated ahead of time. Shown with the `habit` tag. |

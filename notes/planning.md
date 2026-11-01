@@ -247,7 +247,7 @@ are sequential: each assumes the previous ones are done.
 
 ## Status
 
-- [ ] 1 Domain foundation
+- [x] 1 Domain foundation
 - [ ] 2 App shell and design system
 - [ ] 3 Tasks backend
 - [ ] 4 Tasks UI
@@ -279,3 +279,10 @@ Add a dated line whenever a decision changes during a build thread.
 - 2026-11-01: The agent is named **Tibo** everywhere; the earlier working name was Wolowitz.
 - 2026-11-01: Profiles live at `/@username`, so no reserved-username list is needed.
 - 2026-11-01: Relay turns are split 50/50 between the two users' quotas.
+- 2026-11-01 (step 1): Ids are `crypto.randomUUID()` (UUIDv4) in `text` columns, made by `newId()` in `api/src/domain/database.ts`. No dependency; lists order by timestamps, not ids.
+- 2026-11-01 (step 1): Tag colors are keys of a fixed 10-color palette (`TAG_COLOR` in `api/src/domain/model.ts`: gray, red, orange, amber, green, teal, blue, indigo, violet, pink), stored as `text`. Step 2 maps each key to light and dark shades in `web/src/styles.css`. System tags: `default` gray, `habit` green, `goal` violet.
+- 2026-11-01 (step 1): Domain services read the Drizzle db from the `Database` Effect service and take the acting user id as their first argument. Shared values, inputs and typed errors live in `api/src/domain/model.ts` (no database code) and are re-exported by `rpc.ts` for the browser.
+- 2026-11-01 (step 1): The settings row and system tags are created lazily by the `Bootstrap` RPC, which the `_app` layout runs on every load, not in onboarding. This backfills older accounts and keeps the time zone in sync. An invalid browser zone is ignored (new rows fall back to UTC). The time zone isn't user-editable.
+- 2026-11-01 (step 1): Tag writes lock the user's settings row (`SELECT … FOR UPDATE`) so concurrent creates can't pass the 50-tag limit. A partial unique index keeps one tag per system kind.
+- 2026-11-01 (step 1): RPCs are named in PascalCase (`Bootstrap`, `ListTags`, …).
+- 2026-11-02 (step 1): Each user gets a random color (`USER_COLOR`: the tag palette minus gray) when their settings row is created, so the timeline can show usernames in it. It's stored in `user_settings.color`, returned in `Settings`, and not user-editable yet. Rows that existed before the column were backfilled by a random SQL default.

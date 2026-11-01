@@ -1,7 +1,26 @@
 import * as Context from "effect/Context";
+import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
+import {
+  CreateTagInput,
+  Id,
+  InvalidInput,
+  Settings,
+  SettingsPatch,
+  SystemTagLocked,
+  TIME_ZONE_MAX_LENGTH,
+  Tag,
+  TagLimitReached,
+  TagNameTaken,
+  TagNotFound,
+  UpdateTagInput,
+} from "./domain/model.ts";
+
+// The domain's values, inputs and errors, for the browser.
+export * from "./domain/model.ts";
+export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/dates.ts";
 
 /**
  * Shared domain + RPC contract.
@@ -41,9 +60,50 @@ export class Authentication extends RpcMiddleware.Service<
   { provides: CurrentUser }
 >()("api/Authentication", { error: Schema.Union([Unauthorized, TooManyRequests]) }) {}
 
+/** What the app loads on start: the user's settings and tags. */
+export class BootstrapResult extends Schema.Class<BootstrapResult>("BootstrapResult")({
+  settings: Settings,
+  tags: Schema.Array(Tag),
+}) {}
+
 /**
- * Every RPC the API serves. Empty for now: add each new procedure here with
- * `Rpc.make(...)` and implement it in `./api.ts`. The middleware runs every
- * RPC as the signed-in, onboarded user.
+ * Every RPC the API serves. Add each new procedure here with `Rpc.make(...)`
+ * and implement it in `./api.ts`, as a thin call into a domain service
+ * (`./domain/`). The middleware runs every RPC as the signed-in, onboarded
+ * user.
  */
-export class ApiRpcs extends RpcGroup.make().middleware(Authentication) {}
+export class ApiRpcs extends RpcGroup.make(
+  /**
+   * Run by the `_app` layout on every app load with the browser's IANA zone.
+   * Creates the settings row and system tags if missing (this also
+   * backfills older accounts) and saves the zone when it changed.
+   */
+  Rpc.make("Bootstrap", {
+    payload: { timeZone: Schema.String.check(Schema.isMaxLength(TIME_ZONE_MAX_LENGTH)) },
+    success: BootstrapResult,
+  }),
+  Rpc.make("UpdateSettings", {
+    payload: SettingsPatch,
+    success: Settings,
+    error: InvalidInput,
+  }),
+  Rpc.make("ListTags", {
+    success: Schema.Array(Tag),
+  }),
+  Rpc.make("CreateTag", {
+    payload: CreateTagInput,
+    success: Tag,
+    error: Schema.Union([InvalidInput, TagNameTaken, TagLimitReached]),
+  }),
+  Rpc.make("UpdateTag", {
+    payload: UpdateTagInput,
+    success: Tag,
+    error: Schema.Union([InvalidInput, TagNotFound, TagNameTaken, SystemTagLocked]),
+  }),
+  /** Deletes one of the user's own tags and returns its id. Its items move to `default`. */
+  Rpc.make("DeleteTag", {
+    payload: { id: Id },
+    success: Schema.String,
+    error: Schema.Union([TagNotFound, SystemTagLocked]),
+  }),
+).middleware(Authentication) {}
