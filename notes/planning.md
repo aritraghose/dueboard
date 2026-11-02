@@ -252,7 +252,7 @@ are sequential: each assumes the previous ones are done.
 - [x] 1 Domain foundation
 - [x] 2 App shell and design system
 - [x] 3 Tasks backend
-- [ ] 4 Tasks UI
+- [x] 4 Tasks UI
 - [ ] 5 Habits backend
 - [ ] 6 Habits UI
 - [ ] 7 Goals backend
@@ -334,3 +334,23 @@ Add a dated line whenever a decision changes during a build thread.
   - **Unscheduled settled**: `ListUnscheduledTasks({ settledOn })` returns undated tasks settled on that local day, found through their `task_settled` activity's `local_date`.
   - **`ListTasks`**: newest first by `(created_at, id)`, with the cursor `<ISO>|<id>`. `created_at` is set from JS on insert (millisecond precision), so the cursor's `Date` round-trip is exact. `status` is an array filter; `from`/`to` match either date; `query` is a literal case-insensitive title search (`ILIKE`, with wildcards escaped). Default 50, max 100. An extra index `(user_id, created_at desc, id desc)` serves it.
   - **Manual check**: run against a throwaway local Postgres (Docker `postgres:17`) with every migration applied, not through RPC (sign-in is Google-only). It covered settle/unsettle activity, the dates rule, cross-user isolation, the tag reassign and pagination.
+- 2026-11-02 (step 4): **Tasks UI.**
+  - **Unscheduled shows on every day** in `/now`'s bottom tab row, not only today: undated tasks aren't tied to a day, and seeing them while planning tomorrow is the point. Unscheduled tasks settled on the selected day (`ListUnscheduledTasks({ settledOn })`) join that day's Settled list.
+  - **Task card is a centered dialog** (`components/task-card.tsx`, `TaskDialog`) on every screen size, for both creating and editing, at the user's request (the prompt allowed a sheet). Editing saves each field as it changes (unsaved values show at once from a local draft); creating collects the fields and adds with "Add task" or Enter in the title.
+  - **No inline quick add.** Creating is a "New task" button (the day card's top-left corner on `/now`, the page header on `/tasks`) or the `N` key, opening the create card. A new task goes on the selected day (`/tasks`: today, or undated from the Unscheduled view); clearing its assigned date (one click on ×) makes it unscheduled.
+  - **Tags in the card**: a list of the user's tags, each with an edit button, and "New tag" at the bottom. Creating and editing open a tag card (`components/tag-dialog.tsx`) over the task card; it can also delete a user tag (its tasks move to `default`). System tags only change color. A new tag is picked on creation. `/settings` now reads tags from `ListTags` so edits show there.
+  - **Dates** use the shadcn `Calendar` (`react-day-picker` 10.0.2, `date-fns` 4.4.0, approved by the user, added through the catalog). Days on the wrong side of the other date are disabled, so assigned ≤ deadline holds in the picker; the API still checks it.
+  - **Rows** show only set fields (tag hidden when it's `default`, stars, minutes, a deadline badge, a `Working` label). Settling checks and strikes the row for 320 ms, then it moves to Settled (shared `layoutId`s, `motion`) and the Settled count pops.
+  - **Data**: task queries carry the `tasks` reactivity key, tags `tags`. Writes go through `useTaskActions()` (`hooks/use-tasks.ts`), which runs each call as its own short-lived atom: the shared `ApiClient.mutation` atom interrupts an earlier in-flight call when called again. A settle/reopen click overrides the row's status until its call has answered and the refetched list agrees, so a stale refetch can't flip it back.
+  - **`/tasks`**: `?view=upcoming|unscheduled|settled` (absent = All), `?tag=`, `?q=` (debounced title search), "Load more" by cursor (30 per page). `ListTasks` has no "no dates" filter, so Unscheduled uses `ListUnscheduledTasks` and filters tag and search in the browser. Upcoming groups by each task's next date ≥ today, Settled by the day it was settled; since `ListTasks` is newest-created first, "Load more" can add tasks to groups already shown.
+  - **Tokens**: `--importance` (stars) and `--due` / `--due-foreground` ("Due today") come from the tag palette, keeping marigold for Tibo. `.dark` sets `color-scheme: dark` for native controls.
+  - **Deleting** hides the row at once (`removedTasksAtom` in `hooks/use-tasks.ts`); it comes back only if the delete fails. "Try again" on a failed list invalidates the `tasks` and `tags` keys: refreshing `taskListAtom` alone would reuse its failed page atoms.
+  - **Gotcha**: a dialog inside a `<form>` (the tag card inside the task card) renders in a portal, but React still bubbles its `submit` through the component tree to the outer form. Inner forms call `event.stopPropagation()` in `onSubmit`.
+  - **Gotcha**: the dev DB answers in seconds per call and sometimes times out (`PgConnection: Connection timed out`), so test with that in mind; the UI shows changes before the server answers.
+- 2026-11-02 (step 4, follow-up): **View options, stars, top bar.**
+  - **View row** (`components/view-controls.tsx`, `hooks/use-view-options.ts`) above the list on `/now` and `/tasks`: Sort (Default order, Importance, Expected time) with one arrow button beside it that flips ascending/descending, and Group. Importance starts most-important-first, expected time shortest-first; tasks without the value sort last either way. Remembered per viewer and page in localStorage (`dueboard-view-now`, `dueboard-view-tasks`).
+  - `/now` adds Show (All, Tasks, Habits, Goals) and Group by tag. Habits and Goals show a placeholder until steps 6 and 8; their build steps must hook into this filter. Sorting applies to the open list and the Unscheduled tab; Settled stays most recent first.
+  - `/tasks` groups by Day (its old automatic grouping for Upcoming and Settled), Tag, or None.
+  - **Importance**: rows show a soft amber pill with one star and the number; the card has a star track with the level in words (Low, Minor, Medium, High, Critical; `IMPORTANCE_LABEL`) and a pop on pick (`--animate-star-pop`). Tokens `--importance-soft` and `--importance-ink`.
+  - **New task** on `/now` floats at the bottom right of the task list, just above the tab rows; the list keeps bottom padding so it never covers the last row.
+  - **Hideable top row on `/now` only**: `topBar.hideable` in the route's `staticData`, toggled by the button in the day card's top-left corner (`hooks/use-top-bar-hidden.ts`, localStorage `dueboard-now-top-bar-hidden`). Visible by default. Hidden, `/now` takes the full height (its `h-[calc(…)]` values change with it).

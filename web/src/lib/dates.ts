@@ -1,4 +1,4 @@
-import { LocalDate, addDays, startOfWeek, todayIn } from "@dueboard/api/rpc";
+import { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "@dueboard/api/rpc";
 import * as Schema from "effect/Schema";
 
 // Display helpers for calendar days. Date math comes from the API's
@@ -6,7 +6,7 @@ import * as Schema from "effect/Schema";
 // A `LocalDate` names a day, not an instant, so it's formatted in UTC; only
 // instants (the clock) are formatted in the user's time zone.
 
-export { LocalDate, addDays, startOfWeek, todayIn };
+export { LocalDate, addDays, localDateOf, startOfWeek, todayIn };
 
 export const isLocalDate = Schema.is(LocalDate);
 

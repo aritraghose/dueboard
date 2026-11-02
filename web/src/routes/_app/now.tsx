@@ -1,17 +1,32 @@
+import type { Task } from "@dueboard/api/rpc";
+import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronDownIcon, PanelRightOpenIcon, RepeatIcon, TargetIcon, TimerIcon } from "lucide-react";
-import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import { ChevronDownIcon, PanelRightOpenIcon, PanelTopCloseIcon, PanelTopOpenIcon, PlusIcon, RepeatIcon, TargetIcon, TimerIcon } from "lucide-react";
+import { LayoutGroup, motion } from "motion/react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { DayStepper, NowClock } from "@/components/day-navigator";
 import { LiveCard } from "@/components/live-card";
+import { TaskDialog } from "@/components/task-card";
+import { TagChip } from "@/components/tag-chip";
+import { TaskList } from "@/components/task-list";
+import { ViewControls } from "@/components/view-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
+import { useKeyShortcut } from "@/hooks/use-key-shortcut";
+import { useTaskDialog } from "@/hooks/use-task-dialog";
+import { tasksForDayAtom, unscheduledAtom, useOptimisticStatus, useTagMap, useTags, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
+import { setTopBarHidden, useTopBarHidden } from "@/hooks/use-top-bar-hidden";
+import { useViewOptions } from "@/hooks/use-view-options";
 import { type LocalDate, formatDay, isLocalDate } from "@/lib/dates";
+import { groupByTag, sortTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 type NowSearch = {
@@ -35,7 +50,7 @@ export const Route = createFileRoute("/_app/now")({
     date: typeof search.date === "string" && isLocalDate(search.date) ? search.date : undefined,
   }),
   head: () => ({ meta: [{ title: "Now · Dueboard" }] }),
-  staticData: { topBar: { start: StartSessionButton, center: TopBarClock } },
+  staticData: { topBar: { start: StartSessionButton, center: TopBarClock, hideable: true } },
   component: Now,
 });
 
@@ -71,6 +86,12 @@ function Now() {
   const today = useToday(timeZone);
   const date = searchDate ?? today;
   const [liveCollapsed, setLiveCollapsed] = useLiveCollapsed();
+  const dialog = useTaskDialog();
+  const newTask = () => {
+    if (date) dialog.openNew(date);
+  };
+  useKeyShortcut("n", newTask);
+  const topBarHidden = useTopBarHidden();
 
   const changeDate = useCallback(
     (next: LocalDate) => {
@@ -88,7 +109,15 @@ function Now() {
   // Live gives the day card the full width. The page is exactly one screen
   // tall, so the day card's tab rows sit at its bottom without scrolling.
   return (
-    <main className="flex h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] min-h-96 flex-col md:h-[calc(100dvh-3.375rem)]">
+    <main
+      className={cn(
+        "flex min-h-96 flex-col",
+        // Without the 3rem top row, the page starts a hair below the screen's top edge.
+        topBarHidden
+          ? "h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] pt-1.5 md:h-[calc(100dvh-0.375rem)]"
+          : "h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] md:h-[calc(100dvh-3.375rem)]",
+      )}
+    >
       <Tabs
         defaultValue="day"
         className={cn(
@@ -106,7 +135,17 @@ function Now() {
           <CardGlow />
           <Card className={cardClass}>
             <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-start border-b">
-              <span />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="mt-1 justify-self-start text-muted-foreground"
+                aria-pressed={topBarHidden}
+                aria-label={topBarHidden ? "Show the top bar" : "Hide the top bar"}
+                title={topBarHidden ? "Show the top bar" : "Hide the top bar"}
+                onClick={() => setTopBarHidden(!topBarHidden)}
+              >
+                {topBarHidden ? <PanelTopOpenIcon /> : <PanelTopCloseIcon />}
+              </Button>
               <DayStepper date={date} today={today} onChange={changeDate} />
               {liveCollapsed && (
                 <Button
@@ -120,61 +159,23 @@ function Now() {
                 </Button>
               )}
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-4">
-              <section aria-label="Tasks" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-                <p className="flex flex-1 items-center justify-center rounded-xl border border-dashed px-4 py-8 text-center text-muted-foreground">
-                  Nothing due {onDay}.
-                </p>
-              </section>
-
-              <DayTabs
-                label="settled, sessions and unscheduled"
-                tabs={[
-                  {
-                    value: "settled",
-                    label: <Counted label="Settled" count={0} />,
-                    content: `Tasks you settle ${onDay} move here.`,
-                  },
-                  {
-                    value: "sessions",
-                    label: <Counted label="Sessions" count={0} />,
-                    content: `Focus sessions from ${onDay} show here.`,
-                  },
-                  {
-                    value: "unscheduled",
-                    label: <Counted label="Unscheduled" count={0} />,
-                    content: "Tasks without a date wait here until you give them one.",
-                  },
-                ]}
-              />
-
-              <DayTabs
-                label="habits and goals"
-                tabs={[
-                  {
-                    value: "habits",
-                    label: (
-                      <>
-                        <RepeatIcon />
-                        No habits due
-                      </>
-                    ),
-                    content: `Habits due ${onDay} show here, and the ones you've checked.`,
-                  },
-                  {
-                    value: "goals",
-                    label: (
-                      <>
-                        <TargetIcon />
-                        No active goals
-                      </>
-                    ),
-                    content: "Your active goals show here every day, with how far along they are.",
-                  },
-                ]}
-              />
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+              {date && today ? (
+                <DayBody date={date} today={today} onDay={onDay} onOpenTask={dialog.openTask} onNewTask={newTask} />
+              ) : (
+                <DayBodySkeleton />
+              )}
             </CardContent>
           </Card>
+          {today && (
+            <TaskDialog
+              target={dialog.target}
+              open={dialog.open}
+              version={dialog.version}
+              onOpenChange={dialog.setOpen}
+              today={today}
+            />
+          )}
         </TabsContent>
 
         <TabsContent
@@ -190,6 +191,225 @@ function Now() {
         </TabsContent>
       </Tabs>
     </main>
+  );
+}
+
+/**
+ * The day card's body: the view row (show, sort, group), the day's open
+ * tasks with New task floating at their bottom right, then the Settled /
+ * Sessions / Unscheduled and habits / goals tab rows. Unscheduled shows on
+ * every day, not only today (planning.md, step 4 decision).
+ */
+function DayBody({
+  date,
+  today,
+  onDay,
+  onOpenTask,
+  onNewTask,
+}: {
+  date: LocalDate;
+  today: LocalDate;
+  onDay: string;
+  onOpenTask: (task: Task) => void;
+  onNewTask: () => void;
+}) {
+  const [view, setView] = useViewOptions("now");
+  const tagList = useTags();
+  const dayResult = useAtomValue(tasksForDayAtom(date));
+  const unscheduledResult = useAtomValue(unscheduledAtom(date));
+  const { reload } = useTaskActions();
+  const tags = useTagMap();
+
+  const day = AsyncResult.isSuccess(dayResult) ? dayResult.value : undefined;
+  const unscheduled = AsyncResult.isSuccess(unscheduledResult) ? unscheduledResult.value : undefined;
+
+  const all = useMemo(
+    () => [
+      ...(day?.open ?? []).map(({ task }) => task),
+      ...(day?.settled ?? []).map(({ task }) => task),
+      ...(unscheduled?.open ?? []),
+      ...(unscheduled?.settled ?? []),
+    ],
+    [day, unscheduled],
+  );
+  const { statusOf, change, overridden } = useOptimisticStatus(all);
+  const kept = new Set(useWithoutRemoved(all).map((task) => task.id));
+  const shown = (task: Task) => kept.has(task.id);
+
+  // Lists with the user's latest clicks applied: a just-settled task moves
+  // to the top of Settled, a reopened one back to its open list.
+  const dayTasks = [...(day?.open ?? []), ...(day?.settled ?? [])].map(({ task }) => task).filter(shown);
+  const open = sortTasks(
+    dayTasks.filter((task) => statusOf(task) !== "settled"),
+    view.sort,
+    view.direction,
+  );
+  const unscheduledOpen = sortTasks(
+    [...(unscheduled?.open ?? []), ...(unscheduled?.settled ?? [])].filter(
+      (task) => shown(task) && statusOf(task) !== "settled",
+    ),
+    view.sort,
+    view.direction,
+  );
+  const settled = all.filter((task) => shown(task) && statusOf(task) === "settled");
+  const justSettled = settled.filter((task) => overridden.get(task.id) === "settled");
+  const settledList = [...justSettled, ...settled.filter((task) => !justSettled.includes(task))];
+
+  const failed = AsyncResult.isFailure(dayResult) || AsyncResult.isFailure(unscheduledResult);
+  const rowProps = { tags, today, onStatusChange: change, onOpen: onOpenTask, statusOf };
+
+  return (
+    <LayoutGroup>
+      <ViewControls
+        view={view}
+        onChange={setView}
+        kinds
+        groups={[
+          { value: "auto", label: "None" },
+          { value: "tag", label: "Tag" },
+        ]}
+        className="-mt-1"
+      />
+
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <section aria-label="Tasks" className="-mx-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-0.5 pb-14">
+          {view.show === "habits" || view.show === "goals" ? (
+            <EmptyState>
+              {view.show === "habits"
+                ? "Your habits will show here once you can add them."
+                : "Your goals will show here once you can add them."}
+            </EmptyState>
+          ) : failed ? (
+            <EmptyState>
+              Couldn't load your tasks.
+              <Button variant="outline" size="sm" onClick={() => void reload()}>
+                Try again
+              </Button>
+            </EmptyState>
+          ) : !day ? (
+            <TaskRowsSkeleton />
+          ) : open.length > 0 ? (
+            view.group === "tag" ? (
+              groupByTag(open, tagList ?? []).map(({ tag, tasks }) => (
+                <section key={tag?.id ?? "other"} aria-label={tag?.name ?? "Other"} className="flex flex-col gap-0.5 pt-2 first:pt-0">
+                  <h3 className="px-2">
+                    {tag ? <TagChip name={tag.name} color={tag.color} /> : <span className="text-xs text-muted-foreground">Other</span>}
+                  </h3>
+                  <TaskList tasks={tasks} label={tag?.name ?? "Other"} {...rowProps} />
+                </section>
+              ))
+            ) : (
+              <TaskList tasks={open} label={`Tasks ${onDay}`} {...rowProps} />
+            )
+          ) : settled.length > 0 && dayTasks.length > 0 ? (
+            <EmptyState className="text-success">Everything {onDay} is settled.</EmptyState>
+          ) : (
+            <EmptyState>Nothing planned {onDay}. Add one with New task, or press N.</EmptyState>
+          )}
+        </section>
+        <Button
+          className="absolute right-0 bottom-1 rounded-full shadow-(--card-shadow)"
+          onClick={onNewTask}
+          aria-keyshortcuts="N"
+          title="New task (N)"
+        >
+          <PlusIcon />
+          New task
+        </Button>
+      </div>
+
+      <DayTabs
+        label="settled, sessions and unscheduled"
+        tabs={[
+          {
+            value: "settled",
+            label: <Counted label="Settled" count={day && unscheduled ? settledList.length : null} />,
+            content:
+              settledList.length > 0 ? (
+                <TaskList tasks={settledList} label="Settled" {...rowProps} />
+              ) : (
+                `Tasks you settle ${onDay} move here.`
+              ),
+          },
+          {
+            value: "sessions",
+            label: <Counted label="Sessions" count={0} />,
+            content: `Focus sessions from ${onDay} show here.`,
+          },
+          {
+            value: "unscheduled",
+            label: <Counted label="Unscheduled" count={unscheduled ? unscheduledOpen.length : null} />,
+            content:
+              unscheduledOpen.length > 0 ? (
+                <TaskList tasks={unscheduledOpen} label="Unscheduled" {...rowProps} />
+              ) : (
+                "Tasks without a date wait here. Clear a task's assigned date to put it here."
+              ),
+          },
+        ]}
+      />
+
+      <DayTabs
+        label="habits and goals"
+        tabs={[
+          {
+            value: "habits",
+            label: (
+              <>
+                <RepeatIcon />
+                No habits due
+              </>
+            ),
+            content: `Habits due ${onDay} show here, and the ones you've checked.`,
+          },
+          {
+            value: "goals",
+            label: (
+              <>
+                <TargetIcon />
+                No active goals
+              </>
+            ),
+            content: "Your active goals show here every day, with how far along they are.",
+          },
+        ]}
+      />
+
+    </LayoutGroup>
+  );
+}
+
+function DayBodySkeleton() {
+  return (
+    <div className="flex-1">
+      <TaskRowsSkeleton />
+    </div>
+  );
+}
+
+function TaskRowsSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 px-2 py-2" aria-hidden="true">
+      {[70, 45, 60].map((width) => (
+        <div key={width} className="flex items-center gap-3">
+          <Skeleton className="size-4.5 rounded-full" />
+          <Skeleton className="h-4" style={{ width: `${width}%` }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "mx-2 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground",
+        className,
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -218,14 +438,31 @@ function Placeholder({ children }: { children: ReactNode }) {
   return <p className="py-4 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
-/** A tab label with its count. */
-function Counted({ label, count }: { label: string; count: number }) {
+/**
+ * A tab label with its count. Once loaded (`count` isn't `null`), a change
+ * pops the badge, so a settled task is seen landing in Settled.
+ */
+function Counted({ label, count }: { label: string; count: number | null }) {
+  // The first loaded count doesn't pop; every change after it does.
+  const first = useRef<number | null>(null);
+  const changed = useRef(false);
+  if (first.current === null) first.current = count;
+  else if (count !== first.current) changed.current = true;
+  const bump = changed.current;
   return (
     <>
       {label}
-      <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.6875rem] tabular-nums sm:h-4.5 sm:min-w-4.5 sm:text-xs">
-        {count}
-      </Badge>
+      <motion.span
+        key={count ?? "loading"}
+        initial={bump ? { scale: 1.4 } : false}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 600, damping: 18 }}
+        className="inline-flex"
+      >
+        <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.6875rem] tabular-nums sm:h-4.5 sm:min-w-4.5 sm:text-xs">
+          {count ?? 0}
+        </Badge>
+      </motion.span>
     </>
   );
 }
@@ -289,8 +526,8 @@ function DayTabs({
         </div>
         <CollapsibleContent id={contentId}>
           {tabs.map(({ value, content }) => (
-            <TabsContent key={value} value={value}>
-              <Placeholder>{content}</Placeholder>
+            <TabsContent key={value} value={value} className="max-h-[min(14rem,30dvh)] overflow-y-auto">
+              {typeof content === "string" ? <Placeholder>{content}</Placeholder> : content}
             </TabsContent>
           ))}
         </CollapsibleContent>

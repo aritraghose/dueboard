@@ -1,6 +1,7 @@
 import { useMatches } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { TiboButton } from "@/components/tibo-panel";
+import { useTopBarHidden } from "@/hooks/use-top-bar-hidden";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,6 +14,8 @@ export type TopBarSlots = {
   readonly center?: ComponentType;
   /** `false` hides the Tibo button (`/inbox` is Tibo already). */
   readonly tibo?: boolean;
+  /** The page has a toggle that hides the whole row (`/now`; see `useTopBarHidden`). */
+  readonly hideable?: boolean;
 };
 
 declare module "@tanstack/react-router" {
@@ -38,7 +41,9 @@ export function TopBar({ className }: { className?: string }) {
   const Start = slots?.start;
   const Center = slots?.center;
   const tibo = slots?.tibo ?? true;
+  const hidden = useTopBarHidden();
   if (!Start && !Center && !tibo) return null;
+  if (slots?.hideable && hidden) return null;
 
   return (
     <div
