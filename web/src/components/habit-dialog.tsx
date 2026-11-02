@@ -2,6 +2,7 @@ import { HABIT_DESCRIPTION_MAX_LENGTH, HABIT_TITLE_MAX_LENGTH, PRIVACY, type Hab
 import * as Exit from "effect/Exit";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
+import { ItemGoalsField } from "@/components/goal-links";
 import { ScheduleBuilder } from "@/components/schedule-builder";
 import { DateField, Segmented } from "@/components/task-fields";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useBootstrap } from "@/hooks/use-bootstrap";
+import { useItemGoalDrafts, useItemGoalSync } from "@/hooks/use-goals";
 import type { HabitDialogTarget } from "@/hooks/use-habit-dialog";
 import { useHabitActions, useHabitColor } from "@/hooks/use-habits";
 import { failureMessage } from "@/hooks/use-tasks";
@@ -18,7 +20,8 @@ import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 
 // The habit card: one form for creating and editing a habit, saved as a
 // whole with "Add habit" or "Save". Unlike the task card, a habit's fields
-// hang together (the schedule especially), so nothing saves halfway.
+// hang together (the schedule especially), so nothing saves halfway. The
+// goals it moves save with it, after the habit itself.
 
 type Values = {
   title: string;
@@ -62,6 +65,8 @@ export function HabitDialog({
 
 function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: LocalDate; onClose: () => void }) {
   const actions = useHabitActions();
+  const goals = useItemGoalDrafts("habit", habit?.id ?? null);
+  const syncGoals = useItemGoalSync();
   const settings = useBootstrap()?.settings;
   const [values, setValues] = useState<Values>(() =>
     habit
@@ -90,7 +95,7 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
   };
 
   const title = values.title.trim();
-  const canSave = title.length > 0 && draftProblem(values.schedule) === null && !saving;
+  const canSave = title.length > 0 && draftProblem(values.schedule) === null && goals.drafts !== undefined && !saving;
 
   const submit = async () => {
     if (!canSave) return;
@@ -119,6 +124,11 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
         privacy: values.privacy,
         shareToLive: values.shareToLive,
       });
+    }
+    if (Exit.isSuccess(exit) && goals.drafts && goals.saved) {
+      // The habit is saved either way; a goal that didn't link says so.
+      const failure = await syncGoals("habit", exit.value.id, goals.saved, goals.drafts);
+      if (failure) toast.error(failure);
     }
     setSaving(false);
     if (Exit.isSuccess(exit)) {
@@ -175,6 +185,17 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
           {values.startDate > today && (
             <p className="text-xs text-muted-foreground">It shows up on your days from then on.</p>
           )}
+        </Row>
+
+        <Row label="Moves goal">
+          <ItemGoalsField
+            itemType="habit"
+            value={goals.drafts}
+            onChange={(drafts) => {
+              goals.edit(drafts);
+              setError(null);
+            }}
+          />
         </Row>
 
         <Row label="Description">

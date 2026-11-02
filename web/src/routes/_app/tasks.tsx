@@ -1,4 +1,4 @@
-import type { ListTasksInput, Tag, Task } from "@dueboard/api/rpc";
+import type { ListTasksInput, Task } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
@@ -6,11 +6,9 @@ import {
   CalendarClockIcon,
   CalendarOffIcon,
   CheckCheckIcon,
-  ChevronDownIcon,
   ListChecksIcon,
   SearchIcon,
   SearchXIcon,
-  TagIcon,
   XIcon,
 } from "lucide-react";
 import { LayoutGroup } from "motion/react";
@@ -18,11 +16,11 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CreateButton, Page, PageEmpty, PageHeader } from "@/components/page";
 import { TaskDialog } from "@/components/task-card";
 import { TagChip } from "@/components/tag-chip";
+import { TagFilter } from "@/components/tag-filter";
 import { TaskList } from "@/components/task-list";
 import { ViewControls } from "@/components/view-controls";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -48,11 +46,19 @@ const VIEW_LABEL: Record<View, string> = {
 type TasksSearch = {
   /** Absent means `all`. */
   view?: Exclude<View, "all"> | undefined;
-  tag?: string | undefined;
+  /** Tag ids; a task shows when it has any of them. */
+  tags?: readonly string[] | undefined;
   q?: string | undefined;
 };
 
 const PAGE_SIZE = 30;
+
+/** `?tags=` from the URL: up to 50 tag ids (anything else is dropped). */
+const readTagIds = (raw: unknown): readonly string[] | undefined => {
+  if (!Array.isArray(raw)) return undefined;
+  const ids = raw.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 64).slice(0, 50);
+  return ids.length ? ids : undefined;
+};
 
 export const Route = createFileRoute("/_app/tasks")({
   // Every key is always returned (see the decision log on `validateSearch`).
@@ -61,7 +67,7 @@ export const Route = createFileRoute("/_app/tasks")({
       typeof search.view === "string" && VIEWS.includes(search.view as View) && search.view !== "all"
         ? (search.view as Exclude<View, "all">)
         : undefined,
-    tag: typeof search.tag === "string" && search.tag.length <= 64 && search.tag ? search.tag : undefined,
+    tags: readTagIds(search.tags),
     q: typeof search.q === "string" && search.q.trim() ? search.q.slice(0, 200) : undefined,
   }),
   head: () => ({ meta: [{ title: "Tasks · Dueboard" }] }),
@@ -74,7 +80,7 @@ function Tasks() {
   const today = useToday(useTimeZone());
   const view: View = search.view ?? "all";
   const tags = useTags();
-  const tag = tags?.find((candidate) => candidate.id === search.tag);
+  const tagIds = search.tags ?? [];
 
   const dialog = useTaskDialog();
   // How the list is sorted and grouped (the tabs above pick which tasks).
@@ -105,7 +111,7 @@ function Tasks() {
               ))}
             </TabsList>
           </Tabs>
-          <TagFilter tags={tags} value={tag} onChange={(next) => setSearch({ tag: next?.id })} />
+          <TagFilter tags={tags} value={tagIds} onChange={(next) => setSearch({ tags: next.length ? next : undefined })} />
           <SearchField value={search.q ?? ""} onChange={(q) => setSearch({ q: q.trim() ? q : undefined })} />
           <ViewControls
             view={display}
@@ -121,12 +127,12 @@ function Tasks() {
 
         {today && (
           <Results
-            key={`${view}|${search.tag ?? ""}|${search.q ?? ""}`}
+            key={`${view}|${tagIds.join(",")}|${search.q ?? ""}`}
             view={view}
-            tagId={search.tag}
+            tagIds={tagIds}
             query={search.q}
             today={today}
-            onClearFilters={() => setSearch({ tag: undefined, q: undefined })}
+            onClearFilters={() => setSearch({ tags: undefined, q: undefined })}
             onOpenTask={dialog.openTask}
             display={display}
           />
@@ -142,60 +148,6 @@ function Tasks() {
         )}
       </div>
     </Page>
-  );
-}
-
-function TagFilter({
-  tags,
-  value,
-  onChange,
-}: {
-  tags: readonly Tag[] | undefined;
-  value: Tag | undefined;
-  onChange: (tag: Tag | undefined) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const pick = (tag: Tag | undefined) => {
-    onChange(tag);
-    setOpen(false);
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant={value ? "secondary" : "ghost"} size="sm" data-tag={value?.color}>
-          {value ? <span aria-hidden="true" className="size-2 rounded-full bg-tag" /> : <TagIcon />}
-          {value ? value.name : "Any tag"}
-          <ChevronDownIcon className="text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-56! gap-0! p-1.5!">
-        <ul aria-label="Filter by tag" className="flex max-h-64 flex-col overflow-y-auto">
-          <li>
-            <button
-              type="button"
-              onClick={() => pick(undefined)}
-              className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent"
-            >
-              Any tag
-            </button>
-          </li>
-          {(tags ?? []).map((tag) => (
-            <li key={tag.id}>
-              <button
-                type="button"
-                data-tag={tag.color}
-                aria-current={tag.id === value?.id ? "true" : undefined}
-                onClick={() => pick(tag)}
-                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent aria-current:font-medium"
-              >
-                <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full bg-tag" />
-                <span className="truncate">{tag.name}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -243,7 +195,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
 
 type ResultsProps = {
   view: View;
-  tagId: string | undefined;
+  tagIds: readonly string[];
   query: string | undefined;
   today: LocalDate;
   onClearFilters: () => void;
@@ -256,16 +208,16 @@ function Results(props: ResultsProps) {
 }
 
 /** Unscheduled tasks come whole from `ListUnscheduledTasks`; tag and search filter them here. */
-function UnscheduledResults({ tagId, query, today, onClearFilters, onOpenTask, display }: ResultsProps) {
+function UnscheduledResults({ tagIds, query, today, onClearFilters, onOpenTask, display }: ResultsProps) {
   const result = useAtomValue(unscheduledAtom());
   const { reload } = useTaskActions();
   const tasks = useMemo(() => {
     if (!AsyncResult.isSuccess(result)) return undefined;
     const needle = query?.toLowerCase();
     return result.value.open.filter(
-      (task) => (!tagId || task.tagId === tagId) && (!needle || task.title.toLowerCase().includes(needle)),
+      (task) => (tagIds.length === 0 || tagIds.includes(task.tagId)) && (!needle || task.title.toLowerCase().includes(needle)),
     );
-  }, [result, tagId, query]);
+  }, [result, tagIds, query]);
 
   return (
     <ResultList
@@ -273,7 +225,7 @@ function UnscheduledResults({ tagId, query, today, onClearFilters, onOpenTask, d
       tasks={tasks}
       failed={AsyncResult.isFailure(result)}
       onRetry={() => void reload()}
-      filtered={Boolean(tagId || query)}
+      filtered={Boolean(tagIds.length || query)}
       today={today}
       onClearFilters={onClearFilters}
       onOpenTask={onOpenTask}
@@ -283,18 +235,18 @@ function UnscheduledResults({ tagId, query, today, onClearFilters, onOpenTask, d
 }
 
 /** `ListTasks`, a page at a time ("Load more"). */
-function PagedResults({ view, tagId, query, today, onClearFilters, onOpenTask, display }: ResultsProps) {
+function PagedResults({ view, tagIds, query, today, onClearFilters, onOpenTask, display }: ResultsProps) {
   const [pages, setPages] = useState(1);
   const filters = useMemo((): Omit<ListTasksInput, "cursor"> => {
     const base: Omit<ListTasksInput, "cursor"> = {
       limit: PAGE_SIZE,
-      ...(tagId ? { tagId } : {}),
+      ...(tagIds.length ? { tagIds } : {}),
       ...(query ? { query } : {}),
     };
     if (view === "upcoming") return { ...base, from: today, status: ["idle", "working"] };
     if (view === "settled") return { ...base, status: ["settled"] };
     return base;
-  }, [view, tagId, query, today]);
+  }, [view, tagIds, query, today]);
 
   const atom = taskListAtom({ filters, pages });
   const result = useAtomValue(atom);
@@ -312,7 +264,7 @@ function PagedResults({ view, tagId, query, today, onClearFilters, onOpenTask, d
       tasks={data?.tasks}
       failed={AsyncResult.isFailure(result)}
       onRetry={() => void reload()}
-      filtered={Boolean(tagId || query)}
+      filtered={Boolean(tagIds.length || query)}
       today={today}
       onClearFilters={onClearFilters}
       onOpenTask={onOpenTask}

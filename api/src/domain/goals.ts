@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import {
   Activity,
@@ -691,11 +691,13 @@ const loadEvents = (tx: Executor, userId: string, goalIds: ReadonlyArray<string>
       .from(GoalProgressEvents)
       .where(and(eq(GoalProgressEvents.userId, userId), inArray(GoalProgressEvents.goalId, [...goalIds])))
       .as("ranked");
+    // The subquery's columns go by name: this drizzle-orm build renders
+    // `ranked.rank` and friends as empty in `where` and `order by`.
     const rows = yield* tx
       .select()
       .from(ranked)
-      .where(lte(ranked.rank, limit))
-      .orderBy(desc(ranked.createdAt), desc(ranked.id));
+      .where(sql`${sql.identifier("rank")} <= ${limit}`)
+      .orderBy(sql`${sql.identifier("created_at")} desc`, sql`${sql.identifier("id")} desc`);
     for (const { rank: _, ...row } of rows) {
       const list = byGoal.get(row.goalId) ?? [];
       list.push(toEvent(row));

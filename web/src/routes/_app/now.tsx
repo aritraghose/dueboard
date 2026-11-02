@@ -1,17 +1,20 @@
-import type { Habit, Task } from "@dueboard/api/rpc";
+import type { Goal, Habit, Task } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { CheckCheckIcon, ChevronDownIcon, PanelRightOpenIcon, PanelTopCloseIcon, PanelTopOpenIcon, PlusIcon, RepeatIcon, TargetIcon, TimerIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, PanelRightOpenIcon, PanelTopCloseIcon, PanelTopOpenIcon, PlusIcon, TimerIcon } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { DayStepper, NowClock } from "@/components/day-navigator";
+import { GoalDialog } from "@/components/goal-dialog";
+import { CompletedGoals, DayGoalCards } from "@/components/goal-progress";
 import { HabitDialog } from "@/components/habit-dialog";
 import { DueHabits, SettledHabits } from "@/components/habit-section";
 import { LiveCard } from "@/components/live-card";
 import { TaskDialog } from "@/components/task-card";
 import { TagChip } from "@/components/tag-chip";
+import { TagFilter } from "@/components/tag-filter";
 import { TaskList } from "@/components/task-list";
 import { ViewControls } from "@/components/view-controls";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
+import { useGoalDialog } from "@/hooks/use-goal-dialog";
+import { type DayGoals, useDayGoals, useGoalActions } from "@/hooks/use-goals";
 import { useHabitDialog } from "@/hooks/use-habit-dialog";
 import { type DayHabits, useDayHabits, useHabitActions } from "@/hooks/use-habits";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
@@ -41,11 +46,10 @@ type NowSearch = {
 /**
  * Where users land after signing in: one day at a time. The day lives in
  * `?date=YYYY-MM-DD`; anything else in that param is dropped. Two cards: the
- * day (tasks, then at its bottom the Settled / Sessions / Unscheduled and
- * the habits and goals tab rows, each with a fold chevron) takes two thirds, Live (with a note box) one third,
- * and the day card takes it all when Live is collapsed. Their contents are
- * placeholders until their build steps (tasks 4, habits 6, goals 8, sessions
- * 11, Live 14) fill them.
+ * day (tasks, habits and goals, then at its bottom the Settled / Sessions /
+ * Unscheduled tab row with a fold chevron) takes two thirds, Live (with a
+ * note box) one third, and the day card takes it all when Live is collapsed.
+ * Sessions (11) and Live (14) are placeholders until their build steps.
  */
 export const Route = createFileRoute("/_app/now")({
   // `date` is always set, even to `undefined`: the router merges this over
@@ -92,10 +96,12 @@ function Now() {
   const [liveCollapsed, setLiveCollapsed] = useLiveCollapsed();
   const dialog = useTaskDialog();
   const habitDialog = useHabitDialog();
+  const goalDialog = useGoalDialog();
   const [view, setView] = useViewOptions("now");
-  // N adds what the list shows: a habit in the Habits view, a task otherwise.
+  // N adds what the list shows: a habit or goal in those views, a task otherwise.
   const newItem = () => {
     if (view.show === "habits") habitDialog.openNew();
+    else if (view.show === "goals") goalDialog.openNew();
     else if (date) dialog.openNew(date);
   };
   useKeyShortcut("n", newItem);
@@ -177,6 +183,7 @@ function Now() {
                   onViewChange={setView}
                   onOpenTask={dialog.openTask}
                   onEditHabit={habitDialog.openHabit}
+                  onEditGoal={goalDialog.openGoal}
                   onNew={newItem}
                 />
               ) : (
@@ -190,6 +197,15 @@ function Now() {
               open={dialog.open}
               version={dialog.version}
               onOpenChange={dialog.setOpen}
+              today={today}
+            />
+          )}
+          {today && (
+            <GoalDialog
+              target={goalDialog.target}
+              open={goalDialog.open}
+              version={goalDialog.version}
+              onOpenChange={goalDialog.setOpen}
               today={today}
             />
           )}
@@ -221,11 +237,11 @@ function Now() {
 }
 
 /**
- * The day card's body: the view row (show, sort, group), the day's open
- * tasks and due habits (as the Show choice says) with New task or New habit
- * floating at their bottom right, then the Settled / Sessions / Unscheduled
- * and habits / goals tab rows. Unscheduled shows on every day, not only
- * today (planning.md, step 4 decision).
+ * The day card's body: the view row (show, tags, sort, group), the day's
+ * open tasks, due habits and active goals (as the Show choice says) with
+ * New task, habit or goal floating at their bottom right, then the
+ * Settled / Sessions / Unscheduled tab row. Unscheduled shows on every day,
+ * not only today (planning.md, step 4 decision).
  */
 function DayBody({
   date,
@@ -235,6 +251,7 @@ function DayBody({
   onViewChange,
   onOpenTask,
   onEditHabit,
+  onEditGoal,
   onNew,
 }: {
   date: LocalDate;
@@ -244,9 +261,11 @@ function DayBody({
   onViewChange: (patch: Partial<ViewOptions>) => void;
   onOpenTask: (task: Task) => void;
   onEditHabit: (habit: Habit) => void;
+  onEditGoal: (goal: Goal) => void;
   onNew: () => void;
 }) {
   const habits = useDayHabits(date);
+  const goals = useDayGoals(date);
   const tagList = useTags();
   const dayResult = useAtomValue(tasksForDayAtom(date));
   const unscheduledResult = useAtomValue(unscheduledAtom(date));
@@ -267,7 +286,19 @@ function DayBody({
   );
   const { statusOf, change, overridden } = useOptimisticStatus(all);
   const kept = new Set(useWithoutRemoved(all).map((task) => task.id));
-  const shown = (task: Task) => kept.has(task.id);
+  // The tag filter: tasks with any picked tag. Habits and goals wear their
+  // system tags, so they show only when those are picked.
+  const tagFilter = view.tags.filter((id) => tags.has(id));
+  const filtering = tagFilter.length > 0;
+  const systemTagPicked = (kind: "habit" | "goal") =>
+    !filtering || tagFilter.some((id) => tags.get(id)?.systemKind === kind);
+  const showHabits = systemTagPicked("habit");
+  const showGoals = systemTagPicked("goal");
+  const shown = (task: Task) => kept.has(task.id) && (!filtering || tagFilter.includes(task.tagId));
+  const dueHabits = showHabits ? habits.due.length : 0;
+  const settledHabits = showHabits ? habits.settled.length : 0;
+  const activeGoals = showGoals ? goals.active.length + goals.celebrating.size : 0;
+  const completedGoals = showGoals ? goals.completed.length : 0;
 
   // Lists with the user's latest clicks applied: a just-settled task moves
   // to the top of Settled, a reopened one back to its open list.
@@ -291,9 +322,20 @@ function DayBody({
   const failed = AsyncResult.isFailure(dayResult) || AsyncResult.isFailure(unscheduledResult);
   const rowProps = { tags, today, onStatusChange: change, onOpen: onOpenTask, statusOf };
 
-  // In All, habits show only while some are due: once they're all checked,
-  // the habits tab below says so.
-  const habitsInline = view.show === "all" && habits.due.length > 0;
+  // In All, habits show only while some are due (checked ones are in Settled).
+  const habitsInline = view.show === "all" && dueHabits > 0;
+  // Active goals show every day until completed (a just-completed one stays for its celebration).
+  const goalsInline = view.show === "all" && activeGoals > 0;
+  const inlineBelow = habitsInline || goalsInline;
+  // Settled holds the day's checked-off habits and completed goals too.
+  const settledCount =
+    day && unscheduled && habits.loaded && goals.loaded
+      ? settledList.length + settledHabits + completedGoals
+      : null;
+  // Nothing left: no open tasks, due habits or active goals, and something
+  // was settled. (No sessions exist yet; step 11 adds "none running or paused".)
+  const everythingSettled =
+    settledCount !== null && open.length === 0 && dueHabits === 0 && activeGoals === 0 && settledCount > 0;
   const tasksBody = failed ? (
       <EmptyState>
         Couldn't load your tasks.
@@ -316,15 +358,20 @@ function DayBody({
       ) : (
         <TaskList tasks={open} label={`Tasks ${onDay}`} {...rowProps} />
       )
-    ) : settled.length > 0 && dayTasks.length > 0 ? (
-      <EmptyState className={cn("text-success", habitsInline && "flex-none")}>Everything {onDay} is settled.</EmptyState>
+    ) : view.show === "all" && settledCount === null ? (
+      // Which message fits depends on habits and goals too; wait for them.
+      <TaskRowsSkeleton />
+    ) : view.show === "all" && everythingSettled ? (
+      <SettledState>Everything {onDay} is settled.</SettledState>
+    ) : dayTasks.length > 0 ? (
+      <SettledState className={cn(inlineBelow && "flex-none")}>All tasks {onDay} settled.</SettledState>
     ) : (
-      <EmptyState className={cn(habitsInline && "flex-none")}>No tasks {onDay}. Add one with New task, or press N.</EmptyState>
+      <EmptyState className={cn(inlineBelow && "flex-none")}>
+        {filtering ? `No tasks with these tags ${onDay}.` : `No tasks ${onDay}. Add one with New task, or press N.`}
+      </EmptyState>
     );
 
-  const newLabel = view.show === "habits" ? "New habit" : "New task";
-  // Settled holds the day's checked-off habits too (goals join in step 8).
-  const settledCount = day && unscheduled && habits.loaded ? settledList.length + habits.settled.length : null;
+  const newLabel = view.show === "habits" ? "New habit" : view.show === "goals" ? "New goal" : "New task";
 
   return (
     <LayoutGroup>
@@ -332,6 +379,9 @@ function DayBody({
         view={view}
         onChange={onViewChange}
         kinds
+        filter={
+          <TagFilter tags={tagList} value={tagFilter} onChange={(next) => onViewChange({ tags: next })} />
+        }
         groups={[
           { value: "auto", label: "None" },
           { value: "tag", label: "Tag" },
@@ -342,9 +392,17 @@ function DayBody({
       <div className="relative flex min-h-0 flex-1 flex-col">
         <section aria-label="Tasks" className="-mx-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-0.5 pb-14">
           {view.show === "habits" ? (
-            <HabitsView habits={habits} date={date} today={today} onDay={onDay} onEdit={onEditHabit} />
+            showHabits ? (
+              <HabitsView habits={habits} date={date} today={today} onDay={onDay} onEdit={onEditHabit} />
+            ) : (
+              <EmptyState>Habits wear the habit tag. Pick it in the tag filter to see them here.</EmptyState>
+            )
           ) : view.show === "goals" ? (
-            <EmptyState>Your goals will show here once you can add them.</EmptyState>
+            showGoals ? (
+              <GoalsView goals={goals} today={today} onDay={onDay} onEdit={onEditGoal} />
+            ) : (
+              <EmptyState>Goals wear the goal tag. Pick it in the tag filter to see them here.</EmptyState>
+            )
           ) : (
             <>
               {tasksBody}
@@ -352,6 +410,12 @@ function DayBody({
                 <section aria-label="Habits" className="flex flex-col gap-2 pt-4">
                   <h3 className="px-2 text-xs font-medium text-muted-foreground">Habits</h3>
                   <DueHabits habits={habits} date={date} today={today} onEdit={onEditHabit} allChecked={false} />
+                </section>
+              )}
+              {goalsInline && (
+                <section aria-label="Goals" className="flex flex-col gap-2 px-2 pt-4">
+                  <h3 className="text-xs font-medium text-muted-foreground">Goals</h3>
+                  <DayGoalCards goals={goals} today={today} onEdit={onEditGoal} />
                 </section>
               )}
             </>
@@ -376,13 +440,14 @@ function DayBody({
             value: "settled",
             label: <Counted label="Settled" count={settledCount} />,
             content:
-              settledList.length > 0 || habits.settled.length > 0 ? (
+              settledList.length > 0 || settledHabits > 0 || completedGoals > 0 ? (
                 <div className="flex flex-col gap-1">
                   {settledList.length > 0 && <TaskList tasks={settledList} label="Settled" {...rowProps} />}
-                  <SettledHabits habits={habits} date={date} today={today} emptyText="" />
+                  {showHabits && <SettledHabits habits={habits} date={date} today={today} emptyText="" />}
+                  {showGoals && <CompletedGoals goals={goals} today={today} onEdit={onEditGoal} emptyText="" />}
                 </div>
               ) : (
-                `Tasks and habits you settle ${onDay} move here.`
+                `Tasks, habits and goals you finish ${onDay} move here.`
               ),
           },
           {
@@ -399,39 +464,6 @@ function DayBody({
               ) : (
                 "Tasks without a date wait here. Clear a task's assigned date to put it here."
               ),
-          },
-        ]}
-      />
-
-      <DayTabs
-        label="habits and goals"
-        tabs={[
-          {
-            value: "habits",
-            label: <HabitsTabLabel habits={habits} />,
-            done: habits.allChecked,
-            content: (
-              <SettledHabits
-                habits={habits}
-                date={date}
-                today={today}
-                emptyText={
-                  habits.loaded && habits.due.length === 0
-                    ? `No habits are due ${onDay}.`
-                    : `Habits you check off ${onDay} move here.`
-                }
-              />
-            ),
-          },
-          {
-            value: "goals",
-            label: (
-              <>
-                <TargetIcon />
-                No active goals
-              </>
-            ),
-            content: "Your active goals show here every day, with how far along they are.",
           },
         ]}
       />
@@ -479,29 +511,41 @@ function HabitsView({
   );
 }
 
-/** The habits tab's title is the day's habit status. */
-function HabitsTabLabel({ habits }: { habits: DayHabits }) {
-  if (habits.allChecked) {
+/** The Goals view: the active goal cards. Completed ones are in the tabs below. */
+function GoalsView({
+  goals,
+  today,
+  onDay,
+  onEdit,
+}: {
+  goals: DayGoals;
+  today: LocalDate;
+  onDay: string;
+  onEdit: (goal: Goal) => void;
+}) {
+  const { reload } = useGoalActions();
+  if (goals.failed) {
     return (
-      <>
-        <CheckCheckIcon />
-        All habits checked
-      </>
+      <EmptyState>
+        Couldn't load your goals.
+        <Button variant="outline" size="sm" onClick={() => void reload()}>
+          Try again
+        </Button>
+      </EmptyState>
     );
   }
-  if (habits.loaded && habits.due.length > 0) {
-    return (
-      <>
-        <RepeatIcon />
-        <Counted label="Habits due" count={habits.due.length} />
-      </>
+  if (!goals.loaded) return <TaskRowsSkeleton />;
+  if (goals.active.length === 0 && goals.celebrating.size === 0) {
+    return goals.completed.length > 0 ? (
+      <SettledState>All goals {onDay} settled.</SettledState>
+    ) : (
+      <EmptyState>No active goals. Add one with New goal, or press N.</EmptyState>
     );
   }
   return (
-    <>
-      <RepeatIcon />
-      {habits.loaded ? "No habits due" : "Habits"}
-    </>
+    <div className="px-2">
+      <DayGoalCards goals={goals} today={today} onEdit={onEdit} />
+    </div>
   );
 }
 
@@ -522,6 +566,24 @@ function TaskRowsSkeleton() {
           <Skeleton className="h-4" style={{ width: `${width}%` }} />
         </div>
       ))}
+    </div>
+  );
+}
+
+/** A day (or part of it) with nothing left: a check and the line in `--success`. */
+function SettledState({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        "mx-2 flex flex-1 flex-col items-center justify-center gap-2.5 rounded-xl border border-success/25 bg-success/5 px-4 py-8 text-center text-sm font-medium text-success",
+        className,
+      )}
+    >
+      <span className="grid size-9 place-items-center rounded-full bg-success text-background">
+        <CheckIcon aria-hidden="true" className="size-5" strokeWidth={3} />
+      </span>
+      {children}
     </div>
   );
 }
@@ -595,17 +657,15 @@ function Counted({ label, count }: { label: string; count: number | null }) {
 
 type DayTab = {
   readonly value: string;
-  /** The tab's title. For habits and goals it's the status itself. */
+  /** The tab's title, with its count. */
   readonly label: ReactNode;
   readonly content: ReactNode;
-  /** A done status ("All habits checked") reads in green. */
-  readonly done?: boolean;
 };
 
 /**
  * A row of tabs in the day card, with its own fold chevron beside it. The
- * tabs only switch what shows; the chevron alone folds and unfolds. Both
- * rows start folded.
+ * tabs only switch what shows; the chevron alone folds and unfolds. It
+ * starts folded.
  */
 function DayTabs({
   label,
@@ -625,7 +685,7 @@ function DayTabs({
       <Tabs value={tab} onValueChange={setTab} className="gap-2" aria-label={label}>
         <div className="flex items-center gap-1">
           <TabsList className="min-w-0">
-            {tabs.map(({ value, label: title, done }) => (
+            {tabs.map(({ value, label: title }) => (
               <TabsTrigger
                 key={value}
                 value={value}
@@ -633,8 +693,6 @@ function DayTabs({
                   // The text keeps its color on hover and when picked; in dark
                   // mode a dim outline marks the picked tab instead.
                   "gap-1 px-1.5 text-[0.8125rem] hover:text-foreground/60 data-active:hover:text-foreground sm:gap-1.5 sm:px-3 sm:text-sm dark:hover:text-muted-foreground dark:data-active:border-white/25 dark:data-active:text-muted-foreground",
-                  done &&
-                    "text-success hover:text-success data-active:text-success-ink data-active:hover:text-success-ink dark:text-success dark:hover:text-success dark:data-active:text-success",
                 )}
               >
                 {title}

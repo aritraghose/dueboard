@@ -1,4 +1,5 @@
 import { ArrowDownIcon, ArrowDownUpIcon, ArrowUpIcon, LayersIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Segmented } from "@/components/task-fields";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,7 @@ export function ViewControls({
   view,
   onChange,
   kinds = false,
+  filter,
   groups,
   className,
 }: {
@@ -47,6 +49,8 @@ export function ViewControls({
   onChange: (patch: Partial<ViewOptions>) => void;
   /** Show the All / Tasks / Habits / Goals choice. */
   kinds?: boolean;
+  /** A filter (the tag filter) beside the Show choice. */
+  filter?: ReactNode;
   /** The grouping choices this list offers, with their labels. */
   groups: readonly { readonly value: ViewOptions["group"]; readonly label: string }[];
   className?: string;
@@ -65,6 +69,7 @@ export function ViewControls({
           onChange={(show) => onChange({ show })}
         />
       )}
+      {filter}
 
       <div className="flex items-center gap-0.5 max-sm:-ml-2.5 sm:ml-auto">
         <DropdownMenu>

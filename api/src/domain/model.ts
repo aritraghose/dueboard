@@ -249,15 +249,16 @@ export const ListUnscheduledTasksInput = Schema.Struct({
 export type ListUnscheduledTasksInput = typeof ListUnscheduledTasksInput.Type;
 
 /**
- * `/tasks`' filters, newest first. `from`/`to` (inclusive) match a task whose
- * assigned or deadline date falls in the range; `query` matches the title,
- * ignoring case. Pass the previous page's `nextCursor` as `cursor`.
+ * `/tasks`' filters, newest first. `tagIds` matches a task with any of those
+ * tags; `from`/`to` (inclusive) match a task whose assigned or deadline date
+ * falls in the range; `query` matches the title, ignoring case. Pass the
+ * previous page's `nextCursor` as `cursor`.
  */
 export const ListTasksInput = Schema.Struct({
   status: Schema.optionalKey(
     Schema.Array(TaskStatus).check(Schema.isMaxLength(TASK_STATUS.length)),
   ),
-  tagId: Schema.optionalKey(Id),
+  tagIds: Schema.optionalKey(Schema.Array(Id).check(Schema.isMaxLength(MAX_TAGS_PER_USER))),
   from: Schema.optionalKey(LocalDate),
   to: Schema.optionalKey(LocalDate),
   query: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(TASK_SEARCH_MAX_LENGTH))),

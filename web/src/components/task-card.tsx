@@ -14,6 +14,7 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { Trash2Icon } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ItemGoalsField } from "@/components/goal-links";
 import { DateField, Segmented, StarRating, TagSelect } from "@/components/task-fields";
 import {
   AlertDialog,
@@ -32,6 +33,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
+import { useItemGoalDrafts, useItemGoalSync } from "@/hooks/use-goals";
 import type { TaskDialogTarget } from "@/hooks/use-task-dialog";
 import { failureMessage, taskAtom, useTags, useTaskActions } from "@/hooks/use-tasks";
 import { type LocalDate, formatDay, localDateOf } from "@/lib/dates";
@@ -39,8 +41,9 @@ import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 import { formatMinutes } from "@/lib/tasks";
 
 // The task card: a dialog with every field of one task, the unset ones as
-// "Not set". Editing saves each change as it's made; creating collects the
-// fields and adds the task with "Add task" (or Enter in the title).
+// "Not set". Editing saves each change as it's made (the goals it moves
+// too); creating collects the fields and adds the task with "Add task" (or
+// Enter in the title), then links its goals.
 
 const STATUS_LABEL: Record<TaskStatus, string> = { idle: "Idle", working: "Working", settled: "Settled" };
 type Field = Exclude<keyof UpdateTaskInput, "id"> | "status";
@@ -78,6 +81,8 @@ export function TaskDialog({
 
 function CreateTask({ date, today, onClose }: { date: LocalDate | null; today: LocalDate; onClose: () => void }) {
   const { create } = useTaskActions();
+  const goals = useItemGoalDrafts("task", null);
+  const syncGoals = useItemGoalSync();
   const settings = useBootstrap()?.settings;
   const defaultTag = useTags()?.find((tag) => tag.systemKind === "default");
   const [values, setValues] = useState<Values>({
@@ -116,6 +121,11 @@ function CreateTask({ date, today, onClose }: { date: LocalDate | null; today: L
       importance: values.importance,
       expectedMinutes: values.expectedMinutes,
     });
+    if (Exit.isSuccess(exit) && goals.drafts && goals.drafts.length > 0) {
+      // The task is added either way; a goal that didn't link says so.
+      const failure = await syncGoals("task", exit.value.id, [], goals.drafts);
+      if (failure) toast.error(failure);
+    }
     setSaving(false);
     if (Exit.isSuccess(exit)) {
       onClose();
@@ -153,7 +163,14 @@ function CreateTask({ date, today, onClose }: { date: LocalDate | null; today: L
         />
       </header>
 
-      <TaskFields mode="create" values={{ ...values, tagId }} errors={errors} today={today} onChange={change} />
+      <TaskFields
+        mode="create"
+        values={{ ...values, tagId }}
+        errors={errors}
+        today={today}
+        onChange={change}
+        goals={<ItemGoalsField itemType="task" value={goals.drafts} onChange={goals.edit} />}
+      />
 
       <DialogFooter className="mx-0! mb-0! items-center">
         {errors.form && (
@@ -226,7 +243,14 @@ function EditTask({ initial, today, onClose }: { initial: Task; today: LocalDate
         <p className="px-2 text-xs text-muted-foreground">Added {formatDay(localDateOf(task.createdAt, timeZone), today)}</p>
       </header>
 
-      <TaskFields mode="edit" values={task} errors={errors} today={today} onChange={change} />
+      <TaskFields
+        mode="edit"
+        values={task}
+        errors={errors}
+        today={today}
+        onChange={change}
+        goals={<TaskGoals taskId={task.id} />}
+      />
 
       <DialogFooter className="mx-0! mb-0! flex-row! items-center justify-between!">
         <DeleteTask
@@ -256,12 +280,15 @@ function TaskFields({
   errors,
   today,
   onChange,
+  goals,
 }: {
   mode: "create" | "edit";
   values: Values;
   errors: Errors;
   today: LocalDate;
   onChange: (field: Field, patch: Partial<Values>) => unknown;
+  /** The "Moves goal" field. */
+  goals: ReactNode;
 }) {
   return (
     <dl className="grid grid-cols-[7.5rem_1fr] items-start gap-x-3 gap-y-4 p-4 text-sm max-sm:grid-cols-1 max-sm:gap-y-1.5">
@@ -310,6 +337,10 @@ function TaskFields({
         <TagSelect value={values.tagId} onSelect={(tag) => onChange("tagId", { tagId: tag.id })} />
       </Row>
 
+      <Row label="Moves goal" error={undefined}>
+        {goals}
+      </Row>
+
       <Row label="Importance" error={errors.importance}>
         <StarRating value={values.importance} onChange={(importance) => onChange("importance", { importance })} />
       </Row>
@@ -343,6 +374,34 @@ function TaskFields({
         </label>
       </Row>
     </dl>
+  );
+}
+
+/** An open task's goals, saved as each change is made. */
+function TaskGoals({ taskId }: { taskId: string }) {
+  const goals = useItemGoalDrafts("task", taskId);
+  const syncGoals = useItemGoalSync();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <>
+      <ItemGoalsField
+        itemType="task"
+        value={goals.drafts}
+        onChange={async (drafts) => {
+          const before = goals.drafts ?? [];
+          goals.edit(drafts);
+          setError(null);
+          const failure = await syncGoals("task", taskId, before, drafts);
+          goals.settle(failure === null);
+          setError(failure);
+        }}
+      />
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </>
   );
 }
 

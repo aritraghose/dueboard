@@ -11,10 +11,12 @@ import { ApiClient } from "../rpc-client.ts";
 import { failureMessage, useRun, useTags } from "./use-tasks.ts";
 
 // Habits for the UI. Every habit query carries the `habits` reactivity key
-// and every habit write invalidates it, so `/now` and `/habits` refetch
-// after any change.
+// and every habit write invalidates it (and `goals`, which a tap can move),
+// so `/now`, `/habits` and `/goals` refetch after any change.
 
 const HABITS = ["habits"];
+/** A habit write can move (or unlink) a linked goal, so it refreshes goals too. */
+const HABIT_WRITES = [...HABITS, "goals"];
 
 /** `/now`'s habits for one day: due and settled. */
 export const habitsForDayAtom = (date: LocalDate) =>
@@ -27,7 +29,7 @@ export const habitListAtom = ApiClient.query("ListHabits", undefined, { reactivi
 export function useHabitActions() {
   const run = useRun();
   return useMemo(() => {
-    const call = <A, E>(effect: Effect.Effect<A, E, ApiClient | Reactivity.Reactivity>) => run(effect.pipe(Reactivity.mutation(HABITS)));
+    const call = <A, E>(effect: Effect.Effect<A, E, ApiClient | Reactivity.Reactivity>) => run(effect.pipe(Reactivity.mutation(HABIT_WRITES)));
     return {
       create: (payload: CreateHabitInput) => call(ApiClient.use((client) => client("CreateHabit", payload))),
       update: (payload: UpdateHabitInput) => call(ApiClient.use((client) => client("UpdateHabit", payload))),

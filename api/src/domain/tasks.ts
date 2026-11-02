@@ -319,7 +319,7 @@ export const listTasks = Effect.fn("listTasks")(function* (userId: string, input
   const conditions: Array<SQL | undefined> = [
     eq(Tasks.userId, userId),
     filters.status?.length ? inArray(Tasks.status, [...filters.status]) : undefined,
-    filters.tagId ? eq(Tasks.tagId, filters.tagId) : undefined,
+    filters.tagIds?.length ? inArray(Tasks.tagId, [...filters.tagIds]) : undefined,
     from || to ? or(inRange(Tasks.assignedDate), inRange(Tasks.deadlineDate)) : undefined,
     pattern ? ilike(Tasks.title, pattern) : undefined,
     cursor

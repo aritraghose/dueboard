@@ -29,6 +29,8 @@ import { useBootstrap } from "./use-bootstrap.ts";
 
 const TASKS = ["tasks"];
 const TAGS = ["tags"];
+/** A task write can move (or unlink) a linked goal, so it refreshes goals too. */
+const TASK_WRITES = [...TASKS, "goals"];
 
 /** `/now`'s tasks for one day: open and settled, assigned or due that day. */
 export const tasksForDayAtom = (date: LocalDate) =>
@@ -144,18 +146,18 @@ export function useTaskActions() {
   return useMemo(
     () => ({
       create: (payload: CreateTaskInput) =>
-        run(ApiClient.use((client) => client("CreateTask", payload)).pipe(Reactivity.mutation(TASKS))),
+        run(ApiClient.use((client) => client("CreateTask", payload)).pipe(Reactivity.mutation(TASK_WRITES))),
       update: (payload: UpdateTaskInput) =>
-        run(ApiClient.use((client) => client("UpdateTask", payload)).pipe(Reactivity.mutation(TASKS))),
+        run(ApiClient.use((client) => client("UpdateTask", payload)).pipe(Reactivity.mutation(TASK_WRITES))),
       setStatus: (payload: SetTaskStatusInput) =>
         run(
-          ApiClient.use((client) => client("SetTaskStatus", payload)).pipe(Reactivity.mutation(TASKS)),
+          ApiClient.use((client) => client("SetTaskStatus", payload)).pipe(Reactivity.mutation(TASK_WRITES)),
         ),
       // The row hides at once and comes back only if the delete fails.
       remove: async (id: string) => {
         registry.update(removedTasksAtom, ({ ids }) => ({ ids: new Set(ids).add(id) }));
         const exit = await run(
-          ApiClient.use((client) => client("DeleteTask", { id })).pipe(Reactivity.mutation(TASKS)),
+          ApiClient.use((client) => client("DeleteTask", { id })).pipe(Reactivity.mutation(TASK_WRITES)),
         );
         if (Exit.isFailure(exit)) {
           registry.update(removedTasksAtom, ({ ids }) => {
