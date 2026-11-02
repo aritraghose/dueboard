@@ -73,7 +73,7 @@ The social graph and the user's own controls:
   - It sits outside `_app`'s guard, but uses the app chrome when signed in.
 - **`/settings`**, with tabs:
   - **General**:
-    - default privacy and default shareToTimeline;
+    - default privacy and default shareToLive;
     - the time zone (display only, auto-detected);
     - the theme.
   - **Tags**: create, rename and recolor tags. System tags can only be recolored.

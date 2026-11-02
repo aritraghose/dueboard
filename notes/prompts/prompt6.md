@@ -41,7 +41,7 @@ and editing, and the `/habits` page.
 
 ### 2. Create and edit habit
 
-- **Fields**: title, description, schedule, start date (default today), privacy, shareToTimeline. Defaults come from settings.
+- **Fields**: title, description, schedule, start date (default today), privacy, shareToLive. Defaults come from settings.
 - **Schedule builder**, with presets first:
   - Daily
   - N times a day

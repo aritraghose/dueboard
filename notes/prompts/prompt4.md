@@ -60,7 +60,7 @@ Opens on click: a Sheet on mobile, a Dialog or side sheet on desktop.
   - tag picker with colors, and **inline tag creation**
   - status (`idle` / `working` / `settled`)
   - privacy
-  - shareToTimeline
+  - shareToLive
   - importance (1–5 stars)
   - expected minutes
 - Delete, with a confirmation.
@@ -91,7 +91,7 @@ Opens on click: a Sheet on mobile, a Dialog or side sheet on desktop.
 
 ## Out of scope
 
-- Habits, goals and the timeline.
+- Habits, goals and Live.
 
 ## When done
 

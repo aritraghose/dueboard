@@ -16,7 +16,7 @@ const toSettings = (row: UserSettingsRow): Settings =>
     timeZone: row.timeZone,
     color: row.color,
     defaultPrivacy: row.defaultPrivacy,
-    defaultShareToTimeline: row.defaultShareToTimeline,
+    defaultShareToLive: row.defaultShareToLive,
     relayPolicy: row.relayPolicy,
   });
 

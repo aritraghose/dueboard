@@ -26,7 +26,7 @@ A focus session widget on `/now` that's a pleasure to use, plus a `/sessions` hi
 - **Idle**:
   - start with preset minutes (15 / 25 / 50 / 90) or a custom value;
   - an optional label;
-  - privacy and shareToTimeline (defaults from settings).
+  - privacy and shareToLive (defaults from settings).
 - **Running**:
   - a big countdown computed from `ends_at`, with the browser's clock re-synced on focus and visibility change;
   - pause, extend (+5 / +15 / custom) and stop (with confirmation).

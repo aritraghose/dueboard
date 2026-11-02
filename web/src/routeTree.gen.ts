@@ -14,7 +14,17 @@ import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as PublicRouteRouteImport } from './routes/_public/route'
 import { Route as GlanceRouteImport } from './routes/glance'
 import { Route as RpcRouteImport } from './routes/rpc'
+import { Route as AppBoardsRouteImport } from './routes/_app/boards'
+import { Route as AppDiaryRouteImport } from './routes/_app/diary'
+import { Route as AppGoalsRouteImport } from './routes/_app/goals'
+import { Route as AppHabitsRouteImport } from './routes/_app/habits'
+import { Route as AppInboxRouteImport } from './routes/_app/inbox'
+import { Route as AppLiveRouteImport } from './routes/_app/live'
+import { Route as AppNotesRouteImport } from './routes/_app/notes'
 import { Route as AppNowRouteImport } from './routes/_app/now'
+import { Route as AppSessionsRouteImport } from './routes/_app/sessions'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppTasksRouteImport } from './routes/_app/tasks'
 import { Route as AuthAuthRouteImport } from './routes/_auth/auth'
 import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
 import { Route as PublicIndexRouteImport } from './routes/_public/index'
@@ -42,9 +52,59 @@ const RpcRoute = RpcRouteImport.update({
   path: '/rpc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppBoardsRoute = AppBoardsRouteImport.update({
+  id: '/boards',
+  path: '/boards',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppDiaryRoute = AppDiaryRouteImport.update({
+  id: '/diary',
+  path: '/diary',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppGoalsRoute = AppGoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppHabitsRoute = AppHabitsRouteImport.update({
+  id: '/habits',
+  path: '/habits',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppInboxRoute = AppInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppLiveRoute = AppLiveRouteImport.update({
+  id: '/live',
+  path: '/live',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppNotesRoute = AppNotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppNowRoute = AppNowRouteImport.update({
   id: '/now',
   path: '/now',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppSessionsRoute = AppSessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppTasksRoute = AppTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AuthAuthRoute = AuthAuthRouteImport.update({
@@ -72,7 +132,17 @@ export interface FileRoutesByFullPath {
   '/': typeof PublicIndexRoute
   '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
+  '/boards': typeof AppBoardsRoute
+  '/diary': typeof AppDiaryRoute
+  '/goals': typeof AppGoalsRoute
+  '/habits': typeof AppHabitsRoute
+  '/inbox': typeof AppInboxRoute
+  '/live': typeof AppLiveRoute
+  '/notes': typeof AppNotesRoute
   '/now': typeof AppNowRoute
+  '/sessions': typeof AppSessionsRoute
+  '/settings': typeof AppSettingsRoute
+  '/tasks': typeof AppTasksRoute
   '/auth': typeof AuthAuthRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -81,7 +151,17 @@ export interface FileRoutesByTo {
   '/': typeof PublicIndexRoute
   '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
+  '/boards': typeof AppBoardsRoute
+  '/diary': typeof AppDiaryRoute
+  '/goals': typeof AppGoalsRoute
+  '/habits': typeof AppHabitsRoute
+  '/inbox': typeof AppInboxRoute
+  '/live': typeof AppLiveRoute
+  '/notes': typeof AppNotesRoute
   '/now': typeof AppNowRoute
+  '/sessions': typeof AppSessionsRoute
+  '/settings': typeof AppSettingsRoute
+  '/tasks': typeof AppTasksRoute
   '/auth': typeof AuthAuthRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -93,7 +173,17 @@ export interface FileRoutesById {
   '/_public': typeof PublicRouteRouteWithChildren
   '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
+  '/_app/boards': typeof AppBoardsRoute
+  '/_app/diary': typeof AppDiaryRoute
+  '/_app/goals': typeof AppGoalsRoute
+  '/_app/habits': typeof AppHabitsRoute
+  '/_app/inbox': typeof AppInboxRoute
+  '/_app/live': typeof AppLiveRoute
+  '/_app/notes': typeof AppNotesRoute
   '/_app/now': typeof AppNowRoute
+  '/_app/sessions': typeof AppSessionsRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/_app/tasks': typeof AppTasksRoute
   '/_auth/auth': typeof AuthAuthRoute
   '/_auth/onboarding': typeof AuthOnboardingRoute
   '/_public/': typeof PublicIndexRoute
@@ -102,10 +192,42 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/glance' | '/rpc' | '/now' | '/auth' | '/onboarding' | '/api/auth/$'
+    | '/'
+    | '/glance'
+    | '/rpc'
+    | '/boards'
+    | '/diary'
+    | '/goals'
+    | '/habits'
+    | '/inbox'
+    | '/live'
+    | '/notes'
+    | '/now'
+    | '/sessions'
+    | '/settings'
+    | '/tasks'
+    | '/auth'
+    | '/onboarding'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/glance' | '/rpc' | '/now' | '/auth' | '/onboarding' | '/api/auth/$'
+    | '/'
+    | '/glance'
+    | '/rpc'
+    | '/boards'
+    | '/diary'
+    | '/goals'
+    | '/habits'
+    | '/inbox'
+    | '/live'
+    | '/notes'
+    | '/now'
+    | '/sessions'
+    | '/settings'
+    | '/tasks'
+    | '/auth'
+    | '/onboarding'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/_app'
@@ -113,7 +235,17 @@ export interface FileRouteTypes {
     | '/_public'
     | '/glance'
     | '/rpc'
+    | '/_app/boards'
+    | '/_app/diary'
+    | '/_app/goals'
+    | '/_app/habits'
+    | '/_app/inbox'
+    | '/_app/live'
+    | '/_app/notes'
     | '/_app/now'
+    | '/_app/sessions'
+    | '/_app/settings'
+    | '/_app/tasks'
     | '/_auth/auth'
     | '/_auth/onboarding'
     | '/_public/'
@@ -166,11 +298,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RpcRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/boards': {
+      id: '/_app/boards'
+      path: '/boards'
+      fullPath: '/boards'
+      preLoaderRoute: typeof AppBoardsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/diary': {
+      id: '/_app/diary'
+      path: '/diary'
+      fullPath: '/diary'
+      preLoaderRoute: typeof AppDiaryRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/goals': {
+      id: '/_app/goals'
+      path: '/goals'
+      fullPath: '/goals'
+      preLoaderRoute: typeof AppGoalsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/habits': {
+      id: '/_app/habits'
+      path: '/habits'
+      fullPath: '/habits'
+      preLoaderRoute: typeof AppHabitsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/inbox': {
+      id: '/_app/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof AppInboxRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/live': {
+      id: '/_app/live'
+      path: '/live'
+      fullPath: '/live'
+      preLoaderRoute: typeof AppLiveRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/notes': {
+      id: '/_app/notes'
+      path: '/notes'
+      fullPath: '/notes'
+      preLoaderRoute: typeof AppNotesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/now': {
       id: '/_app/now'
       path: '/now'
       fullPath: '/now'
       preLoaderRoute: typeof AppNowRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/sessions': {
+      id: '/_app/sessions'
+      path: '/sessions'
+      fullPath: '/sessions'
+      preLoaderRoute: typeof AppSessionsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/tasks': {
+      id: '/_app/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AppTasksRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_auth/auth': {
@@ -205,11 +407,31 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteRouteChildren {
+  AppBoardsRoute: typeof AppBoardsRoute
+  AppDiaryRoute: typeof AppDiaryRoute
+  AppGoalsRoute: typeof AppGoalsRoute
+  AppHabitsRoute: typeof AppHabitsRoute
+  AppInboxRoute: typeof AppInboxRoute
+  AppLiveRoute: typeof AppLiveRoute
+  AppNotesRoute: typeof AppNotesRoute
   AppNowRoute: typeof AppNowRoute
+  AppSessionsRoute: typeof AppSessionsRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppTasksRoute: typeof AppTasksRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppBoardsRoute: AppBoardsRoute,
+  AppDiaryRoute: AppDiaryRoute,
+  AppGoalsRoute: AppGoalsRoute,
+  AppHabitsRoute: AppHabitsRoute,
+  AppInboxRoute: AppInboxRoute,
+  AppLiveRoute: AppLiveRoute,
+  AppNotesRoute: AppNotesRoute,
   AppNowRoute: AppNowRoute,
+  AppSessionsRoute: AppSessionsRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppTasksRoute: AppTasksRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(

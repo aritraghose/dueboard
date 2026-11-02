@@ -49,7 +49,7 @@ A habit has a `target_count` and one of three schedule kinds:
   - `schedule_kind`, `target_count` (1–100), `period_unit`, `period_length` (1–365);
   - `weekdays smallint[]?`, `month_days smallint[]?`;
   - `start_date`;
-  - `status`, `privacy`, `share_to_timeline`;
+  - `status`, `privacy`, `share_to_live`;
   - timestamps.
 - **`habit_pauses`**: `id`, `habit_id`, `start_date`, `end_date?`.
 - **`habit_checkins`**: `id`, `habit_id`, `user_id`, `local_date`, `count`, `updated_at`.

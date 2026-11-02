@@ -37,7 +37,7 @@ The complete tasks backend: schema, domain service, rules and RPCs. Step 4 build
 | `status` | enum `idle`/`working`/`settled`, default `idle` |
 | `settled_at` | timestamptz, nullable |
 | `privacy` | enum |
-| `share_to_timeline` | boolean |
+| `share_to_live` | boolean |
 | `importance` | smallint, nullable, `CHECK` 1–5 |
 | `expected_minutes` | int, nullable, `CHECK` 1–1440 |
 | `created_at`, `updated_at` | timestamps |
@@ -53,7 +53,7 @@ The complete tasks backend: schema, domain service, rules and RPCs. Step 4 build
 ### 2. Domain service: `api/src/domain/tasks.ts`
 
 - **`createTask`**:
-  - Defaults: `tag_id` → the user's `default` tag; `privacy` and `share_to_timeline` → the user's settings defaults.
+  - Defaults: `tag_id` → the user's `default` tag; `privacy` and `share_to_live` → the user's settings defaults.
   - The tag must belong to the user.
 - **`updateTask`**: a partial update.
   - An explicit `null` clears an optional field; a missing key leaves it unchanged.
@@ -101,7 +101,7 @@ Run `alchemy dev` once so the migration is generated.
 
 - The UI (step 4).
 - Goal links (step 7).
-- The timeline (step 14).
+- Live (step 14).
 
 ## When done
 

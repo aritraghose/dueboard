@@ -50,7 +50,7 @@ Each tool has a Zod schema (the AI SDK uses Zod; check whether it's already inst
 | Notes | create (60 chars), list |
 | Sessions | get active, start (handle `ActiveSessionExists`), pause, resume, extend, stop |
 | Tags | list, create |
-| Social read | timeline and diary, through visibility (§5) |
+| Social read | Live and diary, through visibility (§5) |
 
 - **Dates**: tools accept natural values the model is likely to produce (`YYYY-MM-DD`). The context states today's date and the time zone clearly.
 

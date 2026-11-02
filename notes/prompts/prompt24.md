@@ -26,7 +26,7 @@ Review the whole app. You may run the `security-review` skill. Check:
 - the `/agents/*` proxy pins `tibo-agent` to the session user and computes `ask-agent` names server-side;
 - origin checks;
 - Turnstile verification;
-- prompt-injection boundaries (relays, Ask page, timeline text reaching Tibo);
+- prompt-injection boundaries (relays, Ask page, Live text reaching Tibo);
 - secrets are never exposed to the client;
 - error messages never leak internals.
 
@@ -46,7 +46,7 @@ Fix what you find, or list it for me.
 
 ### 4. Performance
 
-- Check the slow queries: timeline, diary, graph, `GetDay`, `GetUpcoming`. Add missing indexes.
+- Check the slow queries: Live, diary, graph, `GetDay`, `GetUpcoming`. Add missing indexes.
 - Check that `/now` uses one aggregate request.
 
 ### 5. Accessibility and responsive pass

@@ -27,43 +27,160 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /*
+   * Dueboard's light palette: cream washing into teal (the page and cards
+   * are gradients, `--page-gradient` and `--card-gradient`), deep-teal ink
+   * and actions, and marigold as Tibo's own color. Dark mode (`.dark` below) is
+   * neutral black instead. See notes/planning.md (Decision log, step 2).
+   */
+  --background: oklch(0.972 0.016 110);
+  --foreground: oklch(0.26 0.04 200);
+  --card: oklch(0.988 0.02 90);
+  --card-foreground: oklch(0.26 0.04 200);
+  --popover: oklch(0.988 0.02 90);
+  --popover-foreground: oklch(0.26 0.04 200);
+  --primary: oklch(0.43 0.085 192);
+  --primary-foreground: oklch(0.985 0.012 95);
+  --secondary: oklch(0.93 0.03 185);
+  --secondary-foreground: oklch(0.3 0.06 195);
+  --muted: oklch(0.94 0.022 175);
+  --muted-foreground: oklch(0.48 0.035 200);
+  --accent: oklch(0.93 0.03 185);
+  --accent-foreground: oklch(0.26 0.04 200);
+  --destructive: oklch(0.577 0.215 27);
+  --border: oklch(0.89 0.025 165);
+  --input: oklch(0.86 0.03 170);
+  --ring: oklch(0.6 0.1 190);
+  --chart-1: var(--tag-teal);
+  --chart-2: var(--tag-blue);
+  --chart-3: var(--tag-amber);
+  --chart-4: var(--tag-violet);
+  --chart-5: var(--tag-pink);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Done states ("All habits checked"), and Live's dot. */
+  --success: oklch(0.52 0.13 155);
+
+  /* Cream: the "Start a session" pill. */
+  --cream: oklch(0.95 0.05 86);
+  --cream-foreground: oklch(0.36 0.06 70);
+
+  /* Your chat bubble, in deep teal (Tibo's replies are plain text). */
+  --bubble-me: oklch(0.43 0.085 192);
+  --bubble-me-foreground: oklch(0.985 0.012 95);
+  /* The message box's edge: a cream leaning toward the teal around it. */
+  --composer-border: oklch(0.77 0.09 95);
+
+  /* The glow under `/now`'s two cards: teal into marigold, soft. */
+  --card-glow: linear-gradient(120deg, oklch(0.7 0.13 190 / 85%), oklch(0.8 0.15 75 / 80%));
+
+  /* Cards: a border plus a very slight shadow, to sit apart from the page. */
+  --card-shadow: 0 1px 2px oklch(0.3 0.04 200 / 6%), 0 4px 12px -4px oklch(0.3 0.04 200 / 8%);
+
+  /* The page wash: cream at the top, deepening to teal at the bottom. */
+  --page-gradient: linear-gradient(
+    180deg,
+    oklch(0.975 0.022 90) 0%,
+    oklch(0.96 0.03 140) 45%,
+    oklch(0.925 0.05 188) 100%
+  );
+  /*
+   * Every raised surface (cards, menus, panels: anything `bg-card` or
+   * `bg-popover`, see the base layer) follows the same direction a shade
+   * lighter, so it lifts off the page: cream at the top, pale teal below.
+   */
+  --card-gradient: linear-gradient(
+    180deg,
+    oklch(0.988 0.028 88) 0%,
+    oklch(0.982 0.02 135) 50%,
+    oklch(0.965 0.03 185) 100%
+  );
+
+  /* The nav (sidebar and phone tab bar): a light, airy teal. */
+  --sidebar: oklch(0.945 0.03 182);
+  --sidebar-foreground: oklch(0.26 0.05 200);
+  --sidebar-primary: oklch(0.43 0.085 192);
+  --sidebar-primary-foreground: oklch(0.985 0.012 95);
+  --sidebar-accent: oklch(0.89 0.05 185);
+  --sidebar-accent-foreground: oklch(0.22 0.055 200);
+  --sidebar-border: oklch(0.89 0.04 180);
+  --sidebar-ring: oklch(0.6 0.1 190);
+
+  /* Tibo's marigold: the Tibo button, the "today" mark, Tibo's surfaces. */
+  --tibo: oklch(0.82 0.15 78);
+  --tibo-foreground: oklch(0.25 0.04 60);
+  --tibo-soft: oklch(0.95 0.045 85);
+
+  /* The phone top row, over scrolling content. */
+  --chrome: oklch(0.96 0.03 170 / 70%);
+
+  /*
+   * Tag palette. Keys match `TAG_COLOR` in api/src/domain/model.ts.
+   * `--tag-<key>` is the solid (dots, bars), `-soft` a chip background,
+   * `-ink` text on that background. Use them through `data-tag` (below).
+   */
+  --tag-gray: oklch(0.62 0.012 260);
+  --tag-gray-soft: oklch(0.95 0.010 260);
+  --tag-gray-ink: oklch(0.43 0.010 260);
+  --tag-red: oklch(0.62 0.150 25);
+  --tag-red-soft: oklch(0.95 0.040 25);
+  --tag-red-ink: oklch(0.43 0.128 25);
+  --tag-orange: oklch(0.62 0.140 50);
+  --tag-orange-soft: oklch(0.95 0.040 50);
+  --tag-orange-ink: oklch(0.43 0.119 50);
+  --tag-amber: oklch(0.62 0.130 80);
+  --tag-amber-soft: oklch(0.95 0.040 80);
+  --tag-amber-ink: oklch(0.43 0.111 80);
+  --tag-green: oklch(0.62 0.120 150);
+  --tag-green-soft: oklch(0.95 0.040 150);
+  --tag-green-ink: oklch(0.43 0.102 150);
+  --tag-teal: oklch(0.62 0.100 190);
+  --tag-teal-soft: oklch(0.95 0.040 190);
+  --tag-teal-ink: oklch(0.43 0.085 190);
+  --tag-blue: oklch(0.62 0.130 250);
+  --tag-blue-soft: oklch(0.95 0.040 250);
+  --tag-blue-ink: oklch(0.43 0.111 250);
+  --tag-indigo: oklch(0.62 0.140 275);
+  --tag-indigo-soft: oklch(0.95 0.040 275);
+  --tag-indigo-ink: oklch(0.43 0.119 275);
+  --tag-violet: oklch(0.62 0.140 300);
+  --tag-violet-soft: oklch(0.95 0.040 300);
+  --tag-violet-ink: oklch(0.43 0.119 300);
+  --tag-pink: oklch(0.62 0.140 350);
+  --tag-pink-soft: oklch(0.95 0.040 350);
+  --tag-pink-ink: oklch(0.43 0.119 350);
 }
 
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;
+  /* Type scale (Geist only): quiet, with one title size for page headings. */
+  --text-title: 1.625rem;
+  --text-title--line-height: 1.15;
+  --text-title--letter-spacing: -0.03em;
+  /* Tibo blinks now and then. The reduced-motion rule below stops it. */
+  --animate-tibo-blink: tibo-blink 7s ease-in-out infinite;
+  @keyframes tibo-blink {
+    0%, 92%, 100% {
+      transform: scaleY(1);
+    }
+    95% {
+      transform: scaleY(0.1);
+    }
+  }
+  --color-tibo: var(--tibo);
+  --color-tibo-foreground: var(--tibo-foreground);
+  --color-tibo-soft: var(--tibo-soft);
+  --color-chrome: var(--chrome);
+  --color-success: var(--success);
+  --color-cream: var(--cream);
+  --color-bubble-me: var(--bubble-me);
+  --color-bubble-me-foreground: var(--bubble-me-foreground);
+  --color-composer-border: var(--composer-border);
+  --color-cream-foreground: var(--cream-foreground);
+  --color-tag: var(--tag-solid);
+  --color-tag-soft: var(--tag-soft);
+  --color-tag-ink: var(--tag-ink);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -105,37 +222,92 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /*
+   * Dark mode is neutral black, after T3 Code: page and cards the same deep
+   * black, cards set apart by a border and a slight shadow, hairlines from
+   * #141414 to #292929,
+   * #f5f5f5 text and #a1a1a1 for quiet text. Marigold stays the one color:
+   * Tibo's.
+   */
+  --background: #080808;
+  --foreground: #f5f5f5;
+  --card: #080808;
+  --card-foreground: #f5f5f5;
+  --popover: #0b0b0b;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #0e0e0e;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #f5f5f5;
+  --muted: #161616;
+  --muted-foreground: #a1a1a1;
+  --accent: #1a1a1a;
+  --accent-foreground: #f5f5f5;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: #1f1f1f;
+  --input: #292929;
+  --ring: #737373;
+  /*
+   * The page and the cards are the same deep black, with the faintest wash
+   * from the top; a card's border and shadow are what set it apart.
+   */
+  --page-gradient: linear-gradient(180deg, #0c0c0c 0%, #060606 100%);
+  --card-gradient: var(--page-gradient);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 70%), 0 6px 16px -6px rgb(0 0 0 / 80%), inset 0 1px 0 rgb(255 255 255 / 3%);
+  /* In dark mode "Start a session" keeps the quiet secondary gray. */
+  --cream: #1f1f1f;
+  --cream-foreground: #f5f5f5;
+  --bubble-me: #2a2a2a;
+  --bubble-me-foreground: #f5f5f5;
+  --composer-border: var(--input);
+  --card-glow: linear-gradient(120deg, oklch(0.55 0.11 190 / 55%), oklch(0.65 0.13 75 / 45%));
+  --success: oklch(0.8 0.15 155);
+  /* The nav: matte black, a step up from the page's pure black. */
+  --sidebar: #121212;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #f5f5f5;
+  --sidebar-primary-foreground: #0e0e0e;
+  --sidebar-accent: #222222;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #1c1c1c;
+  --sidebar-ring: #737373;
+
+  --tibo: oklch(0.84 0.14 80);
+  --tibo-foreground: oklch(0.24 0.04 60);
+  --tibo-soft: oklch(0.27 0.05 75);
+
+  --chrome: rgb(0 0 0 / 80%);
+
+  --tag-gray: oklch(0.74 0 0);
+  --tag-gray-soft: oklch(0.27 0 0);
+  --tag-gray-ink: oklch(0.87 0 0);
+  --tag-red: oklch(0.74 0.135 25);
+  --tag-red-soft: oklch(0.29 0.048 25);
+  --tag-red-ink: oklch(0.87 0.083 25);
+  --tag-orange: oklch(0.74 0.126 50);
+  --tag-orange-soft: oklch(0.29 0.048 50);
+  --tag-orange-ink: oklch(0.87 0.077 50);
+  --tag-amber: oklch(0.74 0.117 80);
+  --tag-amber-soft: oklch(0.29 0.048 80);
+  --tag-amber-ink: oklch(0.87 0.072 80);
+  --tag-green: oklch(0.74 0.108 150);
+  --tag-green-soft: oklch(0.29 0.048 150);
+  --tag-green-ink: oklch(0.87 0.066 150);
+  --tag-teal: oklch(0.74 0.090 190);
+  --tag-teal-soft: oklch(0.29 0.048 190);
+  --tag-teal-ink: oklch(0.87 0.055 190);
+  --tag-blue: oklch(0.74 0.117 250);
+  --tag-blue-soft: oklch(0.29 0.048 250);
+  --tag-blue-ink: oklch(0.87 0.072 250);
+  --tag-indigo: oklch(0.74 0.126 275);
+  --tag-indigo-soft: oklch(0.29 0.048 275);
+  --tag-indigo-ink: oklch(0.87 0.077 275);
+  --tag-violet: oklch(0.74 0.126 300);
+  --tag-violet-soft: oklch(0.29 0.048 300);
+  --tag-violet-ink: oklch(0.87 0.077 300);
+  --tag-pink: oklch(0.74 0.126 350);
+  --tag-pink-soft: oklch(0.29 0.048 350);
+  --tag-pink-ink: oklch(0.87 0.077 350);
 }
 
 @layer base {
@@ -144,8 +316,111 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image: var(--page-gradient);
+    background-attachment: fixed;
+  }
+
+  /* The cream-to-teal wash on every raised surface (none in dark mode). */
+  .bg-card,
+  .bg-popover {
+    background-image: var(--card-gradient);
   }
   html {
     @apply font-sans;
+  }
+
+  /*
+   * `data-tag="<key>"` points the `tag`, `tag-soft` and `tag-ink` colors at
+   * one palette entry, so a chip is `bg-tag-soft text-tag-ink` whatever its
+   * color. The same keys color usernames (`Settings.color`).
+   */
+  [data-tag="gray"] {
+    --tag-solid: var(--tag-gray);
+    --tag-soft: var(--tag-gray-soft);
+    --tag-ink: var(--tag-gray-ink);
+  }
+  [data-tag="red"] {
+    --tag-solid: var(--tag-red);
+    --tag-soft: var(--tag-red-soft);
+    --tag-ink: var(--tag-red-ink);
+  }
+  [data-tag="orange"] {
+    --tag-solid: var(--tag-orange);
+    --tag-soft: var(--tag-orange-soft);
+    --tag-ink: var(--tag-orange-ink);
+  }
+  [data-tag="amber"] {
+    --tag-solid: var(--tag-amber);
+    --tag-soft: var(--tag-amber-soft);
+    --tag-ink: var(--tag-amber-ink);
+  }
+  [data-tag="green"] {
+    --tag-solid: var(--tag-green);
+    --tag-soft: var(--tag-green-soft);
+    --tag-ink: var(--tag-green-ink);
+  }
+  [data-tag="teal"] {
+    --tag-solid: var(--tag-teal);
+    --tag-soft: var(--tag-teal-soft);
+    --tag-ink: var(--tag-teal-ink);
+  }
+  [data-tag="blue"] {
+    --tag-solid: var(--tag-blue);
+    --tag-soft: var(--tag-blue-soft);
+    --tag-ink: var(--tag-blue-ink);
+  }
+  [data-tag="indigo"] {
+    --tag-solid: var(--tag-indigo);
+    --tag-soft: var(--tag-indigo-soft);
+    --tag-ink: var(--tag-indigo-ink);
+  }
+  [data-tag="violet"] {
+    --tag-solid: var(--tag-violet);
+    --tag-soft: var(--tag-violet-soft);
+    --tag-ink: var(--tag-violet-ink);
+  }
+  [data-tag="pink"] {
+    --tag-solid: var(--tag-pink);
+    --tag-soft: var(--tag-pink-soft);
+    --tag-ink: var(--tag-pink-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * On wide screens the Tibo panel grows out of the Tibo button at the top
+ * right and shrinks back into it. Unlayered, so it replaces the sheet's
+ * slide-in; the reduced-motion rule above still cuts it short.
+ */
+[data-tibo-panel][data-side="right"] {
+  transform-origin: top right;
+}
+[data-tibo-panel][data-side="right"][data-state="open"] {
+  animation: tibo-grow 280ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+[data-tibo-panel][data-side="right"][data-state="closed"] {
+  animation: tibo-shrink 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+@keyframes tibo-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.08);
+    border-radius: 2rem;
+  }
+}
+@keyframes tibo-shrink {
+  to {
+    opacity: 0;
+    transform: scale(0.08);
   }
 }

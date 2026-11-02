@@ -51,7 +51,7 @@ Pick one id strategy and document it in `notes/architecture.md` §4. Recommended
   - `user_id` PK (text);
   - `time_zone` (IANA, not null);
   - `default_privacy` (default `connections`);
-  - `default_share_to_timeline` (default true);
+  - `default_share_to_live` (default true);
   - `relay_policy` (default `connections`);
   - `ai_quota_override` (int, nullable);
   - `created_at` and `updated_at`.

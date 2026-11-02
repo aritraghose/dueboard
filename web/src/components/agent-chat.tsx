@@ -5,12 +5,12 @@ import {
   ArrowUpIcon,
   CircleCheckIcon,
   LoaderCircleIcon,
-  MessageCircleDashedIcon,
   SquareIcon,
   Trash2Icon,
 } from "lucide-react";
 import * as React from "react";
 import { Markdown } from "@/components/markdown";
+import { TiboMark } from "@/components/tibo-mark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import {
   Trace,
   TraceCollapsible,
@@ -56,18 +57,31 @@ const SUGGESTIONS = [
 ];
 
 /**
- * Chat with the Dueboard assistant (`api/src/agent.ts`). Each user has one
- * conversation, kept by the agent, so it is still here after a reload or on
- * another device. Renders only in the browser: it opens a WebSocket.
+ * Chat with Tibo. Until step 17 this is the demo `ChatAgent`
+ * (`api/src/agent.ts`). Each user has one conversation, kept by the agent, so
+ * it is still here after a reload or on another device. Renders only in the
+ * browser: it opens a WebSocket. Shown in the Tibo side panel and on `/inbox`;
+ * `headerEnd` adds controls (the panel's close button) to its header.
  */
-export function AgentChat({ userId }: { userId: string }) {
+export function AgentChat({
+  userId,
+  className,
+  headerEnd,
+}: {
+  userId: string;
+  className?: string;
+  headerEnd?: React.ReactNode;
+}) {
   return (
     <section
-      aria-label="Assistant"
-      className="flex h-[min(40rem,75dvh)] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground"
+      aria-label="Tibo"
+      className={cn(
+        "flex h-[min(40rem,75dvh)] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground",
+        className,
+      )}
     >
       <React.Suspense fallback={<ChatLoading />}>
-        <ChatThread userId={userId} />
+        <ChatThread userId={userId} headerEnd={headerEnd} />
       </React.Suspense>
     </section>
   );
@@ -82,7 +96,7 @@ function ChatLoading() {
   );
 }
 
-function ChatThread({ userId }: { userId: string }) {
+function ChatThread({ userId, headerEnd }: { userId: string; headerEnd?: React.ReactNode }) {
   // The web stack's `/agents/*` proxy pins the instance to the signed-in user,
   // whatever name is sent; this one just matches it.
   const agent = useAgent({ agent: "ChatAgent", name: userId });
@@ -109,26 +123,21 @@ function ChatThread({ userId }: { userId: string }) {
   };
 
   const clear = () => {
-    if (window.confirm("Clear this conversation? The assistant forgets it too.")) {
+    if (window.confirm("Clear this conversation? Tibo forgets it too.")) {
       clearHistory();
     }
   };
 
   return (
     <MessageScrollerProvider autoScroll>
-      <header className="flex items-center gap-3 border-b px-4 py-3">
-        <div className="flex min-w-0 flex-col">
-          <h2 className="font-heading font-semibold">Assistant</h2>
-          <p className="truncate text-xs text-muted-foreground">
-            Plans, priorities and next steps for what's due.
-          </p>
-        </div>
+      {/* Like every card's title, Tibo's sits in the middle. */}
+      <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-b px-4 py-3">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="icon-sm"
-              className="ml-auto"
+              className="justify-self-start"
               aria-label="Clear conversation"
               onClick={clear}
               disabled={busy || messages.length === 0}
@@ -138,18 +147,28 @@ function ChatThread({ userId }: { userId: string }) {
           </TooltipTrigger>
           <TooltipContent>Clear conversation</TooltipContent>
         </Tooltip>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <TiboMark className="size-8" />
+          <div className="flex min-w-0 flex-col">
+            <h2 className="font-heading font-semibold">Tibo</h2>
+            <p className="truncate text-xs text-muted-foreground max-sm:hidden">
+              Plans, priorities and the occasional pep talk.
+            </p>
+          </div>
+        </div>
+        <div className="flex justify-end">{headerEnd}</div>
       </header>
 
       <div className="min-h-0 flex-1">
         {messages.length === 0 ? (
           <Empty className="h-full">
             <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <MessageCircleDashedIcon />
+              <EmptyMedia>
+                <TiboMark className="size-12" />
               </EmptyMedia>
               <EmptyTitle>What's on your plate?</EmptyTitle>
               <EmptyDescription>
-                Tell the assistant what's due, and it will help you decide what to do first.
+                Tell Tibo what's due, and it will help you decide what to do first.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent className="items-stretch">
@@ -198,16 +217,16 @@ function ChatThread({ userId }: { userId: string }) {
       <div className="flex flex-col gap-3 p-4 pt-2">
         {error && !busy && (
           <Alert variant="destructive">
-            <AlertTitle>The assistant couldn't reply</AlertTitle>
+            <AlertTitle>Tibo couldn't reply</AlertTitle>
             <AlertDescription>{error.message || "Send your message again."}</AlertDescription>
           </Alert>
         )}
         <form ref={formRef} onSubmit={onSubmit}>
-          <InputGroup>
+          <InputGroup className="border-composer-border!">
             <InputGroupTextarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask about what's due…"
+              placeholder="Message Tibo…"
               aria-label="Message"
               className="max-h-40 min-h-14"
               onKeyDown={(event) => {
@@ -262,7 +281,9 @@ function ChatMessage({ message, streaming }: { message: UIMessage; streaming: bo
       <Message align="end">
         <MessageContent>
           <Bubble align="end" variant="muted">
-            <BubbleContent className="whitespace-pre-wrap">{text}</BubbleContent>
+            <BubbleContent className="bg-bubble-me! whitespace-pre-wrap text-bubble-me-foreground!">
+              {text}
+            </BubbleContent>
           </Bubble>
         </MessageContent>
       </Message>
@@ -281,6 +302,7 @@ function ChatMessage({ message, streaming }: { message: UIMessage; streaming: bo
             ))}
           </Trace>
         )}
+        {/* Tibo's replies are plain text on the panel; only yours sit in a bubble. */}
         {text && <Markdown streaming={streaming}>{text}</Markdown>}
       </MessageContent>
     </Message>

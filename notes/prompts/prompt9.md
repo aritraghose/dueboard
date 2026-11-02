@@ -17,7 +17,7 @@ You are building step 9 of Dueboard's v1. Before anything else, read
 
 ## Goal
 
-Short notes, at most 60 characters each and several per day, each with privacy and shareToTimeline. Notes appear in the diary and on the timeline (later steps).
+Short notes, at most 60 characters each and several per day, each with privacy and shareToLive. Notes appear in the diary and on Live (later steps).
 
 ## Build
 
@@ -27,7 +27,7 @@ Short notes, at most 60 characters each and several per day, each with privacy a
   - `id`, `user_id`;
   - `body` (1–60 chars, `CHECK char_length(body) <= 60`);
   - `local_date` (the user's local date when written);
-  - `privacy`, `share_to_timeline`;
+  - `privacy`, `share_to_live`;
   - `created_at`, `updated_at`;
   - an index on `(user_id, local_date)`.
 - **Service `api/src/domain/notes.ts`**:
@@ -45,7 +45,7 @@ Short notes, at most 60 characters each and several per day, each with privacy a
 - **`/notes` page**:
   - A composer for today with a live character counter (60 max) and privacy and share controls (defaults from settings).
   - Notes grouped by day, newest first, with search, inline edit and delete.
-- **`/now`**: the spec doesn't put notes in the main column. Add a compact "Note" quick-add (in the header actions or the timeline area) that writes a note for today, and show today's notes count, without cluttering the page. Briefly propose the placement to me before building it.
+- **`/now` and `/live`**: step 2 already put a note box (60 characters, with a countdown) at the bottom of the Live card (`NoteComposer` in `web/src/components/live-card.tsx`). Wire it to `CreateNote` for today, and show today's notes count without cluttering the page.
 
 ## Acceptance
 

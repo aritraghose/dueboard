@@ -44,7 +44,7 @@ Goals on `/now`, the `/goals` page, and linking habits and tasks to goals from b
   - description
   - mode: slider, or count with a target
   - target date
-  - privacy and shareToTimeline (defaults from settings)
+  - privacy and shareToLive (defaults from settings)
 - **Links panel** (count goals):
   - Add linked habits and tasks through a searchable picker.
   - Set the amount per check-in or task.

@@ -60,7 +60,7 @@ export const UserSettings = pgTable("user_settings", {
       ),
     ),
   defaultPrivacy: privacy("default_privacy").notNull().default("connections"),
-  defaultShareToTimeline: boolean("default_share_to_timeline").notNull().default(true),
+  defaultShareToLive: boolean("default_share_to_live").notNull().default(true),
   relayPolicy: relayPolicy("relay_policy").notNull().default("connections"),
   /** Replaces `AI_MONTHLY_MESSAGE_QUOTA` for this user when set. */
   aiQuotaOverride: integer("ai_quota_override"),
@@ -94,7 +94,7 @@ export const Tags = pgTable(
 export type TagRow = typeof Tags.$inferSelect;
 
 /**
- * The single feed behind the timeline, diary and contribution graph
+ * The single feed behind the live feed, diary and contribution graph
  * (architecture.md §5). Rows never copy titles, privacy or share flags:
  * readers join the subject for those.
  */

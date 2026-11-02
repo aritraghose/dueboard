@@ -16,7 +16,7 @@ There are two kinds of data, and each lives where it fits:
 | | Postgres (Neon, via Hyperdrive) | A Durable Object per user (`TiboAgent`) |
 |---|---|---|
 | What | Tasks, habits, goals, notes, sessions, tags, settings, connections, activity, relays, usage | Tibo's single thread, memory, summaries, schedules, live connections |
-| Why | Social features read **across users** (timeline, diaries, profiles). A relational database does that well. | One user's agent is one long-lived, stateful thing with its own storage, alarms and WebSockets. |
+| Why | Social features read **across users** (Live, diaries, profiles). A relational database does that well. | One user's agent is one long-lived, stateful thing with its own storage, alarms and WebSockets. |
 
 ## 2. Components
 
@@ -92,26 +92,26 @@ plain `date`**, interpreted in the owner's time zone.
 ### Shared enums
 
 - `privacy`: `public` | `connections` | `private`. New items default to `connections`.
-- `share_to_timeline`: boolean. New items default to `true`.
+- `share_to_live`: boolean. New items default to `true`.
 - Each user can change both defaults in settings.
 
 ### Tables
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `user_settings` | `user_id` PK, `time_zone`, `color`, `default_privacy`, `default_share_to_timeline`, `relay_policy` (`connections`\|`anyone`\|`none`, default `connections`), `ai_quota_override` (nullable) | Created on first sign-in or onboarding. `time_zone` is IANA (`America/New_York`). `color` is a random tag-palette key (never gray), assigned once when the row is created; the timeline shows the username in it. |
+| `user_settings` | `user_id` PK, `time_zone`, `color`, `default_privacy`, `default_share_to_live`, `relay_policy` (`connections`\|`anyone`\|`none`, default `connections`), `ai_quota_override` (nullable) | Created on first sign-in or onboarding. `time_zone` is IANA (`America/New_York`). `color` is a random tag-palette key (never gray), assigned once when the row is created; Live shows the username in it. |
 | `tags` | `id`, `user_id`, `name`, `color`, `system_kind` (`default`\|`habit`\|`goal`\|null) | Unique `(user_id, lower(name))`. System tags are seeded at onboarding. They can be recolored but not renamed or deleted. |
-| `tasks` | `id`, `user_id`, `title`, `description?`, `assigned_date?`, `deadline_date?`, `tag_id`, `status` (`idle`\|`working`\|`settled`, default `idle`), `settled_at?`, `privacy`, `share_to_timeline`, `importance?` (1–5), `expected_minutes?` | `CHECK (assigned_date <= deadline_date)`. `tag_id` defaults to the user's `default` tag. `working` is only a label. |
-| `habits` | `id`, `user_id`, `title`, `description?`, `schedule_kind` (`flexible`\|`specific_days`), `target_count`, `period_unit` (`day`\|`week`\|`month`), `period_length`, `weekdays int[]?`, `month_days int[]?`, `start_date`, `status` (`active`\|`paused`\|`archived`), `privacy`, `share_to_timeline` | Stores the **rule**. Nothing is generated ahead of time. Shown with the `habit` tag. |
+| `tasks` | `id`, `user_id`, `title`, `description?`, `assigned_date?`, `deadline_date?`, `tag_id`, `status` (`idle`\|`working`\|`settled`, default `idle`), `settled_at?`, `privacy`, `share_to_live`, `importance?` (1–5), `expected_minutes?` | `CHECK (assigned_date <= deadline_date)`. `tag_id` defaults to the user's `default` tag. `working` is only a label. |
+| `habits` | `id`, `user_id`, `title`, `description?`, `schedule_kind` (`flexible`\|`specific_days`), `target_count`, `period_unit` (`day`\|`week`\|`month`), `period_length`, `weekdays int[]?`, `month_days int[]?`, `start_date`, `status` (`active`\|`paused`\|`archived`), `privacy`, `share_to_live` | Stores the **rule**. Nothing is generated ahead of time. Shown with the `habit` tag. |
 | `habit_pauses` | `habit_id`, `start_date`, `end_date?` | Pause and resume history. A paused day is never due. |
 | `habit_checkins` | `habit_id`, `user_id`, `local_date`, `count` | Unique `(habit_id, local_date)`. Each tap adds 1, and an undo subtracts 1. |
-| `goals` | `id`, `user_id`, `name`, `description?`, `progress_mode` (`slider`\|`count`), `progress_percent`, `target_count?`, `current_count?`, `target_date?`, `status` (`active`\|`paused`\|`completed`), `completed_at?`, `privacy`, `share_to_timeline` | Progress can go down. Reopening sets `status = active` and clears `completed_at`. |
+| `goals` | `id`, `user_id`, `name`, `description?`, `progress_mode` (`slider`\|`count`), `progress_percent`, `target_count?`, `current_count?`, `target_date?`, `status` (`active`\|`paused`\|`completed`), `completed_at?`, `privacy`, `share_to_live` | Progress can go down. Reopening sets `status = active` and clears `completed_at`. |
 | `goal_links` | `goal_id`, `item_type` (`habit`\|`task`), `item_id`, `amount` (default 1) | A habit check-in adds `amount` per tap. Settling a task adds `amount`. Undoing reverses it. |
-| `goal_progress_events` | `goal_id`, `user_id`, `delta`, `value_after`, `source` (`manual`\|`habit`\|`task`), `source_id?`, `created_at` | Progress history, used by the timeline and for undo. |
-| `notes` | `id`, `user_id`, `body` (≤ 60 chars, `CHECK`), `local_date`, `privacy`, `share_to_timeline`, `created_at` | Several per day. |
-| `focus_sessions` | `id`, `user_id`, `label?`, `planned_minutes`, `status` (`running`\|`paused`\|`completed`\|`stopped`), `started_at`, `ends_at?`, `ended_at?`, `privacy`, `share_to_timeline` | **Partial unique index on `user_id` WHERE status IN ('running','paused')**, so the database enforces one active session. `ends_at` is recomputed on resume and extend so the sweep can find expired ones. |
+| `goal_progress_events` | `goal_id`, `user_id`, `delta`, `value_after`, `source` (`manual`\|`habit`\|`task`), `source_id?`, `created_at` | Progress history, used by Live and for undo. |
+| `notes` | `id`, `user_id`, `body` (≤ 60 chars, `CHECK`), `local_date`, `privacy`, `share_to_live`, `created_at` | Several per day. |
+| `focus_sessions` | `id`, `user_id`, `label?`, `planned_minutes`, `status` (`running`\|`paused`\|`completed`\|`stopped`), `started_at`, `ends_at?`, `ended_at?`, `privacy`, `share_to_live` | **Partial unique index on `user_id` WHERE status IN ('running','paused')**, so the database enforces one active session. `ends_at` is recomputed on resume and extend so the sweep can find expired ones. |
 | `focus_session_segments` | `session_id`, `started_at`, `ended_at?` | Pause and resume history. Elapsed time is the sum of the segments. |
-| `activity` | `id`, `user_id` (actor), `kind`, `subject_type`, `subject_id`, `occurred_at`, `local_date`, `meta jsonb` | The single feed behind the timeline, diary and contribution graph (§5). Indexes on `(user_id, occurred_at desc)` and `(user_id, local_date)`. |
+| `activity` | `id`, `user_id` (actor), `kind`, `subject_type`, `subject_id`, `occurred_at`, `local_date`, `meta jsonb` | The single feed behind Live, diary and contribution graph (§5). Indexes on `(user_id, occurred_at desc)` and `(user_id, local_date)`. |
 | `connection_requests` | `id`, `from_user_id`, `to_user_id`, `status` (`pending`\|`accepted`\|`declined`\|`cancelled`), `created_at` | |
 | `connections` | `user_low`, `user_high` (ordered pair), `created_at` | Mutual. Removing a connection deletes the row. |
 | `blocks` | `blocker_id`, `blocked_id` | Hides everything both ways and blocks requests, relays and the Ask page. |
@@ -184,15 +184,15 @@ canSeeItem(viewer, owner, privacy):
   connections         → connected(viewer, owner)
   private             → false
 
-timeline (viewer = signed-in user):
+live (viewer = signed-in user):
   actors   = viewer ∪ connections(viewer), minus blocked
-  rows     = activity of actors where item.share_to_timeline = true
+  rows     = activity of actors where item.share_to_live = true
   display  = owner == viewer or privacy ∈ {public, connections} → full ("ar1tra settled a task: add rate limiter")
              privacy == private                                → redacted ("ar1tra settled a task")
   option   "only mine" → actors = {viewer}
 
 diary (/diary for yourself, /@username for others):
-  rows where canSeeItem(viewer, owner, privacy), whatever share_to_timeline is
+  rows where canSeeItem(viewer, owner, privacy), whatever share_to_live is
 
 contribution graph:
   counts per local_date of task_settled, habit_completed, goal_completed and
@@ -200,7 +200,7 @@ contribution graph:
   session_stopped does not count.
 ```
 
-Strangers never see a timeline. They only see public diary items and the graph
+Strangers never see Live. They only see public diary items and the graph
 on a profile.
 
 ### Fan-out
@@ -215,9 +215,11 @@ If it gets slow later, add a materialized per-user inbox.
 |---|---|---|
 | `/` | `_public` | Landing page |
 | `/auth`, `/onboarding` | `_auth` | Existing. Onboarding also seeds tags and settings. |
-| `/now` | `_app` | Replaces `/glance` (sign-in lands here). A date header with ← → and local time; Today's tasks, Unscheduled, Habits, Goals; a session widget; a collapsible Timeline; an "Upcoming" view. |
+| `/now` | `_app` | Replaces `/glance` (sign-in lands here). A date header with ← → and local time; Today's tasks, Unscheduled, Habits, Goals; a session widget; a collapsible Live card; an "Upcoming" view. |
 | `/tasks` `/habits` `/goals` `/notes` `/sessions` `/diary` | `_app` | Full lists and history for your own data |
 | `/inbox` | `_app` | Focused full-page Tibo chat |
+| `/boards` | `_app` | Every board (Tasks, Habits, Goals, Notes, Live, Diary) as a card that opens it |
+| `/live` | `_app` | Live, full-page: the feed of what you and your connections get done (it was called the timeline) |
 | `/settings` | `_app` | Defaults, relay policy, Ask page, time zone (read-only display), connections |
 | `/@username` | public-readable | Profile card, contribution graph, diary filtered for the viewer. Logged-out visitors can view it. |
 | `/@username/ask` | public-readable | Q&A with the user's Ask agent, only if they enabled it |
@@ -277,7 +279,7 @@ Tools call the domain services through the internal binding, **as the DO's
 user**: list, create, update and settle tasks; check, uncheck, pause and resume
 habits; create goals, update progress and link items; create notes; start,
 pause, resume, extend and stop sessions; list and create tags; read the
-timeline and diary; search the conversation; relay (§7.5).
+Live and diary; search the conversation; relay (§7.5).
 
 - Destructive or surprising actions (delete, stop a running session, a bulk
   change) must ask the user to confirm first.
@@ -376,7 +378,7 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
 
 ## 10. Realtime
 
-- **v1**: AtomRpc queries refetch after mutations. The timeline polls every
+- **v1**: AtomRpc queries refetch after mutations. Live polls every
   30–60 s while visible. The session timer counts down in the browser from
   `ends_at`. Tibo is realtime through its WebSocket.
 - **Later**: a per-user realtime channel if needed.

@@ -43,7 +43,7 @@ Goals with real progress tracking, moved forward automatically by linked habits 
   - `progress_mode`, `progress_percent` (numeric 0–100), `target_count?`, `current_count?`;
   - `target_date?`;
   - `status`, `completed_at?`;
-  - `privacy`, `share_to_timeline`;
+  - `privacy`, `share_to_live`;
   - timestamps.
   - `CHECK`s keep these consistent.
 - **`goal_links`**: `id`, `goal_id`, `user_id`, `item_type` (`habit`|`task`), `item_id`, `amount` (> 0).
@@ -63,7 +63,7 @@ Goals with real progress tracking, moved forward automatically by linked habits 
   - They run inside the same transaction.
   - They write `goal_progress_events` and update completion.
 - **Activity**:
-  - **`goal_progressed`**: coalesce to **at most one row per goal per local day**. Update the day's existing row's `meta.value_after` and `occurred_at` instead of adding rows, so the timeline isn't spammed.
+  - **`goal_progressed`**: coalesce to **at most one row per goal per local day**. Update the day's existing row's `meta.value_after` and `occurred_at` instead of adding rows, so Live isn't spammed.
   - **`goal_completed`**: on completion. Delete it if the goal reopens.
 - **Reads**:
   - `listGoalsForDay(date)`: active goals, plus any completed that day.

@@ -42,7 +42,7 @@ export type TagColor = typeof TagColor.Type;
 
 /**
  * Each user's color, picked at random from the tag palette when their
- * settings row is created. The timeline shows their username in it. Gray is
+ * settings row is created. The live feed shows their username in it. Gray is
  * left out: it reads as muted text, not as a name.
  */
 export const USER_COLOR = TAG_COLOR.filter(
@@ -90,7 +90,7 @@ export const Id = Schema.String.check(Schema.isBetweenLength(1, 64));
 
 export const SettingsPatch = Schema.Struct({
   defaultPrivacy: Schema.optionalKey(Privacy),
-  defaultShareToTimeline: Schema.optionalKey(Schema.Boolean),
+  defaultShareToLive: Schema.optionalKey(Schema.Boolean),
   relayPolicy: Schema.optionalKey(RelayPolicy),
 });
 export type SettingsPatch = typeof SettingsPatch.Type;
@@ -122,7 +122,7 @@ export class Settings extends Schema.Class<Settings>("Settings")({
   /** Assigned once at random; not user-editable yet. */
   color: UserColor,
   defaultPrivacy: Privacy,
-  defaultShareToTimeline: Schema.Boolean,
+  defaultShareToLive: Schema.Boolean,
   relayPolicy: RelayPolicy,
 }) {}
 

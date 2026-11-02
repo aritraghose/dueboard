@@ -27,7 +27,7 @@ they aren't, stop and tell me.
 
 - **`GetDiary({ username, cursor })`**: activity grouped by the owner's `local_date`, newest day first, cursor-paginated by day.
   - Viewing your own diary shows everything.
-  - Other viewers see only items allowed by `canSeeItem`, **whatever** `share_to_timeline` is. Use the step 14 SQL helpers.
+  - Other viewers see only items allowed by `canSeeItem`, **whatever** `share_to_live` is. Use the step 14 SQL helpers.
   - It works for logged-out viewers, who see public items only, through the public read path from step 13.
 - **Diary contents**:
   - settled tasks

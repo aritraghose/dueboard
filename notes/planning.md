@@ -21,7 +21,7 @@ and quotas can be added later without redesigning anything.
   - **Habits** checklist. When all are done it shows "All habits checked", and the checked habits sit in Settled.
   - **Goals**, showing each active goal's progress (%).
   - **Focus session** widget.
-  - **Timeline**: can be minimized, with a "only mine" toggle.
+  - **Live**: can be minimized, with a "only mine" toggle.
 - An **Upcoming** button shows tasks, habits and goals for coming dates, grouped by date.
 
 ### Tasks
@@ -34,7 +34,7 @@ and quotas can be added later without redesigning anything.
   - tag (defaults to the user's `default` tag)
   - status: `idle` (default), `working` (a label only), or `settled`
   - privacy
-  - shareToTimeline
+  - shareToLive
   - importance, 1–5 stars (optional)
   - expected duration in minutes (optional)
 - **Display**:
@@ -54,7 +54,7 @@ and quotas can be added later without redesigning anything.
   - description (optional)
   - schedule
   - privacy
-  - shareToTimeline
+  - shareToLive
 - **Schedule types**:
   - **Flexible**: N times per period, such as 3× per week, 2× every 5 days, 10× per month, or every 2 weeks. It shows every day of the period until done.
   - **Specific days**: weekdays (Mon/Wed/Fri) or month days (1st and 15th), with N taps needed on each of those days.
@@ -73,7 +73,7 @@ and quotas can be added later without redesigning anything.
   - progress, either a completion slider (%) or a **target count** (7/20 → 35%)
   - optional target date
   - privacy
-  - shareToTimeline
+  - shareToLive
 - **Behavior**:
   - A goal shows **every day until completed**.
   - Goals can be paused and resumed. Progress can go down, and a completed goal can be reopened.
@@ -83,7 +83,7 @@ and quotas can be added later without redesigning anything.
 ### Notes
 
 - At most 60 characters each, with several allowed per day.
-- Each has privacy and shareToTimeline.
+- Each has privacy and shareToLive.
 
 ### Focus sessions
 
@@ -91,26 +91,26 @@ and quotas can be added later without redesigning anything.
   - duration in minutes
   - optional label
   - privacy
-  - shareToTimeline
+  - shareToLive
 - **Behavior**:
   - Sessions can be paused, resumed and extended.
   - **Only one** can be running or paused at a time. Starting another shows a warning, and confirming **stops** the old one.
   - When the time runs out, a session auto-completes even if the app is closed.
   - A session stopped early has status **stopped**. It does not count on the contribution graph.
-- **Timeline**: with shareToTimeline on, the session's start and its completion (or stop) appear on the timeline.
+- **Live**: with shareToLive on, the session's start and its completion (or stop) appear on Live.
 
 ### Tags
 
 - Users create tags, each with a color.
 - The pre-created tags `default`, `habit` and `goal` can be recolored but not renamed or deleted.
 
-### Privacy and the timeline
+### Privacy and Live
 
-- Every event type has `privacy` (`public` | `connections` | `private`) and `shareToTimeline` (yes/no).
-- **Defaults**: privacy `connections`, shareToTimeline yes. Each user can change these defaults in settings.
-- **Timeline**: shows the user's and their connections' events, with timestamps, and never strangers'.
+- Every event type has `privacy` (`public` | `connections` | `private`) and `shareToLive` (yes/no).
+- **Defaults**: privacy `connections`, shareToLive yes. Each user can change these defaults in settings.
+- **Live**: shows the user's and their connections' events, with timestamps, and never strangers'.
 
-  | privacy | shareToTimeline | Timeline shows | Diary visible to |
+  | privacy | shareToLive | Live shows | Diary visible to |
   |---|---|---|---|
   | public | yes | "ar1tra settled a task: add rate limiter" | everyone |
   | connections | yes | full text | connections |
@@ -119,7 +119,7 @@ and quotas can be added later without redesigning anything.
   | connections | no | — | connections |
   | private | no | — | only the user |
 
-- The timeline can be **minimized**, and it has an **only mine** toggle.
+- Live can be **minimized**, and it has an **only mine** toggle.
 
 ### Diary
 
@@ -142,7 +142,9 @@ and quotas can be added later without redesigning anything.
 
 ### Pages
 
-- `/now`, `/tasks`, `/habits`, `/goals`, `/notes`, `/sessions`, `/diary`, `/inbox` and `/settings`.
+- `/now`, `/inbox`, `/boards`, `/tasks`, `/habits`, `/goals`, `/notes`, `/live`, `/sessions`, `/diary` and `/settings`.
+- `/boards` shows every board (Tasks, Habits, Goals, Notes, Live, Diary) as a card that opens it.
+- `/live` is Live on its own page: the feed of what the user and their connections get done.
 - `/glance` is retired; sign-in lands on `/now`.
 
 ### Tibo (the AI agent)
@@ -233,7 +235,7 @@ are sequential: each assumes the previous ones are done.
 | 11 | Focus sessions: UI widget on `/now`, `/sessions` | 2, 10 |
 | 12 | Upcoming view and day navigation polish across all types | 4, 6, 8, 9, 11 |
 | 13 | Profiles, connections, blocks, `/settings` | 1 |
-| 14 | Visibility module and timeline on `/now` | 12, 13 |
+| 14 | Visibility module and Live on `/now` | 12, 13 |
 | 15 | Diary (`/diary`, profile diary) and contribution graph | 14 |
 | 16 | Rate limiting pass and AI usage quota ledger | 13 |
 | 17 | Tibo core: `TiboAgent`, single thread, bubbles, typing, persona, quota notice, side panel and `/inbox` | 16 |
@@ -248,7 +250,7 @@ are sequential: each assumes the previous ones are done.
 ## Status
 
 - [x] 1 Domain foundation
-- [ ] 2 App shell and design system
+- [x] 2 App shell and design system
 - [ ] 3 Tasks backend
 - [ ] 4 Tasks UI
 - [ ] 5 Habits backend
@@ -260,7 +262,7 @@ are sequential: each assumes the previous ones are done.
 - [ ] 11 Sessions UI
 - [ ] 12 Upcoming and day navigation
 - [ ] 13 Profiles and connections
-- [ ] 14 Visibility and timeline
+- [ ] 14 Visibility and Live
 - [ ] 15 Diary and contribution graph
 - [ ] 16 Rate limits and AI quota
 - [ ] 17 Tibo core
@@ -286,3 +288,40 @@ Add a dated line whenever a decision changes during a build thread.
 - 2026-11-01 (step 1): Tag writes lock the user's settings row (`SELECT … FOR UPDATE`) so concurrent creates can't pass the 50-tag limit. A partial unique index keeps one tag per system kind.
 - 2026-11-01 (step 1): RPCs are named in PascalCase (`Bootstrap`, `ListTags`, …).
 - 2026-11-02 (step 1): Each user gets a random color (`USER_COLOR`: the tag palette minus gray) when their settings row is created, so the timeline can show usernames in it. It's stored in `user_settings.color`, returned in `Settings`, and not user-editable yet. Rows that existed before the column were backfilled by a random SQL default.
+- 2026-11-02 (step 2): **Design tokens** live in `web/src/styles.css`. Geist is the only font (the user declined font dependencies).
+  - **Light mode**: the page is a cream-to-teal gradient (`--page-gradient`, top to bottom). Every `bg-card`/`bg-popover` surface gets `--card-gradient` (a base-layer rule). Ink and actions are deep teal (`--primary`). Marigold (`--tibo*`) is reserved for Tibo and the "today" dot. The nav is a light teal (`--sidebar`).
+  - **Dark mode**: neutral black, after T3 Code. Page and cards share one `#0c0c0c`→`#060606` wash; cards stand out by a border plus `--card-shadow`. Text is `#f5f5f5`, quiet text `#a1a1a1`, the nav matte `#121212`.
+  - **Other tokens**: `--success` (done states), `--cream` ("Start a session"; gray in dark), `--card-glow` (the glow under `/now`'s cards), `--bubble-me` (your chat bubble), `--composer-border` (the light-mode message box edge).
+  - **Tag colors**: `--tag-<key>`, `--tag-<key>-soft` and `--tag-<key>-ink`. Set `data-tag="<key>"` and use `bg-tag`, `bg-tag-soft` and `text-tag-ink` (`TagChip`). User colors use the same keys.
+  - **Rules**: a global reduced-motion rule; card titles sit in the top middle with side controls in the corners.
+  - **Gotcha**: the `cn` package doesn't merge conflicting Tailwind classes, so overriding a shadcn default needs `!` (for example `bg-cream!`).
+- 2026-11-02 (step 2): **Navigation.** The shared list is `web/src/lib/nav.ts`.
+  - **Desktop**: a full-height sidebar (shadcn `sidebar-07`, `components/app-sidebar.tsx`) that collapses to an icon rail. Its state is in the `sidebar_state` cookie, read on the server through `lib/sidebar-state.ts`.
+  - **Desktop items**: Now, Inbox, Boards, then Settings and the avatar menu (profile `/@username`, theme, sign out). Under Boards, a subsection (Tasks, Habits, Goals, Notes, Live, Diary) shows only while expanded.
+  - **Phones** (< 768px): a floating tab bar (`components/mobile-nav.tsx`) with Now, Inbox, Boards and Profile. Profile is the user menu and also holds Settings. Swiping up on the bar, or tapping its handle, opens Tibo.
+  - `/sessions` exists but isn't linked anywhere yet.
+- 2026-11-02 (step 2): **Top row and Tibo.**
+  - **Top row** (`components/top-bar.tsx`): a page fills its start and center slots through its route's `staticData.topBar: { start, center, tibo }`; Tibo holds the end on desktop. On phones Tibo is a draggable floating button above the nav instead (`TiboFab`, position in localStorage `dueboard-tibo-fab`). `tibo: false` hides both (as on `/inbox`); a row with nothing in it isn't drawn.
+  - **Tibo panel**: one Sheet owned by `TiboProvider` (state in `hooks/use-tibo.ts`). On desktop it grows out of the Tibo button (`[data-tibo-panel]` animation in `styles.css`); on phones it rises from the bottom. It and `/inbox` host the demo `AgentChat` until step 17 ("Tibo" is UI naming only). Your messages sit in a bubble; Tibo's replies are plain text.
+- 2026-11-02 (step 2): **Layout.**
+  - **Margins**: the `_app` margins are thin (6px; phones keep 6rem at the bottom for the nav), so cards reach the screen edges. `Page` (list pages) pads its own content.
+  - **Full-screen pages**: `/now` and `/inbox` are exactly one screen tall through `h-[calc(100dvh-…)]` values that assume a 3rem top row and those bottom paddings. Keep them in sync if either changes.
+  - **Pages**: `/boards` shows each board as a square card (at most 13rem), centered, in rows of 2, 3 (`sm`) or 6 (`xl`). `/live` is a full-page `LiveCard`. List pages show full-space empty states. `/settings` shows the time zone and tags.
+- 2026-11-02 (step 2): **`/now`.**
+  - **Selected day**: `?date=YYYY-MM-DD`, validated with `LocalDate`; absent means today in the user's zone. Stepping onto today drops the param, and day steps use `replace`. ← and → step days (`hooks/use-day-arrow-keys.ts`) except in fields, menus, dialogs and tablists.
+  - **Top row**: "Start a session" ("Start" on phones; a placeholder toast for now; a running session's countdown replaces it in step 11). Today's date and the ticking local time sit in the center.
+  - **Two cards** (`isolate` on the container keeps both `--card-glow` glows under both cards):
+    - **Day card** (two thirds): the `DayStepper` heading centered ("Today", "Yesterday", "Tomorrow" or the date, between ‹ and ›). Then the tasks area, which takes the rest of the height and scrolls inside itself. At the bottom are two `DayTabs` rows, each with its own fold chevron: tabs only switch, the chevron alone folds, and both start folded. The rows are Settled / Sessions / Unscheduled (with counts), and habits and goals, whose tab titles are the statuses ("No habits due", later "All habits checked" in `--success`).
+    - **Live card** (one third): `components/live-card.tsx`, with a 60-character `NoteComposer` that step 9 wires up. It collapses on desktop (localStorage `dueboard-live-collapsed`), giving the day card the full width.
+  - **Phones**: the two cards become Tasks and Live tabs.
+  - **Upcoming**: there's no Upcoming button any more. Step 12 needs to agree a new entry point with the user.
+- 2026-11-02 (step 2): **The timeline is now called Live**, everywhere: UI, code, notes and data.
+  - `share_to_timeline` became `share_to_live` (`shareToLive`). Later tables use `share_to_live`.
+  - `user_settings.default_share_to_timeline` was renamed by the hand-written migration `api/migrations/20261101220000_share_to_live` (`RENAME COLUMN` plus an updated `snapshot.json`). Alchemy runs drizzle-kit non-interactively, and it can't choose rename versus drop-and-create, so **write rename migrations by hand** the same way.
+- 2026-11-02 (step 2): **Plumbing and gotchas.**
+  - **Session reuse**: the `_app` guard reuses the session checked on entry when `cause === "stay"` (`lib/session-cache.ts`), so moves inside the app don't wait on `get-session`.
+  - **Settings and tags**: Bootstrap is the client's source for both, through `useBootstrap()` and `useTimeZone()` (`hooks/use-bootstrap.ts`); the browser zone stands in until it answers. Date display helpers are in `lib/dates.ts` (`formatDay` → "Sun, Nov 1", `relativeDay`, `formatClock`); weeks start on Sunday.
+  - **`validateSearch`** must always return its keys (even `undefined`), or the router merges invalid raw values back in.
+  - **Compiled API types**: the web app imports them from `api/lib`, so after changing `api/src/rpc.ts` or `model.ts`, run `tsc -b` (with dev servers stopped) or the browser fails to decode RPC results.
+  - **Fast Refresh**: keep hooks in `hooks/`, not exported beside components, or Fast Refresh breaks.
+  - **Pre-existing error**: `tsc -b` still fails on `api/src/agent.ts(41)` (`preconnect`), which predates step 2; typecheck web with `bunx tsc -p web/tsconfig.json --noEmit`.

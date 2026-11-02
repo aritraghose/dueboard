@@ -79,9 +79,9 @@ Create routes for `/tasks`, `/habits`, `/goals`, `/notes`, `/sessions`, `/diary`
   - Habits
   - Goals
   - Focus session
-  - Timeline, which can be minimized. Save the minimized state per viewer in `localStorage`, wrapped in try/catch.
+  - Live, which can be minimized. Save the minimized state per viewer in `localStorage`, wrapped in try/catch.
   - An "Upcoming" entry point.
-- Design the layout for how it will be used: a focused main column (tasks, habits, goals) plus a side or secondary area for the session and timeline on wide screens, all stacking on mobile.
+- Design the layout for how it will be used: a focused main column (tasks, habits, goals) plus a side or secondary area for the session and Live on wide screens, all stacking on mobile.
 
 ### 6. Shared hooks
 

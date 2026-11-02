@@ -1,13 +1,13 @@
-import { useAtomSet } from "@effect/atom-react";
-import { Link, Outlet, createFileRoute, redirect } from "@tanstack/react-router";
-import * as Exit from "effect/Exit";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { authClient } from "../../auth-client.ts";
-import { ApiClient } from "../../rpc-client.ts";
+import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { AppSidebar } from "@/components/app-sidebar";
+import { MobileNav } from "@/components/mobile-nav";
+import { TiboFab } from "@/components/tibo-fab";
+import { TiboProvider } from "@/components/tibo-panel";
+import { TopBar } from "@/components/top-bar";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { useRunBootstrap } from "@/hooks/use-bootstrap";
+import { lastCheckedUser, rememberCheckedUser } from "@/lib/session-cache";
+import { readSidebarOpen } from "@/lib/sidebar-state";
 import { getSessionUser } from "../../session.ts";
 
 /**
@@ -16,63 +16,45 @@ import { getSessionUser } from "../../session.ts";
  * who finished onboarding. The API enforces the same rule on every RPC.
  */
 export const Route = createFileRoute("/_app")({
-  beforeLoad: async () => {
+  beforeLoad: async ({ cause }) => {
+    // Moves inside the app (another page, another day on `/now`) reuse the
+    // session checked on entry, so they render at once instead of waiting
+    // on a server round trip.
+    const checked = lastCheckedUser();
+    if (cause === "stay" && checked) return { user: checked, sidebarOpen: readSidebarOpen() };
     const user = await getSessionUser();
     if (!user) throw redirect({ to: "/auth" });
     if (!user.username) throw redirect({ to: "/onboarding" });
-    return { user: { ...user, username: user.username } };
+    const onboarded = { ...user, username: user.username };
+    rememberCheckedUser(onboarded);
+    return { user: onboarded, sidebarOpen: readSidebarOpen() };
   },
   component: AppLayout,
 });
 
-const bootstrapAtom = ApiClient.mutation("Bootstrap");
-
-/**
- * Runs `Bootstrap` once per app load with the browser's time zone: it
- * creates the user's settings and system tags if they're missing and keeps
- * the stored zone in step with where the user is.
- */
-function useBootstrap() {
-  const bootstrap = useAtomSet(bootstrapAtom, { mode: "promiseExit" });
-  useEffect(() => {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    void bootstrap({ payload: { timeZone }, reactivityKeys: ["settings", "tags"] }).then(
-      (exit) => {
-        if (Exit.isFailure(exit)) toast.error("Couldn't load your settings. Try reloading.");
-      },
-    );
-  }, [bootstrap]);
-}
-
 function AppLayout() {
-  const { user } = Route.useRouteContext();
-  const [signingOut, setSigningOut] = useState(false);
-  useBootstrap();
-
-  const signOut = async () => {
-    setSigningOut(true);
-    await authClient.signOut();
-    // A full page load also drops every cached query atom of this user.
-    window.location.assign("/");
-  };
+  const { user, sidebarOpen } = Route.useRouteContext();
+  useRunBootstrap();
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pt-4 pb-12">
-      <header className="mb-12 flex items-center gap-3">
-        <Link to="/now" className="font-heading font-semibold tracking-tight">
-          Dueboard
-        </Link>
-        <ThemeSwitcher className="ml-auto" />
-        <Avatar size="sm">
-          {user.image && <AvatarImage src={user.image} alt="" referrerPolicy="no-referrer" />}
-          <AvatarFallback>{user.username.slice(0, 1).toUpperCase()}</AvatarFallback>
-        </Avatar>
-        <span className="text-sm font-medium">@{user.username}</span>
-        <Button variant="ghost" size="sm" onClick={signOut} disabled={signingOut}>
-          {signingOut ? "Signing out…" : "Sign out"}
-        </Button>
-      </header>
-      <Outlet />
-    </div>
+    <TiboProvider userId={user.id}>
+      <SidebarProvider defaultOpen={sidebarOpen}>
+        <AppSidebar user={user} />
+        <div className="flex min-h-svh min-w-0 flex-1 flex-col">
+          {/* No bar on wide screens: the page's controls and Tibo float in the top row. */}
+          <TopBar className="bg-chrome backdrop-blur-md md:bg-transparent md:backdrop-blur-none" />
+          {/* Full width: pages set their own reading width (`Page`), `/now` fills it. */}
+          {/*
+            Thin margins, so pages and cards fill the screen and the page shows
+            only at the edges. Phones keep room at the bottom for the floating nav.
+          */}
+          <div className="flex w-full flex-1 flex-col px-1.5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-1.5">
+            <Outlet />
+          </div>
+        </div>
+        <MobileNav user={user} className="md:hidden" />
+        <TiboFab className="md:hidden" />
+      </SidebarProvider>
+    </TiboProvider>
   );
 }

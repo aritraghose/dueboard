@@ -46,7 +46,7 @@ runs out, even if the app is closed.
   - `id`, `user_id`, `label?` (≤ 100);
   - `planned_minutes` (1–600, extend adds to it), `status`;
   - `started_at`, `ends_at?`, `ended_at?`;
-  - `privacy`, `share_to_timeline`;
+  - `privacy`, `share_to_live`;
   - timestamps.
   - Plus the partial unique index.
 - **`focus_session_segments`**: `id`, `session_id`, `started_at`, `ended_at?`.
