@@ -13,6 +13,7 @@ import { Hyperdrive } from "./database.ts";
 import { Database } from "./domain/database.ts";
 import * as SettingsService from "./domain/settings.ts";
 import * as TagsService from "./domain/tags.ts";
+import * as TasksService from "./domain/tasks.ts";
 // import { NeonDatabase } from "./database.ts"; // Neon.Connect alternative
 import {
   ApiRpcs,
@@ -153,6 +154,46 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         Effect.gen(function* () {
           const user = yield* CurrentUser;
           return yield* TagsService.deleteTag(user.id, id);
+        }),
+      CreateTask: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.createTask(user.id, input);
+        }),
+      UpdateTask: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.updateTask(user.id, input);
+        }),
+      SetTaskStatus: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.setTaskStatus(user.id, input);
+        }),
+      DeleteTask: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.deleteTask(user.id, id);
+        }),
+      GetTask: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.getTask(user.id, id);
+        }),
+      ListTasksForDay: ({ date }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.listTasksForDay(user.id, date);
+        }),
+      ListUnscheduledTasks: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.listUnscheduledTasks(user.id, input);
+        }),
+      ListTasks: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* TasksService.listTasks(user.id, input);
         }),
     }).pipe(Layer.provide(Layer.succeed(Database, db)));
 

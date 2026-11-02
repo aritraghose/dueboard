@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { LocalDate } from "./dates.ts";
 
 // The domain's values and typed errors. Pure Schemas with no database code,
 // so `../rpc.ts` (which the browser imports) can re-export them, and the
@@ -51,6 +52,16 @@ export const USER_COLOR = TAG_COLOR.filter(
 export const UserColor = Schema.Literals(USER_COLOR);
 export type UserColor = typeof UserColor.Type;
 
+/** `working` is only a label; `settled` is done. */
+export const TASK_STATUS = ["idle", "working", "settled"] as const;
+export const TaskStatus = Schema.Literals(TASK_STATUS);
+export type TaskStatus = typeof TaskStatus.Type;
+
+/** Which of a task's dates fall on a given day. */
+export const TASK_DATE_ROLE = ["assigned", "deadline", "both"] as const;
+export const TaskDateRole = Schema.Literals(TASK_DATE_ROLE);
+export type TaskDateRole = typeof TaskDateRole.Type;
+
 /** What every activity row can record. See architecture.md §5. */
 export const ACTIVITY_KIND = [
   "task_settled",
@@ -74,6 +85,17 @@ export const TAG_NAME_MAX_LENGTH = 30;
 export const MAX_TAGS_PER_USER = 50;
 /** IANA names are far shorter; this only bounds the request body. */
 export const TIME_ZONE_MAX_LENGTH = 64;
+
+export const TASK_TITLE_MAX_LENGTH = 200;
+export const TASK_DESCRIPTION_MAX_LENGTH = 2000;
+export const TASK_IMPORTANCE_MAX = 5;
+/** One day. */
+export const TASK_EXPECTED_MINUTES_MAX = 1440;
+export const TASK_SEARCH_MAX_LENGTH = 200;
+export const TASK_PAGE_SIZE_DEFAULT = 50;
+export const TASK_PAGE_SIZE_MAX = 100;
+/** `ListTasks` cursors are `<ISO timestamp>|<uuid>`; this only bounds the request body. */
+export const TASK_CURSOR_MAX_LENGTH = 128;
 
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
@@ -106,6 +128,80 @@ export const UpdateTagInput = Schema.Struct({
 });
 export type UpdateTagInput = typeof UpdateTagInput.Type;
 
+export const TaskTitle = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isBetweenLength(1, TASK_TITLE_MAX_LENGTH),
+);
+export const TaskDescription = Schema.String.check(Schema.isMaxLength(TASK_DESCRIPTION_MAX_LENGTH));
+/** 1–5 stars. */
+export const TaskImportance = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: TASK_IMPORTANCE_MAX }));
+export const TaskExpectedMinutes = Schema.Int.check(
+  Schema.isBetween({ minimum: 1, maximum: TASK_EXPECTED_MINUTES_MAX }),
+);
+
+/**
+ * Omitted optional fields stay unset. `tagId` defaults to the user's
+ * `default` tag; `privacy` and `shareToLive` to their settings defaults. New
+ * tasks start `idle`.
+ */
+export const CreateTaskInput = Schema.Struct({
+  title: TaskTitle,
+  description: Schema.optionalKey(Schema.NullOr(TaskDescription)),
+  assignedDate: Schema.optionalKey(Schema.NullOr(LocalDate)),
+  deadlineDate: Schema.optionalKey(Schema.NullOr(LocalDate)),
+  tagId: Schema.optionalKey(Id),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+  importance: Schema.optionalKey(Schema.NullOr(TaskImportance)),
+  expectedMinutes: Schema.optionalKey(Schema.NullOr(TaskExpectedMinutes)),
+});
+export type CreateTaskInput = typeof CreateTaskInput.Type;
+
+/**
+ * A partial update: an omitted key is left as it is, and `null` clears an
+ * optional field. The status changes through `SetTaskStatus` only.
+ */
+export const UpdateTaskInput = Schema.Struct({
+  id: Id,
+  title: Schema.optionalKey(TaskTitle),
+  description: Schema.optionalKey(Schema.NullOr(TaskDescription)),
+  assignedDate: Schema.optionalKey(Schema.NullOr(LocalDate)),
+  deadlineDate: Schema.optionalKey(Schema.NullOr(LocalDate)),
+  tagId: Schema.optionalKey(Id),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+  importance: Schema.optionalKey(Schema.NullOr(TaskImportance)),
+  expectedMinutes: Schema.optionalKey(Schema.NullOr(TaskExpectedMinutes)),
+});
+export type UpdateTaskInput = typeof UpdateTaskInput.Type;
+
+export const SetTaskStatusInput = Schema.Struct({ id: Id, status: TaskStatus });
+export type SetTaskStatusInput = typeof SetTaskStatusInput.Type;
+
+export const ListUnscheduledTasksInput = Schema.Struct({
+  /** Also return the unscheduled tasks settled on this day (in the user's zone). */
+  settledOn: Schema.optionalKey(LocalDate),
+});
+export type ListUnscheduledTasksInput = typeof ListUnscheduledTasksInput.Type;
+
+/**
+ * `/tasks`' filters, newest first. `from`/`to` (inclusive) match a task whose
+ * assigned or deadline date falls in the range; `query` matches the title,
+ * ignoring case. Pass the previous page's `nextCursor` as `cursor`.
+ */
+export const ListTasksInput = Schema.Struct({
+  status: Schema.optionalKey(
+    Schema.Array(TaskStatus).check(Schema.isMaxLength(TASK_STATUS.length)),
+  ),
+  tagId: Schema.optionalKey(Id),
+  from: Schema.optionalKey(LocalDate),
+  to: Schema.optionalKey(LocalDate),
+  query: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(TASK_SEARCH_MAX_LENGTH))),
+  cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(TASK_CURSOR_MAX_LENGTH))),
+  limit: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: TASK_PAGE_SIZE_MAX }))),
+});
+export type ListTasksInput = typeof ListTasksInput.Type;
+
 /** Decodes a service's input, failing with {@link InvalidInput}. */
 export const decodeInput =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -135,6 +231,53 @@ export class Tag extends Schema.Class<Tag>("Tag")({
   createdAt: Schema.Date,
 }) {}
 
+export class Task extends Schema.Class<Task>("Task")({
+  id: Schema.String,
+  title: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  assignedDate: Schema.NullOr(LocalDate),
+  deadlineDate: Schema.NullOr(LocalDate),
+  tagId: Schema.String,
+  status: TaskStatus,
+  /** Set exactly when `status` is `settled`. */
+  settledAt: Schema.NullOr(Schema.Date),
+  privacy: Privacy,
+  shareToLive: Schema.Boolean,
+  importance: Schema.NullOr(Schema.Number),
+  expectedMinutes: Schema.NullOr(Schema.Number),
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}) {}
+
+/** A task on a day, with which of its dates fall on that day ("Due today" when `deadline`). */
+export class DayTask extends Schema.Class<DayTask>("DayTask")({
+  task: Task,
+  role: TaskDateRole,
+}) {}
+
+/**
+ * The tasks whose assigned or deadline date is `date`. `open` is oldest
+ * first; `settled` (including tasks settled before their deadline day) is
+ * most recently settled first.
+ */
+export class TasksForDay extends Schema.Class<TasksForDay>("TasksForDay")({
+  date: LocalDate,
+  open: Schema.Array(DayTask),
+  settled: Schema.Array(DayTask),
+}) {}
+
+/** Tasks with no dates. `settled` is empty unless `settledOn` was asked for. */
+export class UnscheduledTasks extends Schema.Class<UnscheduledTasks>("UnscheduledTasks")({
+  open: Schema.Array(Task),
+  settled: Schema.Array(Task),
+}) {}
+
+export class TaskPage extends Schema.Class<TaskPage>("TaskPage")({
+  tasks: Schema.Array(Task),
+  /** `null` on the last page. */
+  nextCursor: Schema.NullOr(Schema.String),
+}) {}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Input that fails a rule its Schema can't express, or that skipped the RPC decode (Tibo). */
@@ -159,6 +302,11 @@ export class TagLimitReached extends Schema.TaggedError<TagLimitReached>()("TagL
 
 /** Renaming or deleting a system tag. */
 export class SystemTagLocked extends Schema.TaggedError<SystemTagLocked>()("SystemTagLocked", {
+  message: Schema.String,
+  id: Schema.String,
+}) {}
+
+export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()("TaskNotFound", {
   message: Schema.String,
   id: Schema.String,
 }) {}

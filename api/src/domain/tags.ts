@@ -1,6 +1,6 @@
 import { and, asc, count, eq } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Tags, UserSettings, type TagRow } from "../schema.ts";
+import { Tags, Tasks, UserSettings, type TagRow } from "../schema.ts";
 import {
   Database,
   isUniqueViolation,
@@ -50,13 +50,26 @@ export const toTag = (row: TagRow): Tag =>
 const nameTaken = (name: string) =>
   new TagNameTaken({ message: `You already have a tag named "${name}".`, name });
 
-const findTag = (tx: Executor, userId: string, id: string) =>
+/** One of the user's tags, or `TagNotFound` (also for another user's tag). */
+export const findTag = (tx: Executor, userId: string, id: string) =>
   Effect.gen(function* () {
     const [row] = yield* tx
       .select()
       .from(Tags)
       .where(and(eq(Tags.id, id), eq(Tags.userId, userId)));
     if (!row) return yield* new TagNotFound({ message: "That tag no longer exists.", id });
+    return row;
+  });
+
+/** The user's `default` tag, which new items get and deleted tags' items move to. */
+export const findDefaultTag = (tx: Executor, userId: string) =>
+  Effect.gen(function* () {
+    const [row] = yield* tx
+      .select()
+      .from(Tags)
+      .where(and(eq(Tags.userId, userId), eq(Tags.systemKind, "default")));
+    // `ensureUserSetup` always seeds it, so this is a broken invariant.
+    if (!row) return yield* Effect.die(new Error(`User ${userId} has no default tag`));
     return row;
   });
 
@@ -141,14 +154,14 @@ export const updateTag = Effect.fn("updateTag")(function* (userId: string, input
 
 /**
  * Moves everything tagged `fromTagId` onto the user's `default` tag, before
- * that tag is deleted.
- *
- * TODO(step 3): reassign the tag's tasks (`UPDATE tasks SET tag_id = toTagId
- * WHERE user_id = userId AND tag_id = fromTagId`). Every later table with a
- * `tag_id` gets reassigned here too.
+ * that tag is deleted. Every later table with a `tag_id` gets reassigned
+ * here too.
  */
-const reassignTagItems = (_tx: Executor, _userId: string, _fromTagId: string, _toTagId: string) =>
-  Effect.void;
+const reassignTagItems = (tx: Executor, userId: string, fromTagId: string, toTagId: string) =>
+  tx
+    .update(Tasks)
+    .set({ tagId: toTagId })
+    .where(and(eq(Tasks.userId, userId), eq(Tasks.tagId, fromTagId)));
 
 /** Deletes one of the user's own tags; its items move to `default`. Returns the id. */
 export const deleteTag = Effect.fn("deleteTag")(function* (userId: string, id: string) {
@@ -162,12 +175,7 @@ export const deleteTag = Effect.fn("deleteTag")(function* (userId: string, id: s
           id,
         });
       }
-      const [fallback] = yield* tx
-        .select({ id: Tags.id })
-        .from(Tags)
-        .where(and(eq(Tags.userId, userId), eq(Tags.systemKind, "default")));
-      // `ensureUserSetup` always seeds it, so this is a broken invariant.
-      if (!fallback) return yield* Effect.die(new Error(`User ${userId} has no default tag`));
+      const fallback = yield* findDefaultTag(tx, userId);
       yield* reassignTagItems(tx, userId, id, fallback.id);
       yield* tx.delete(Tags).where(and(eq(Tags.id, id), eq(Tags.userId, userId)));
       return id;

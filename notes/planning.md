@@ -251,7 +251,7 @@ are sequential: each assumes the previous ones are done.
 
 - [x] 1 Domain foundation
 - [x] 2 App shell and design system
-- [ ] 3 Tasks backend
+- [x] 3 Tasks backend
 - [ ] 4 Tasks UI
 - [ ] 5 Habits backend
 - [ ] 6 Habits UI
@@ -325,3 +325,12 @@ Add a dated line whenever a decision changes during a build thread.
   - **Compiled API types**: the web app imports them from `api/lib`, so after changing `api/src/rpc.ts` or `model.ts`, run `tsc -b` (with dev servers stopped) or the browser fails to decode RPC results.
   - **Fast Refresh**: keep hooks in `hooks/`, not exported beside components, or Fast Refresh breaks.
   - **Pre-existing error**: `tsc -b` still fails on `api/src/agent.ts(41)` (`preconnect`), which predates step 2; typecheck web with `bunx tsc -p web/tsconfig.json --noEmit`.
+- 2026-11-02 (step 3): **Tasks backend.** Table `tasks` (migration `20261102121723_migration`), service `api/src/domain/tasks.ts`, pure rules in `tasks-rules.ts` (tested).
+  - **Errors**: the prompt's `NotFound` and `ValidationError` follow step 1's names: `TaskNotFound` and the existing `InvalidInput` (dates out of order, bad cursor, inverted range). A tag that isn't the user's is `TagNotFound`. Another user's task is always `TaskNotFound`, never "forbidden".
+  - **Database guards**: `CHECK`s for title and description lengths, importance 1–5, minutes 1–1440, assigned ≤ deadline, and `settled_at` set exactly when settled. `tag_id` is a foreign key to `tags` with `ON DELETE RESTRICT`, so a tag can't be deleted with tasks still on it (`deleteTag` moves them to `default` first, in the same transaction).
+  - **Titles** must be trimmed, 1–200 characters (like tag names): the client trims. Descriptions are ≤ 2000, untrimmed.
+  - **Status**: tasks are created `idle`. `SetTaskStatus` is the only way to change status. Leaving `settled` for `idle` or `working` clears `settled_at` and deletes the `task_settled` row. Writes lock the task row (`FOR UPDATE`).
+  - **Goal seams**: `onTaskSettled` / `onTaskUnsettled` in `tasks.ts` (no-ops). Deleting a settled task calls `onTaskUnsettled` first, so step 7 reverses its goal progress there and also deletes the task's `goal_links`.
+  - **Unscheduled settled**: `ListUnscheduledTasks({ settledOn })` returns undated tasks settled on that local day, found through their `task_settled` activity's `local_date`.
+  - **`ListTasks`**: newest first by `(created_at, id)`, with the cursor `<ISO>|<id>`. `created_at` is set from JS on insert (millisecond precision), so the cursor's `Date` round-trip is exact. `status` is an array filter; `from`/`to` match either date; `query` is a literal case-insensitive title search (`ILIKE`, with wildcards escaped). Default 50, max 100. An extra index `(user_id, created_at desc, id desc)` serves it.
+  - **Manual check**: run against a throwaway local Postgres (Docker `postgres:17`) with every migration applied, not through RPC (sign-in is Google-only). It covered settle/unsettle activity, the dates rule, cross-user isolation, the tag reassign and pagination.

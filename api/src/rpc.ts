@@ -3,10 +3,15 @@ import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
+import { LocalDate } from "./domain/dates.ts";
 import {
   CreateTagInput,
+  CreateTaskInput,
   Id,
   InvalidInput,
+  ListTasksInput,
+  ListUnscheduledTasksInput,
+  SetTaskStatusInput,
   Settings,
   SettingsPatch,
   SystemTagLocked,
@@ -15,7 +20,13 @@ import {
   TagLimitReached,
   TagNameTaken,
   TagNotFound,
+  Task,
+  TaskNotFound,
+  TaskPage,
+  TasksForDay,
+  UnscheduledTasks,
   UpdateTagInput,
+  UpdateTaskInput,
 } from "./domain/model.ts";
 
 // The domain's values, inputs and errors, for the browser.
@@ -105,5 +116,55 @@ export class ApiRpcs extends RpcGroup.make(
     payload: { id: Id },
     success: Schema.String,
     error: Schema.Union([TagNotFound, SystemTagLocked]),
+  }),
+  /**
+   * `tagId` defaults to the `default` tag, `privacy` and `shareToLive` to the
+   * user's settings. `TagNotFound` when the tag isn't theirs; `InvalidInput`
+   * when the assigned date is after the deadline.
+   */
+  Rpc.make("CreateTask", {
+    payload: CreateTaskInput,
+    success: Task,
+    error: Schema.Union([InvalidInput, TagNotFound]),
+  }),
+  /** A partial update: a missing key is unchanged, `null` clears. */
+  Rpc.make("UpdateTask", {
+    payload: UpdateTaskInput,
+    success: Task,
+    error: Schema.Union([InvalidInput, TaskNotFound, TagNotFound]),
+  }),
+  /** Settling records a `task_settled` activity; leaving `settled` removes it. */
+  Rpc.make("SetTaskStatus", {
+    payload: SetTaskStatusInput,
+    success: Task,
+    error: Schema.Union([InvalidInput, TaskNotFound]),
+  }),
+  /** Deletes a task and its activity, and returns its id. */
+  Rpc.make("DeleteTask", {
+    payload: { id: Id },
+    success: Schema.String,
+    error: Schema.Union([InvalidInput, TaskNotFound]),
+  }),
+  Rpc.make("GetTask", {
+    payload: { id: Id },
+    success: Task,
+    error: Schema.Union([InvalidInput, TaskNotFound]),
+  }),
+  /** `/now`'s tasks for a day: those assigned or due that day, open and settled. */
+  Rpc.make("ListTasksForDay", {
+    payload: { date: LocalDate },
+    success: TasksForDay,
+    error: InvalidInput,
+  }),
+  Rpc.make("ListUnscheduledTasks", {
+    payload: ListUnscheduledTasksInput,
+    success: UnscheduledTasks,
+    error: InvalidInput,
+  }),
+  /** `/tasks`: filtered, newest first, paginated by `nextCursor`. */
+  Rpc.make("ListTasks", {
+    payload: ListTasksInput,
+    success: TaskPage,
+    error: InvalidInput,
   }),
 ).middleware(Authentication) {}

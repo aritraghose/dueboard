@@ -1,12 +1,14 @@
 import { defineRelations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -17,10 +19,16 @@ import {
   PRIVACY,
   RELAY_POLICY,
   SYSTEM_TAG_KIND,
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_EXPECTED_MINUTES_MAX,
+  TASK_IMPORTANCE_MAX,
+  TASK_STATUS,
+  TASK_TITLE_MAX_LENGTH,
   USER_COLOR,
   type TagColor,
   type UserColor,
 } from "./domain/model.ts";
+import type { LocalDate } from "./domain/dates.ts";
 
 // The app's Drizzle tables. Define each table here with `pgTable(...)` and
 // add it to `defineRelations` below. Better Auth owns (and migrates) its own
@@ -41,6 +49,7 @@ export const relayPolicy = pgEnum("relay_policy", RELAY_POLICY);
 export const systemTagKind = pgEnum("system_tag_kind", SYSTEM_TAG_KIND);
 export const activityKind = pgEnum("activity_kind", ACTIVITY_KIND);
 export const activitySubject = pgEnum("activity_subject", ACTIVITY_SUBJECT);
+export const taskStatus = pgEnum("task_status", TASK_STATUS);
 
 /** One row per user, created by `ensureUserSetup` on the first app load. */
 export const UserSettings = pgTable("user_settings", {
@@ -94,6 +103,72 @@ export const Tags = pgTable(
 export type TagRow = typeof Tags.$inferSelect;
 
 /**
+ * A task appears on its assigned date, its deadline date, or both; with
+ * neither it's "unscheduled". The rules live in `domain/tasks.ts`.
+ */
+export const Tasks = pgTable(
+  "tasks",
+  {
+    id: id(),
+    userId: userId(),
+    title: text("title").notNull(),
+    description: text("description"),
+    assignedDate: date("assigned_date", { mode: "string" }).$type<LocalDate>(),
+    deadlineDate: date("deadline_date", { mode: "string" }).$type<LocalDate>(),
+    /** Deleting a tag first moves its tasks to `default` (`domain/tags.ts`). */
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => Tags.id, { onDelete: "restrict" }),
+    status: taskStatus("status").notNull().default("idle"),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+    privacy: privacy("privacy").notNull(),
+    shareToLive: boolean("share_to_live").notNull(),
+    importance: smallint("importance"),
+    expectedMinutes: integer("expected_minutes"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("tasks_user_assigned_idx").on(t.userId, t.assignedDate),
+    index("tasks_user_deadline_idx").on(t.userId, t.deadlineDate),
+    index("tasks_user_status_idx").on(t.userId, t.status),
+    index("tasks_user_created_idx").on(t.userId, t.createdAt.desc(), t.id.desc()),
+    index("tasks_user_unscheduled_idx")
+      .on(t.userId, t.status)
+      .where(sql`${t.assignedDate} is null and ${t.deadlineDate} is null`),
+    index("tasks_tag_idx").on(t.tagId),
+    check(
+      "tasks_title_length",
+      sql`char_length(${t.title}) between 1 and ${sql.raw(String(TASK_TITLE_MAX_LENGTH))}`,
+    ),
+    check(
+      "tasks_description_length",
+      sql`char_length(${t.description}) <= ${sql.raw(String(TASK_DESCRIPTION_MAX_LENGTH))}`,
+    ),
+    check(
+      "tasks_importance_range",
+      sql`${t.importance} between 1 and ${sql.raw(String(TASK_IMPORTANCE_MAX))}`,
+    ),
+    check(
+      "tasks_expected_minutes_range",
+      sql`${t.expectedMinutes} between 1 and ${sql.raw(String(TASK_EXPECTED_MINUTES_MAX))}`,
+    ),
+    check(
+      "tasks_dates_order",
+      sql`${t.assignedDate} is null or ${t.deadlineDate} is null or ${t.assignedDate} <= ${t.deadlineDate}`,
+    ),
+    check(
+      "tasks_settled_at",
+      sql`(${t.status} = 'settled') = (${t.settledAt} is not null)`,
+    ),
+  ],
+);
+export type TaskRow = typeof Tasks.$inferSelect;
+
+/**
  * The single feed behind the live feed, diary and contribution graph
  * (architecture.md §5). Rows never copy titles, privacy or share flags:
  * readers join the subject for those.
@@ -120,4 +195,4 @@ export const Activity = pgTable(
 );
 export type ActivityRow = typeof Activity.$inferSelect;
 
-export const relations = defineRelations({ UserSettings, Tags, Activity }, () => ({}));
+export const relations = defineRelations({ UserSettings, Tags, Tasks, Activity }, () => ({}));
