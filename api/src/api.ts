@@ -13,6 +13,7 @@ import { Hyperdrive } from "./database.ts";
 import { Database } from "./domain/database.ts";
 import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
+import * as NotesService from "./domain/notes.ts";
 import * as SettingsService from "./domain/settings.ts";
 import * as TagsService from "./domain/tags.ts";
 import * as TasksService from "./domain/tasks.ts";
@@ -321,6 +322,31 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         Effect.gen(function* () {
           const user = yield* CurrentUser;
           return yield* GoalsService.listItemGoals(user.id, input);
+        }),
+      CreateNote: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* NotesService.createNote(user.id, input);
+        }),
+      UpdateNote: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* NotesService.updateNote(user.id, input);
+        }),
+      DeleteNote: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* NotesService.deleteNote(user.id, id);
+        }),
+      ListNotesForDay: ({ date }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* NotesService.listNotesForDay(user.id, date);
+        }),
+      ListNotes: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* NotesService.listNotes(user.id, input);
         }),
     }).pipe(Layer.provide(Layer.succeed(Database, db)));
 

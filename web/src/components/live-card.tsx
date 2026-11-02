@@ -1,20 +1,20 @@
-import { ArrowUpIcon, PanelRightCloseIcon } from "lucide-react";
-import { useId, useState } from "react";
-import { toast } from "sonner";
+import { useAtomValue } from "@effect/atom-react";
+import { Link } from "@tanstack/react-router";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import { PanelRightCloseIcon } from "lucide-react";
+import { useId } from "react";
+import { CompactNoteComposer } from "@/components/note-composer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-  InputGroupText,
-} from "@/components/ui/input-group";
-import { cn } from "@/lib/utils";
+import { useTimeZone } from "@/hooks/use-bootstrap";
+import { useToday } from "@/hooks/use-now";
+import { notesForDayAtom } from "@/hooks/use-notes";
+import type { LocalDate } from "@/lib/dates";
+import { noteCount } from "@/lib/notes";
 
 // Live: the feed of what you and your connections get done (it was called
 // the timeline before). A card on `/now` and the whole of `/live`; the feed
-// itself is built in step 14.
+// itself is built in step 14. The note box writes today's notes.
 
 /**
  * The Live card: the feed, and a note box under it. `onCollapse` adds the
@@ -28,6 +28,7 @@ export function LiveCard({
   className?: string;
 }) {
   const headingId = useId();
+  const today = useToday(useTimeZone());
   return (
     <Card aria-labelledby={headingId} role="region" className={className}>
       <CardHeader className="grid grid-cols-[1fr_auto_1fr] items-center border-b">
@@ -56,51 +57,23 @@ export function LiveCard({
             What you and your connections get done shows up here as it happens.
           </p>
         </div>
-        <NoteComposer />
+        <CompactNoteComposer today={today} footer={today && <TodayNotes today={today} />} />
       </CardContent>
     </Card>
   );
 }
 
-/** Notes are short: 60 characters each (see planning.md, Notes). */
-const NOTE_MAX_LENGTH = 60;
-
-/** Post a short note to your day (and Live). Notes are built in step 9. */
-function NoteComposer() {
-  const [note, setNote] = useState("");
-  const left = NOTE_MAX_LENGTH - note.length;
+/** Today's notes count under the note box, once there is one; it opens `/notes`. */
+function TodayNotes({ today }: { today: LocalDate }) {
+  const result = useAtomValue(notesForDayAtom(today));
+  const count = AsyncResult.isSuccess(result) ? result.value.notes.length : 0;
+  if (count === 0) return null;
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!note.trim()) return;
-        toast("Notes are on the way.");
-      }}
+    <Link
+      to="/notes"
+      className="self-center rounded-sm px-1 text-xs text-muted-foreground tabular-nums hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
-      <InputGroup className="rounded-full bg-background/60">
-        <InputGroupInput
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          maxLength={NOTE_MAX_LENGTH}
-          placeholder="Post a note…"
-          aria-label="Note"
-        />
-        <InputGroupAddon align="inline-end">
-          <InputGroupText className={cn("tabular-nums", left <= 10 && "text-tibo-foreground dark:text-tibo")}>
-            {left}
-          </InputGroupText>
-          <InputGroupButton
-            type="submit"
-            variant="default"
-            size="icon-xs"
-            className="rounded-full"
-            aria-label="Post note"
-            disabled={!note.trim()}
-          >
-            <ArrowUpIcon />
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
-    </form>
+      {noteCount(count)} today
+    </Link>
   );
 }

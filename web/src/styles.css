@@ -73,6 +73,15 @@
   --due: var(--tag-orange-soft);
   --due-foreground: var(--tag-orange-ink);
 
+  /*
+   * Notes: the composer's fill line toward 60 characters, and the warning
+   * for the last 10 (meter and countdown). From the tag palette, so they
+   * follow it in dark mode; marigold stays Tibo's.
+   */
+  --note-meter: var(--tag-teal);
+  --note-limit: var(--tag-orange);
+  --note-limit-ink: var(--tag-orange-ink);
+
   /* Cream: the "Start a session" pill. */
   --cream: oklch(0.95 0.05 86);
   --cream-foreground: oklch(0.36 0.06 70);
@@ -246,6 +255,9 @@
   --color-importance-ink: var(--importance-ink);
   --color-due: var(--due);
   --color-due-foreground: var(--due-foreground);
+  --color-note-meter: var(--note-meter);
+  --color-note-limit: var(--note-limit);
+  --color-note-limit-ink: var(--note-limit-ink);
   --color-cream: var(--cream);
   --color-bubble-me: var(--bubble-me);
   --color-bubble-me-foreground: var(--bubble-me-foreground);

@@ -32,6 +32,7 @@ import {
   HABIT_STATUS,
   HABIT_TARGET_MAX,
   HABIT_TITLE_MAX_LENGTH,
+  NOTE_BODY_MAX_LENGTH,
   PRIVACY,
   RELAY_POLICY,
   SYSTEM_TAG_KIND,
@@ -428,6 +429,36 @@ export const GoalProgressEvents = pgTable(
 export type GoalProgressEventRow = typeof GoalProgressEvents.$inferSelect;
 
 /**
+ * Short notes, several a day, written for the user's local day
+ * (`domain/notes.ts`). `local_date` is fixed at creation; edits keep it.
+ */
+export const Notes = pgTable(
+  "notes",
+  {
+    id: id(),
+    userId: userId(),
+    body: text("body").notNull(),
+    localDate: date("local_date", { mode: "string" }).$type<LocalDate>().notNull(),
+    privacy: privacy("privacy").notNull(),
+    shareToLive: boolean("share_to_live").notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    // Serves `ListNotesForDay`, the per-day cap and (scanned backwards) `ListNotes`' order.
+    index("notes_user_local_date_idx").on(t.userId, t.localDate, t.createdAt, t.id),
+    check(
+      "notes_body_length",
+      sql`char_length(${t.body}) between 1 and ${sql.raw(String(NOTE_BODY_MAX_LENGTH))}`,
+    ),
+  ],
+);
+export type NoteRow = typeof Notes.$inferSelect;
+
+/**
  * The single feed behind the live feed, diary and contribution graph
  * (architecture.md §5). Rows never copy titles, privacy or share flags:
  * readers join the subject for those.
@@ -465,6 +496,7 @@ export const relations = defineRelations(
     Goals,
     GoalLinks,
     GoalProgressEvents,
+    Notes,
     Activity,
   },
   () => ({}),

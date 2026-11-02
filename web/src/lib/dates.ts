@@ -77,3 +77,15 @@ export const formatClock = (instant: Date, timeZone: string): string => {
   }
   return format.format(instant);
 };
+
+const timeFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** The time of `instant` in `timeZone`, to the minute: "9:41 PM". */
+export const formatTime = (instant: Date, timeZone: string): string => {
+  let format = timeFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" });
+    timeFormats.set(timeZone, format);
+  }
+  return format.format(instant);
+};

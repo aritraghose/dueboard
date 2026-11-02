@@ -161,6 +161,16 @@ export const GOAL_LINKS_MAX = 50;
 export const GOAL_EVENTS_IN_LIST = 10;
 export const GOAL_EVENTS_IN_DETAIL = 50;
 
+/** Counted in UTF-16 units like `maxLength`, so never more than `char_length`'s code points. */
+export const NOTE_BODY_MAX_LENGTH = 60;
+/** Per user and local day, so a script can't flood the diary or Live. */
+export const MAX_NOTES_PER_DAY = 50;
+export const NOTE_SEARCH_MAX_LENGTH = 60;
+export const NOTE_PAGE_SIZE_DEFAULT = 50;
+export const NOTE_PAGE_SIZE_MAX = 100;
+/** `ListNotes` cursors are `<date>|<ISO timestamp>|<uuid>`; this only bounds the request body. */
+export const NOTE_CURSOR_MAX_LENGTH = 160;
+
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
   Schema.isTrimmed(),
@@ -418,6 +428,46 @@ export type ListGoalsInput = typeof ListGoalsInput.Type;
 export const GoalItemRef = Schema.Struct({ itemType: GoalLinkItem, itemId: Id });
 export type GoalItemRef = typeof GoalItemRef.Type;
 
+/** A note: trimmed, 1–60 characters, one line. */
+export const NoteBody = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isBetweenLength(1, NOTE_BODY_MAX_LENGTH),
+  Schema.makeFilter((value: string) => !/[\r\n]/.test(value) || "A note is a single line"),
+);
+
+/**
+ * Notes are written for today in the user's zone. `date`, when sent, must be
+ * that day (it guards a client still showing yesterday after midnight).
+ * `privacy` and `shareToLive` default to the user's settings.
+ */
+export const CreateNoteInput = Schema.Struct({
+  body: NoteBody,
+  date: Schema.optionalKey(LocalDate),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+});
+export type CreateNoteInput = typeof CreateNoteInput.Type;
+
+/** Omitted fields are left as they are. Past notes can be edited too. */
+export const UpdateNoteInput = Schema.Struct({
+  id: Id,
+  body: Schema.optionalKey(NoteBody),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+});
+export type UpdateNoteInput = typeof UpdateNoteInput.Type;
+
+/**
+ * `/notes`: newest day first, newest note first within a day. `query`
+ * matches the body, ignoring case. Pass the previous page's `nextCursor`.
+ */
+export const ListNotesInput = Schema.Struct({
+  query: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(NOTE_SEARCH_MAX_LENGTH))),
+  cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(NOTE_CURSOR_MAX_LENGTH))),
+  limit: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: NOTE_PAGE_SIZE_MAX }))),
+});
+export type ListNotesInput = typeof ListNotesInput.Type;
+
 /** Decodes a service's input, failing with {@link InvalidInput}. */
 export const decodeInput =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -636,6 +686,39 @@ export class ItemGoal extends Schema.Class<ItemGoal>("ItemGoal")({
   link: GoalLink,
 }) {}
 
+export class Note extends Schema.Class<Note>("Note")({
+  id: Schema.String,
+  body: Schema.String,
+  /** The user's local day when it was written. */
+  localDate: LocalDate,
+  privacy: Privacy,
+  shareToLive: Schema.Boolean,
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}) {}
+
+/** A day's notes, oldest first. */
+export class NotesForDay extends Schema.Class<NotesForDay>("NotesForDay")({
+  date: LocalDate,
+  notes: Schema.Array(Note),
+}) {}
+
+/** One day's notes in a `NotePage`, newest first. */
+export class NoteDay extends Schema.Class<NoteDay>("NoteDay")({
+  date: LocalDate,
+  notes: Schema.Array(Note),
+}) {}
+
+/**
+ * A page of `ListNotes`, grouped by day, newest day first. Pages split by
+ * note, so a day can continue on the next page: merge it into the last group.
+ */
+export class NotePage extends Schema.Class<NotePage>("NotePage")({
+  days: Schema.Array(NoteDay),
+  /** `null` on the last page. */
+  nextCursor: Schema.NullOr(Schema.String),
+}) {}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Input that fails a rule its Schema can't express, or that skipped the RPC decode (Tibo). */
@@ -686,4 +769,15 @@ export type CheckInRefusal = (typeof CHECK_IN_REFUSAL)[number];
 export class CheckInNotAllowed extends Schema.TaggedError<CheckInNotAllowed>()("CheckInNotAllowed", {
   message: Schema.String,
   reason: Schema.Literals(CHECK_IN_REFUSAL),
+}) {}
+
+export class NoteNotFound extends Schema.TaggedError<NoteNotFound>()("NoteNotFound", {
+  message: Schema.String,
+  id: Schema.String,
+}) {}
+
+/** More than 50 notes on one local day. */
+export class NoteLimitReached extends Schema.TaggedError<NoteLimitReached>()("NoteLimitReached", {
+  message: Schema.String,
+  limit: Schema.Number,
 }) {}

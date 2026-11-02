@@ -9,6 +9,7 @@ import {
   CheckInNotAllowed,
   CreateGoalInput,
   CreateHabitInput,
+  CreateNoteInput,
   CreateTagInput,
   CreateTaskInput,
   Goal,
@@ -27,7 +28,13 @@ import {
   InvalidInput,
   ItemGoal,
   LinkGoalItemInput,
+  Note,
+  NoteLimitReached,
+  NoteNotFound,
+  NotePage,
+  NotesForDay,
   ListGoalsInput,
+  ListNotesInput,
   ListTasksInput,
   ListUnscheduledTasksInput,
   SetGoalProgressInput,
@@ -48,6 +55,7 @@ import {
   UnscheduledTasks,
   UpdateGoalInput,
   UpdateHabitInput,
+  UpdateNoteInput,
   UpdateTagInput,
   UpdateTaskInput,
 } from "./domain/model.ts";
@@ -360,6 +368,40 @@ export class ApiRpcs extends RpcGroup.make(
   Rpc.make("ListItemGoals", {
     payload: GoalItemRef,
     success: Schema.Array(ItemGoal),
+    error: InvalidInput,
+  }),
+  /**
+   * Writes a note for today in the user's zone, with a `note_created`
+   * activity. `InvalidInput` when `date` isn't today; `NoteLimitReached`
+   * past 50 notes that day.
+   */
+  Rpc.make("CreateNote", {
+    payload: CreateNoteInput,
+    success: Note,
+    error: Schema.Union([InvalidInput, NoteLimitReached]),
+  }),
+  /** A partial update of the body, privacy or share flag; past notes too. */
+  Rpc.make("UpdateNote", {
+    payload: UpdateNoteInput,
+    success: Note,
+    error: Schema.Union([InvalidInput, NoteNotFound]),
+  }),
+  /** Deletes a note and its activity, and returns its id. */
+  Rpc.make("DeleteNote", {
+    payload: { id: Id },
+    success: Schema.String,
+    error: Schema.Union([InvalidInput, NoteNotFound]),
+  }),
+  /** The notes written on a day, oldest first. */
+  Rpc.make("ListNotesForDay", {
+    payload: { date: LocalDate },
+    success: NotesForDay,
+    error: InvalidInput,
+  }),
+  /** `/notes`: searched, grouped by day, newest first, paginated by `nextCursor`. */
+  Rpc.make("ListNotes", {
+    payload: ListNotesInput,
+    success: NotePage,
     error: InvalidInput,
   }),
 ).middleware(Authentication) {}
