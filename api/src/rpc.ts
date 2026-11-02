@@ -5,10 +5,18 @@ import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
 import { LocalDate } from "./domain/dates.ts";
 import {
+  AdjustGoalProgressInput,
   CheckInNotAllowed,
+  CreateGoalInput,
   CreateHabitInput,
   CreateTagInput,
   CreateTaskInput,
+  Goal,
+  GoalItemRef,
+  GoalLink,
+  GoalNotFound,
+  GoalSummary,
+  GoalsForDay,
   Habit,
   HabitCheckInInput,
   HabitNotFound,
@@ -17,8 +25,12 @@ import {
   HabitsForDay,
   Id,
   InvalidInput,
+  ItemGoal,
+  LinkGoalItemInput,
+  ListGoalsInput,
   ListTasksInput,
   ListUnscheduledTasksInput,
+  SetGoalProgressInput,
   SetTaskStatusInput,
   Settings,
   SettingsPatch,
@@ -32,7 +44,9 @@ import {
   TaskNotFound,
   TaskPage,
   TasksForDay,
+  UnlinkGoalItemInput,
   UnscheduledTasks,
+  UpdateGoalInput,
   UpdateHabitInput,
   UpdateTagInput,
   UpdateTaskInput,
@@ -41,6 +55,8 @@ import {
 // The domain's values, inputs and errors, for the browser.
 export * from "./domain/model.ts";
 export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/dates.ts";
+// The pure goal rules, so the UI shows percents exactly as the API does.
+export { goalPercent, goalValue, isReached } from "./domain/goal-rules.ts";
 // The pure habit engine, so the UI words and computes schedules like the API.
 export {
   dayStatus,
@@ -252,5 +268,98 @@ export class ApiRpcs extends RpcGroup.make(
     payload: { id: Id },
     success: HabitSummary,
     error: Schema.Union([InvalidInput, HabitNotFound]),
+  }),
+  /**
+   * `count` goals need `targetCount`; `value` is the starting progress.
+   * `privacy` and `shareToLive` default to the user's settings.
+   */
+  Rpc.make("CreateGoal", {
+    payload: CreateGoalInput,
+    success: Goal,
+    error: InvalidInput,
+  }),
+  /**
+   * A partial update. `progressMode` switches the mode (carrying progress
+   * over) only when the goal has no links; `targetCount` changes a count
+   * goal's target, which can complete or reopen it.
+   */
+  Rpc.make("UpdateGoal", {
+    payload: UpdateGoalInput,
+    success: Goal,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /** Sets a slider's percent or a count. Reaching the target completes the goal; dropping below reopens it. */
+  Rpc.make("SetGoalProgress", {
+    payload: SetGoalProgressInput,
+    success: Goal,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /** Moves the progress by `delta`, clamped to the goal's range. */
+  Rpc.make("AdjustGoalProgress", {
+    payload: AdjustGoalProgressInput,
+    success: Goal,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /** Hides an active goal from `/now`; linked habits and tasks still move it. */
+  Rpc.make("PauseGoal", {
+    payload: { id: Id },
+    success: Goal,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  Rpc.make("ResumeGoal", {
+    payload: { id: Id },
+    success: Goal,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /** Makes a completed goal active again and removes its `goal_completed` activity. */
+  Rpc.make("ReopenGoal", {
+    payload: { id: Id },
+    success: Goal,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /** Deletes a goal with its links, progress history and activity, and returns its id. */
+  Rpc.make("DeleteGoal", {
+    payload: { id: Id },
+    success: Schema.String,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /**
+   * Links a habit or task to a count goal (or changes the link's amount).
+   * `InvalidInput` for a slider goal or past 50 links; `TaskNotFound` or
+   * `HabitNotFound` when the item isn't the user's.
+   */
+  Rpc.make("LinkGoalItem", {
+    payload: LinkGoalItemInput,
+    success: GoalLink,
+    error: Schema.Union([InvalidInput, GoalNotFound, TaskNotFound, HabitNotFound]),
+  }),
+  /** Removes a link; the progress it added stays. */
+  Rpc.make("UnlinkGoalItem", {
+    payload: UnlinkGoalItemInput,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /** `/now`'s goals for a day: active ones, and those completed that day. */
+  Rpc.make("ListGoalsForDay", {
+    payload: { date: LocalDate },
+    success: GoalsForDay,
+    error: InvalidInput,
+  }),
+  /** `/goals`: every goal (or those with `status`), with links and the last 10 progress events. */
+  Rpc.make("ListGoals", {
+    payload: ListGoalsInput,
+    success: Schema.Array(GoalSummary),
+    error: InvalidInput,
+  }),
+  /** A goal with its links and the last 50 progress events. */
+  Rpc.make("GetGoal", {
+    payload: { id: Id },
+    success: GoalSummary,
+    error: Schema.Union([InvalidInput, GoalNotFound]),
+  }),
+  /** The goals a habit or task is linked to, for its card. */
+  Rpc.make("ListItemGoals", {
+    payload: GoalItemRef,
+    success: Schema.Array(ItemGoal),
+    error: InvalidInput,
   }),
 ).middleware(Authentication) {}

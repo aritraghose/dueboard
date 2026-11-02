@@ -13,6 +13,7 @@ import {
 import { deleteActivityFor, recordActivity } from "./activity.ts";
 import { LocalDate, addDays, startOfWeek, todayIn } from "./dates.ts";
 import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+import { deleteLinksFor, onHabitCheckIn } from "./goals.ts";
 import {
   dayStatus,
   describeSchedule,
@@ -48,7 +49,8 @@ import {
 // stores its rule; `habit-rules.ts` decides what's due, progress and
 // streaks from the rule, its pauses and its check-ins. A check-in that meets
 // the period's (or day's) target records one `habit_completed` activity,
-// and an undo that drops below it removes that row.
+// and an undo that drops below it removes that row. Each tap and undo also
+// moves the goals linked to the habit (`goals.ts`), in the same transaction.
 //
 // Pauses cover `[start_date, end_date)` and are dated in the user's zone.
 // `paused` and `archived` habits always have one open pause, so the days
@@ -199,14 +201,6 @@ const habitSummary = (
   });
 };
 
-// ─── Goal hooks ──────────────────────────────────────────────────────────────
-// Seam for step 7: a check-in on a goal-linked habit adds the link's amount
-// per tap to the goal, and an undo takes it back. It runs inside the
-// check-in's transaction. A no-op until goals exist.
-
-/** Called after a tap (`delta` 1) or an undo (`delta` -1) on `habit`. */
-const onHabitCheckIn = (_tx: Executor, _habit: HabitRow, _delta: 1 | -1) => Effect.void;
-
 // ─── Writes ──────────────────────────────────────────────────────────────────
 
 export const createHabit = Effect.fn("createHabit")(function* (
@@ -338,13 +332,17 @@ export const archiveHabit = Effect.fn("archiveHabit")(function* (userId: string,
   );
 });
 
-/** Deletes a habit with its pauses, check-ins (both cascade) and activity. Returns the id. */
+/**
+ * Deletes a habit with its pauses, check-ins (both cascade), activity and
+ * goal links. The progress its taps added to goals stays. Returns the id.
+ */
 export const deleteHabit = Effect.fn("deleteHabit")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
     Effect.gen(function* () {
       yield* findHabit(tx, userId, id, true);
+      yield* deleteLinksFor(tx, userId, "habit", id);
       yield* deleteActivityFor(tx, "habit", id);
       yield* tx.delete(Habits).where(and(eq(Habits.id, id), eq(Habits.userId, userId)));
       return id;
@@ -438,7 +436,7 @@ const tap = (userId: string, input: HabitCheckInInput, delta: 1 | -1) =>
         } else if (was.complete && !now.complete) {
           yield* tx.delete(Activity).where(completedIn(userId, id, now.period.start));
         }
-        yield* onHabitCheckIn(tx, habit, delta);
+        yield* onHabitCheckIn(tx, habit, delta, date);
         return habitOnDay(habit, pauses, after, date, today);
       }),
     );

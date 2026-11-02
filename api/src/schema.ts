@@ -6,6 +6,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   smallint,
@@ -16,6 +17,14 @@ import {
 import {
   ACTIVITY_KIND,
   ACTIVITY_SUBJECT,
+  GOAL_COUNT_MAX,
+  GOAL_DESCRIPTION_MAX_LENGTH,
+  GOAL_LINK_AMOUNT_MAX,
+  GOAL_LINK_ITEM,
+  GOAL_NAME_MAX_LENGTH,
+  GOAL_PROGRESS_MODE,
+  GOAL_PROGRESS_SOURCE,
+  GOAL_STATUS,
   HABIT_DESCRIPTION_MAX_LENGTH,
   HABIT_PERIOD_LENGTH_MAX,
   HABIT_PERIOD_UNIT,
@@ -60,6 +69,10 @@ export const taskStatus = pgEnum("task_status", TASK_STATUS);
 export const habitScheduleKind = pgEnum("habit_schedule_kind", HABIT_SCHEDULE_KIND);
 export const habitPeriodUnit = pgEnum("habit_period_unit", HABIT_PERIOD_UNIT);
 export const habitStatus = pgEnum("habit_status", HABIT_STATUS);
+export const goalProgressMode = pgEnum("goal_progress_mode", GOAL_PROGRESS_MODE);
+export const goalStatus = pgEnum("goal_status", GOAL_STATUS);
+export const goalLinkItem = pgEnum("goal_link_item", GOAL_LINK_ITEM);
+export const goalProgressSource = pgEnum("goal_progress_source", GOAL_PROGRESS_SOURCE);
 
 /** One row per user, created by `ensureUserSetup` on the first app load. */
 export const UserSettings = pgTable("user_settings", {
@@ -289,6 +302,132 @@ export const HabitCheckins = pgTable(
 export type HabitCheckinRow = typeof HabitCheckins.$inferSelect;
 
 /**
+ * A goal's progress is a slider percent or a count toward a target; the
+ * rules live in `domain/goal-rules.ts` (pure) and `domain/goals.ts`.
+ * `progress_percent` is stored for both modes (derived for `count`), so a
+ * goal reads the same everywhere.
+ */
+export const Goals = pgTable(
+  "goals",
+  {
+    id: id(),
+    userId: userId(),
+    name: text("name").notNull(),
+    description: text("description"),
+    progressMode: goalProgressMode("progress_mode").notNull(),
+    progressPercent: numeric("progress_percent", { precision: 5, scale: 2, mode: "number" })
+      .notNull()
+      .default(0),
+    targetCount: integer("target_count"),
+    currentCount: integer("current_count"),
+    targetDate: date("target_date", { mode: "string" }).$type<LocalDate>(),
+    status: goalStatus("status").notNull().default("active"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    privacy: privacy("privacy").notNull(),
+    shareToLive: boolean("share_to_live").notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("goals_user_status_idx").on(t.userId, t.status),
+    index("goals_user_created_idx").on(t.userId, t.createdAt, t.id),
+    check(
+      "goals_name_length",
+      sql`char_length(${t.name}) between 1 and ${sql.raw(String(GOAL_NAME_MAX_LENGTH))}`,
+    ),
+    check(
+      "goals_description_length",
+      sql`char_length(${t.description}) <= ${sql.raw(String(GOAL_DESCRIPTION_MAX_LENGTH))}`,
+    ),
+    check("goals_percent_range", sql`${t.progressPercent} between 0 and 100`),
+    // Counts exactly for count goals, in range.
+    check(
+      "goals_progress_shape",
+      sql`(${t.progressMode} = 'slider' and ${t.targetCount} is null and ${t.currentCount} is null)
+        or (${t.progressMode} = 'count'
+          and ${t.targetCount} between 1 and ${sql.raw(String(GOAL_COUNT_MAX))}
+          and ${t.currentCount} between 0 and ${sql.raw(String(GOAL_COUNT_MAX))})`,
+    ),
+    check("goals_completed_at", sql`(${t.status} = 'completed') = (${t.completedAt} is not null)`),
+    // A completed goal is at its target (an active one may be too, after a reopen).
+    check(
+      "goals_completed_reached",
+      sql`${t.status} <> 'completed' or (case ${t.progressMode}
+        when 'slider' then ${t.progressPercent} = 100
+        else ${t.currentCount} >= ${t.targetCount} end)`,
+    ),
+  ],
+);
+export type GoalRow = typeof Goals.$inferSelect;
+
+/**
+ * Habits and tasks that move a count goal: each tap (or settle) adds
+ * `amount`. `item_id` has no foreign key (it names a habit or a task);
+ * deleting either deletes its links (`domain/goals.ts`).
+ */
+export const GoalLinks = pgTable(
+  "goal_links",
+  {
+    id: id(),
+    goalId: text("goal_id")
+      .notNull()
+      .references(() => Goals.id, { onDelete: "cascade" }),
+    userId: userId(),
+    itemType: goalLinkItem("item_type").notNull(),
+    itemId: text("item_id").notNull(),
+    amount: integer("amount").notNull().default(1),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("goal_links_goal_item_idx").on(t.goalId, t.itemType, t.itemId),
+    index("goal_links_user_item_idx").on(t.userId, t.itemType, t.itemId),
+    check(
+      "goal_links_amount_range",
+      sql`${t.amount} between 1 and ${sql.raw(String(GOAL_LINK_AMOUNT_MAX))}`,
+    ),
+  ],
+);
+export type GoalLinkRow = typeof GoalLinks.$inferSelect;
+
+/**
+ * Every change to a goal's progress, in the goal's unit (percent points or
+ * count). Linked undos read the net a habit day or a task added from here,
+ * so they never take back more than was added.
+ */
+export const GoalProgressEvents = pgTable(
+  "goal_progress_events",
+  {
+    id: id(),
+    goalId: text("goal_id")
+      .notNull()
+      .references(() => Goals.id, { onDelete: "cascade" }),
+    userId: userId(),
+    delta: numeric("delta", { precision: 12, scale: 2, mode: "number" }).notNull(),
+    valueAfter: numeric("value_after", { precision: 12, scale: 2, mode: "number" }).notNull(),
+    source: goalProgressSource("source").notNull(),
+    /** The habit or task, for linked changes. */
+    sourceId: text("source_id"),
+    /** The check-in's day, for habit changes. */
+    sourceDate: date("source_date", { mode: "string" }).$type<LocalDate>(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("goal_progress_events_goal_idx").on(t.goalId, t.createdAt.desc(), t.id.desc()),
+    index("goal_progress_events_source_idx").on(t.goalId, t.source, t.sourceId),
+    index("goal_progress_events_user_idx").on(t.userId, t.createdAt),
+    check("goal_progress_events_delta", sql`${t.delta} <> 0`),
+    check(
+      "goal_progress_events_source_id",
+      sql`(${t.source} = 'manual') = (${t.sourceId} is null)`,
+    ),
+  ],
+);
+export type GoalProgressEventRow = typeof GoalProgressEvents.$inferSelect;
+
+/**
  * The single feed behind the live feed, diary and contribution graph
  * (architecture.md §5). Rows never copy titles, privacy or share flags:
  * readers join the subject for those.
@@ -316,6 +455,17 @@ export const Activity = pgTable(
 export type ActivityRow = typeof Activity.$inferSelect;
 
 export const relations = defineRelations(
-  { UserSettings, Tags, Tasks, Habits, HabitPauses, HabitCheckins, Activity },
+  {
+    UserSettings,
+    Tags,
+    Tasks,
+    Habits,
+    HabitPauses,
+    HabitCheckins,
+    Goals,
+    GoalLinks,
+    GoalProgressEvents,
+    Activity,
+  },
   () => ({}),
 );

@@ -11,6 +11,7 @@ import { RpcSerialization, RpcServer } from "effect/rpc";
 import { Auth } from "./auth.ts";
 import { Hyperdrive } from "./database.ts";
 import { Database } from "./domain/database.ts";
+import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
 import * as SettingsService from "./domain/settings.ts";
 import * as TagsService from "./domain/tags.ts";
@@ -250,6 +251,76 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         Effect.gen(function* () {
           const user = yield* CurrentUser;
           return yield* HabitsService.getHabit(user.id, id);
+        }),
+      CreateGoal: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.createGoal(user.id, input);
+        }),
+      UpdateGoal: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.updateGoal(user.id, input);
+        }),
+      SetGoalProgress: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.setProgress(user.id, input);
+        }),
+      AdjustGoalProgress: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.adjustProgress(user.id, input);
+        }),
+      PauseGoal: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.pauseGoal(user.id, id);
+        }),
+      ResumeGoal: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.resumeGoal(user.id, id);
+        }),
+      ReopenGoal: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.reopenGoal(user.id, id);
+        }),
+      DeleteGoal: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.deleteGoal(user.id, id);
+        }),
+      LinkGoalItem: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.linkItem(user.id, input);
+        }),
+      UnlinkGoalItem: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.unlinkItem(user.id, input);
+        }),
+      ListGoalsForDay: ({ date }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.listGoalsForDay(user.id, date);
+        }),
+      ListGoals: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.listGoals(user.id, input);
+        }),
+      GetGoal: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.getGoal(user.id, id);
+        }),
+      ListItemGoals: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* GoalsService.listItemGoals(user.id, input);
         }),
     }).pipe(Layer.provide(Layer.succeed(Database, db)));
 

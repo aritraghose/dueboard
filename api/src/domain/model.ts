@@ -98,6 +98,26 @@ export const ACTIVITY_KIND = [
 ] as const;
 export type ActivityKind = (typeof ACTIVITY_KIND)[number];
 
+/** `slider`: the user sets 0–100%. `count`: `current_count` of `target_count`; the percent is derived. */
+export const GOAL_PROGRESS_MODE = ["slider", "count"] as const;
+export const GoalProgressMode = Schema.Literals(GOAL_PROGRESS_MODE);
+export type GoalProgressMode = typeof GoalProgressMode.Type;
+
+/** `completed` exactly while progress is at its target (or after reaching it, until it drops or is reopened). */
+export const GOAL_STATUS = ["active", "paused", "completed"] as const;
+export const GoalStatus = Schema.Literals(GOAL_STATUS);
+export type GoalStatus = typeof GoalStatus.Type;
+
+/** What can be linked to a (count) goal. */
+export const GOAL_LINK_ITEM = ["habit", "task"] as const;
+export const GoalLinkItem = Schema.Literals(GOAL_LINK_ITEM);
+export type GoalLinkItem = typeof GoalLinkItem.Type;
+
+/** What moved a goal's progress. */
+export const GOAL_PROGRESS_SOURCE = ["manual", "habit", "task"] as const;
+export const GoalProgressSource = Schema.Literals(GOAL_PROGRESS_SOURCE);
+export type GoalProgressSource = typeof GoalProgressSource.Type;
+
 export const ACTIVITY_SUBJECT = ["task", "habit", "goal", "session", "note"] as const;
 export type ActivitySubject = (typeof ACTIVITY_SUBJECT)[number];
 
@@ -128,6 +148,18 @@ export const HABIT_PERIOD_LENGTH_MAX = 365;
 export const HABIT_CHECKIN_DAYS_BACK = 30;
 /** `ListHabits`' history: this many weeks, ending with the current one. */
 export const HABIT_HISTORY_WEEKS = 12;
+
+export const GOAL_NAME_MAX_LENGTH = 200;
+export const GOAL_DESCRIPTION_MAX_LENGTH = 2000;
+/** Bounds both `target_count` and `current_count`. */
+export const GOAL_COUNT_MAX = 1_000_000;
+/** What one tap or settled task can add to a goal. */
+export const GOAL_LINK_AMOUNT_MAX = 1000;
+/** Links per goal. */
+export const GOAL_LINKS_MAX = 50;
+/** Progress events per goal in `ListGoals`, and in `GetGoal`. */
+export const GOAL_EVENTS_IN_LIST = 10;
+export const GOAL_EVENTS_IN_DETAIL = 50;
 
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
@@ -304,6 +336,87 @@ export type UpdateHabitInput = typeof UpdateHabitInput.Type;
 export const HabitCheckInInput = Schema.Struct({ id: Id, date: LocalDate });
 export type HabitCheckInInput = typeof HabitCheckInInput.Type;
 
+export const GoalName = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isBetweenLength(1, GOAL_NAME_MAX_LENGTH),
+);
+export const GoalDescription = Schema.String.check(Schema.isMaxLength(GOAL_DESCRIPTION_MAX_LENGTH));
+export const GoalTargetCount = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: GOAL_COUNT_MAX }));
+/** A count goal's value or a slider's percent; `goal-rules.ts` checks it against the mode. */
+export const GoalValue = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: GOAL_COUNT_MAX }));
+export const GoalLinkAmount = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: GOAL_LINK_AMOUNT_MAX }));
+
+/**
+ * `count` goals need `targetCount`. `value` is the starting progress
+ * (a percent for `slider`, a count for `count`), 0 by default; starting at
+ * the target creates the goal completed. `privacy` and `shareToLive`
+ * default to the user's settings.
+ */
+export const CreateGoalInput = Schema.Struct({
+  name: GoalName,
+  description: Schema.optionalKey(Schema.NullOr(GoalDescription)),
+  progressMode: GoalProgressMode,
+  targetCount: Schema.optionalKey(GoalTargetCount),
+  value: Schema.optionalKey(GoalValue),
+  targetDate: Schema.optionalKey(Schema.NullOr(LocalDate)),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+});
+export type CreateGoalInput = typeof CreateGoalInput.Type;
+
+/**
+ * A partial update: an omitted key is left as it is, and `null` clears an
+ * optional field. `progressMode` switches the mode (carrying the progress
+ * over), and only when the goal has no links; switching to `count` needs
+ * `targetCount`. `targetCount` alone changes a count goal's target.
+ * Progress and status change through their own RPCs.
+ */
+export const UpdateGoalInput = Schema.Struct({
+  id: Id,
+  name: Schema.optionalKey(GoalName),
+  description: Schema.optionalKey(Schema.NullOr(GoalDescription)),
+  targetDate: Schema.optionalKey(Schema.NullOr(LocalDate)),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+  progressMode: Schema.optionalKey(GoalProgressMode),
+  targetCount: Schema.optionalKey(GoalTargetCount),
+});
+export type UpdateGoalInput = typeof UpdateGoalInput.Type;
+
+/** Sets the progress: a percent (0–100) for a slider goal, a whole count for a count goal. */
+export const SetGoalProgressInput = Schema.Struct({ id: Id, value: GoalValue });
+export type SetGoalProgressInput = typeof SetGoalProgressInput.Type;
+
+/** Moves the progress by `delta` (percent points or a whole count), clamped to the goal's range. */
+export const AdjustGoalProgressInput = Schema.Struct({
+  id: Id,
+  delta: Schema.Finite.check(Schema.isBetween({ minimum: -GOAL_COUNT_MAX, maximum: GOAL_COUNT_MAX })),
+});
+export type AdjustGoalProgressInput = typeof AdjustGoalProgressInput.Type;
+
+/** Links one of the user's habits or tasks to a count goal; linking again changes the amount. */
+export const LinkGoalItemInput = Schema.Struct({
+  goalId: Id,
+  itemType: GoalLinkItem,
+  itemId: Id,
+  /** Added per tap or per settle. Defaults to 1. */
+  amount: Schema.optionalKey(GoalLinkAmount),
+});
+export type LinkGoalItemInput = typeof LinkGoalItemInput.Type;
+
+export const UnlinkGoalItemInput = Schema.Struct({ goalId: Id, itemType: GoalLinkItem, itemId: Id });
+export type UnlinkGoalItemInput = typeof UnlinkGoalItemInput.Type;
+
+/** `/goals`' filter: every goal when `status` is omitted. */
+export const ListGoalsInput = Schema.Struct({
+  status: Schema.optionalKey(Schema.Array(GoalStatus).check(Schema.isMaxLength(GOAL_STATUS.length))),
+});
+export type ListGoalsInput = typeof ListGoalsInput.Type;
+
+/** A habit or task, to list the goals it's linked to. */
+export const GoalItemRef = Schema.Struct({ itemType: GoalLinkItem, itemId: Id });
+export type GoalItemRef = typeof GoalItemRef.Type;
+
 /** Decodes a service's input, failing with {@link InvalidInput}. */
 export const decodeInput =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -455,6 +568,73 @@ export class HabitSummary extends Schema.Class<HabitSummary>("HabitSummary")({
   history: Schema.Array(HabitCheckin),
 }) {}
 
+export class Goal extends Schema.Class<Goal>("Goal")({
+  id: Schema.String,
+  name: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  progressMode: GoalProgressMode,
+  /** 0–100, two decimals. Derived from the counts for `count` goals (`goalPercent`). */
+  progressPercent: Schema.Number,
+  /** Set exactly for `count` goals. `currentCount` can pass the target. */
+  targetCount: Schema.NullOr(Schema.Number),
+  currentCount: Schema.NullOr(Schema.Number),
+  targetDate: Schema.NullOr(LocalDate),
+  status: GoalStatus,
+  /** Set exactly when `status` is `completed`. */
+  completedAt: Schema.NullOr(Schema.Date),
+  privacy: Privacy,
+  shareToLive: Schema.Boolean,
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}) {}
+
+export class GoalLink extends Schema.Class<GoalLink>("GoalLink")({
+  id: Schema.String,
+  goalId: Schema.String,
+  itemType: GoalLinkItem,
+  itemId: Schema.String,
+  amount: Schema.Number,
+  /** The habit's or task's title, read when listed. */
+  itemTitle: Schema.String,
+  createdAt: Schema.Date,
+}) {}
+
+/** One change to a goal's progress, in its own unit (percent points or count). */
+export class GoalProgressEvent extends Schema.Class<GoalProgressEvent>("GoalProgressEvent")({
+  id: Schema.String,
+  delta: Schema.Number,
+  valueAfter: Schema.Number,
+  source: GoalProgressSource,
+  /** The habit or task, for linked changes. */
+  sourceId: Schema.NullOr(Schema.String),
+  /** The check-in's day, for habit changes. */
+  sourceDate: Schema.NullOr(LocalDate),
+  createdAt: Schema.Date,
+}) {}
+
+/** `/goals` and `GetGoal`: a goal with its links and its latest progress events (newest first). */
+export class GoalSummary extends Schema.Class<GoalSummary>("GoalSummary")({
+  goal: Goal,
+  links: Schema.Array(GoalLink),
+  events: Schema.Array(GoalProgressEvent),
+}) {}
+
+/**
+ * `/now`'s goals for a day: `active` ones (created on or before it), oldest
+ * first, and the ones `completed` that day. Paused goals are left out.
+ */
+export class GoalsForDay extends Schema.Class<GoalsForDay>("GoalsForDay")({
+  date: LocalDate,
+  active: Schema.Array(Goal),
+  completed: Schema.Array(Goal),
+}) {}
+
+/** A goal a habit or task is linked to, with the link. */
+export class ItemGoal extends Schema.Class<ItemGoal>("ItemGoal")({
+  goal: Goal,
+  link: GoalLink,
+}) {}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Input that fails a rule its Schema can't express, or that skipped the RPC decode (Tibo). */
@@ -489,6 +669,11 @@ export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()("TaskNotFou
 }) {}
 
 export class HabitNotFound extends Schema.TaggedError<HabitNotFound>()("HabitNotFound", {
+  message: Schema.String,
+  id: Schema.String,
+}) {}
+
+export class GoalNotFound extends Schema.TaggedError<GoalNotFound>()("GoalNotFound", {
   message: Schema.String,
   id: Schema.String,
 }) {}

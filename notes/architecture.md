@@ -107,7 +107,7 @@ plain `date`**, interpreted in the owner's time zone.
 | `habit_checkins` | `habit_id`, `user_id`, `local_date`, `count` | Unique `(habit_id, local_date)`. Each tap adds 1, and an undo subtracts 1 (a row at 0 is kept). Pauses and check-ins cascade when a habit is deleted. |
 | `goals` | `id`, `user_id`, `name`, `description?`, `progress_mode` (`slider`\|`count`), `progress_percent`, `target_count?`, `current_count?`, `target_date?`, `status` (`active`\|`paused`\|`completed`), `completed_at?`, `privacy`, `share_to_live` | Progress can go down. Reopening sets `status = active` and clears `completed_at`. |
 | `goal_links` | `goal_id`, `item_type` (`habit`\|`task`), `item_id`, `amount` (default 1) | A habit check-in adds `amount` per tap. Settling a task adds `amount`. Undoing reverses it. |
-| `goal_progress_events` | `goal_id`, `user_id`, `delta`, `value_after`, `source` (`manual`\|`habit`\|`task`), `source_id?`, `created_at` | Progress history, used by Live and for undo. |
+| `goal_progress_events` | `goal_id`, `user_id`, `delta`, `value_after`, `source` (`manual`\|`habit`\|`task`), `source_id?`, `source_date?`, `created_at` | Progress history, used by Live and for undo. `source_date` is a habit check-in's day: undos take back at most what that day (or task) added. |
 | `notes` | `id`, `user_id`, `body` (≤ 60 chars, `CHECK`), `local_date`, `privacy`, `share_to_live`, `created_at` | Several per day. |
 | `focus_sessions` | `id`, `user_id`, `label?`, `planned_minutes`, `status` (`running`\|`paused`\|`completed`\|`stopped`), `started_at`, `ends_at?`, `ended_at?`, `privacy`, `share_to_live` | **Partial unique index on `user_id` WHERE status IN ('running','paused')**, so the database enforces one active session. `ends_at` is recomputed on resume and extend so the sweep can find expired ones. |
 | `focus_session_segments` | `session_id`, `started_at`, `ended_at?` | Pause and resume history. Elapsed time is the sum of the segments. |
@@ -162,7 +162,7 @@ These are written by the domain services in the same transaction as the change:
 |---|---|---|
 | `task_settled` | status → settled | un-settled or deleted → row deleted |
 | `habit_completed` | a check-in makes the period (or day) target reached. `meta` holds `periodStart`/`periodEnd`; `local_date` is the check-in's day. | an undo drops it below target → row deleted |
-| `goal_progressed` | progress changes (manual or linked). `meta` holds the new value. | — (history) |
+| `goal_progressed` | progress changes (manual or linked). At most one row per goal and local day, updated in place; `meta` holds `valueBefore`, `valueAfter`, `percent`. | the day's changes cancel out → row deleted |
 | `goal_completed` | reaches 100% or the target count | reopened → row deleted |
 | `session_started` / `session_completed` / `session_stopped` | lifecycle | session deleted → rows deleted |
 | `note_created` | a note is written | note deleted → row deleted |

@@ -4,6 +4,7 @@ import { Activity, Tasks, UserSettings, type TaskRow } from "../schema.ts";
 import { deleteActivityFor, recordActivity } from "./activity.ts";
 import { LocalDate } from "./dates.ts";
 import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+import { deleteLinksFor, onTaskSettled, onTaskUnsettled } from "./goals.ts";
 import {
   CreateTaskInput,
   DayTask,
@@ -35,7 +36,8 @@ import {
 // The user's tasks (planning.md "Tasks", architecture.md §4). A task shows
 // on its assigned date, its deadline date, or both; with neither it's
 // "unscheduled". Settling one records a `task_settled` activity in the same
-// transaction, and un-settling or deleting it removes that row.
+// transaction, and un-settling or deleting it removes that row. Goals
+// linked to the task move with it (`goals.ts`), in the same transaction.
 
 export const toTask = (row: TaskRow): Task =>
   new Task({
@@ -73,17 +75,6 @@ const findTask = (tx: Executor, userId: string, id: string, lock = false) =>
     if (!row) return yield* notFound(id);
     return row;
   });
-
-// ─── Goal hooks ──────────────────────────────────────────────────────────────
-// Seams for step 7: settling a goal-linked task adds the link's amount to the
-// goal, and un-settling (or deleting a settled task) takes it back. They run
-// inside the status change's transaction. No-ops until goals exist.
-
-/** Called after `task` (the updated row) became settled. */
-const onTaskSettled = (_tx: Executor, _userId: string, _task: TaskRow) => Effect.void;
-
-/** Called after `task` (the updated row) stopped being settled, or before a settled task is deleted. */
-const onTaskUnsettled = (_tx: Executor, _userId: string, _task: TaskRow) => Effect.void;
 
 // ─── Writes ──────────────────────────────────────────────────────────────────
 
@@ -206,7 +197,10 @@ export const setTaskStatus = Effect.fn("setTaskStatus")(function* (
   );
 });
 
-/** Deletes a task and its activity. Returns the id. */
+/**
+ * Deletes a task, its activity and its goal links. A settled task's goals
+ * lose what it added first. Returns the id.
+ */
 export const deleteTask = Effect.fn("deleteTask")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -214,6 +208,7 @@ export const deleteTask = Effect.fn("deleteTask")(function* (userId: string, id:
     Effect.gen(function* () {
       const current = yield* findTask(tx, userId, id, true);
       if (current.status === "settled") yield* onTaskUnsettled(tx, userId, current);
+      yield* deleteLinksFor(tx, userId, "task", id);
       yield* deleteActivityFor(tx, "task", id);
       yield* tx.delete(Tasks).where(and(eq(Tasks.id, id), eq(Tasks.userId, userId)));
       return id;
