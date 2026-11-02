@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 const cardTransition = { type: "spring", stiffness: 520, damping: 42, mass: 0.8 } as const;
 
 /**
- * The due cards, one per row, then "All habits checked" when nothing is
+ * The due cards, one per row, then "All habits today checked" when nothing is
  * left (unless `allChecked` is off, as in `/now`'s All view, where the
  * habits tab says it).
  */
@@ -56,7 +56,13 @@ export function DueHabits({
         </p>
       )}
       {habits.allChecked ? (
-        allChecked && <AllChecked count={habits.settled.length} celebrate={habits.celebrate} />
+        allChecked && (
+          <AllChecked
+            count={habits.settled.length}
+            celebrate={habits.celebrate}
+            onDay={date === today ? "today" : `on ${formatDay(date, today)}`}
+          />
+        )
       ) : (
         <ul aria-label="Habits due" className="flex flex-col gap-1.5">
           <AnimatePresence initial={false}>
@@ -224,7 +230,7 @@ function HabitMenu({ habit, onEdit }: { habit: Habit; onEdit: (habit: Habit) => 
  * Every due habit is done. When the user's own tap got here, rings spread
  * from the check once; with reduced motion it just appears.
  */
-function AllChecked({ count, celebrate }: { count: number; celebrate: boolean }) {
+function AllChecked({ count, celebrate, onDay }: { count: number; celebrate: boolean; onDay: string }) {
   const reduced = useReducedMotion();
   return (
     <motion.div
@@ -246,7 +252,7 @@ function AllChecked({ count, celebrate }: { count: number; celebrate: boolean })
         )}
         <CheckIcon className="size-6" strokeWidth={3} />
       </span>
-      <p className="font-medium text-success">All habits checked</p>
+      <p className="font-medium text-success">All habits {onDay} checked.</p>
       <p className="text-xs text-muted-foreground">
         {count === 1 ? "The one habit due is done." : `All ${count} habits due are done.`}
       </p>

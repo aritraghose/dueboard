@@ -473,7 +473,7 @@ function DayBody({
 }
 
 /**
- * The Habits view: the due cards, or "All habits checked".
+ * The Habits view: the due cards, or "All habits today checked".
  */
 function HabitsView({
   habits,
@@ -537,7 +537,7 @@ function GoalsView({
   if (!goals.loaded) return <TaskRowsSkeleton />;
   if (goals.active.length === 0 && goals.celebrating.size === 0) {
     return goals.completed.length > 0 ? (
-      <SettledState>All goals {onDay} settled.</SettledState>
+      <SettledState>All goals {onDay} completed.</SettledState>
     ) : (
       <EmptyState>No active goals. Add one with New goal, or press N.</EmptyState>
     );

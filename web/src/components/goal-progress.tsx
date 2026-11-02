@@ -253,7 +253,7 @@ function GoalCard({
             const next = (goal.currentCount ?? 0) + 1;
             if (next === goal.targetCount) toast(`${goal.name}: target reached`, { id: `goal-${goal.id}` });
           }}
-          className="-mt-px inline-flex items-center gap-1 self-end rounded-b-lg border border-t-0 border-sidebar-border bg-sidebar px-2.5 pt-1 pb-1.5 text-xs font-medium text-tag-ink transition-colors outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring active:translate-y-px [&_svg]:size-3.5"
+          className="-mt-px inline-flex items-center gap-1 self-end rounded-b-lg border border-t-0 border-tag bg-tag px-2.5 pt-1 pb-1.5 text-xs font-medium text-primary-foreground transition-colors outline-none hover:bg-tag/85 focus-visible:ring-2 focus-visible:ring-ring active:translate-y-px [&_svg]:size-3.5"
         >
           <PlusIcon aria-hidden="true" />
           Move Goal
