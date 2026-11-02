@@ -5,6 +5,7 @@ import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
 import { LocalDate } from "./domain/dates.ts";
 import {
+  ActiveSessionExists,
   AdjustGoalProgressInput,
   CheckInNotAllowed,
   CreateGoalInput,
@@ -12,6 +13,8 @@ import {
   CreateNoteInput,
   CreateTagInput,
   CreateTaskInput,
+  ExtendSessionInput,
+  FocusSession,
   Goal,
   GoalItemRef,
   GoalLink,
@@ -35,12 +38,18 @@ import {
   NotesForDay,
   ListGoalsInput,
   ListNotesInput,
+  ListSessionsInput,
   ListTasksInput,
   ListUnscheduledTasksInput,
   SetGoalProgressInput,
+  SessionNotFound,
+  SessionPage,
+  SessionTransitionNotAllowed,
+  SessionsForDay,
   SetTaskStatusInput,
   Settings,
   SettingsPatch,
+  StartSessionInput,
   SystemTagLocked,
   TIME_ZONE_MAX_LENGTH,
   Tag,
@@ -63,6 +72,8 @@ import {
 // The domain's values, inputs and errors, for the browser.
 export * from "./domain/model.ts";
 export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/dates.ts";
+// The pure session rules, so the UI counts time exactly as the API does.
+export { computeEndsAt, elapsed, remaining } from "./domain/session-rules.ts";
 // The pure goal rules, so the UI shows percents exactly as the API does.
 export { goalPercent, goalValue, isReached } from "./domain/goal-rules.ts";
 // The pure habit engine, so the UI words and computes schedules like the API.
@@ -403,5 +414,61 @@ export class ApiRpcs extends RpcGroup.make(
     payload: ListNotesInput,
     success: NotePage,
     error: InvalidInput,
+  }),
+  /**
+   * Starts a focus session now, with a `session_started` activity. While
+   * another is running or paused: `ActiveSessionExists` carrying it, or with
+   * `replaceActive` that one is stopped in the same transaction.
+   */
+  Rpc.make("StartSession", {
+    payload: StartSessionInput,
+    success: FocusSession,
+    error: Schema.Union([InvalidInput, ActiveSessionExists]),
+  }),
+  /** Pauses a running session. */
+  Rpc.make("PauseSession", {
+    payload: { id: Id },
+    success: FocusSession,
+    error: Schema.Union([InvalidInput, SessionNotFound, SessionTransitionNotAllowed]),
+  }),
+  /** Resumes a paused session; `endsAt` moves by the pause. */
+  Rpc.make("ResumeSession", {
+    payload: { id: Id },
+    success: FocusSession,
+    error: Schema.Union([InvalidInput, SessionNotFound, SessionTransitionNotAllowed]),
+  }),
+  /** Adds minutes to a running or paused session; `InvalidInput` past 600 in all. */
+  Rpc.make("ExtendSession", {
+    payload: ExtendSessionInput,
+    success: FocusSession,
+    error: Schema.Union([InvalidInput, SessionNotFound, SessionTransitionNotAllowed]),
+  }),
+  /** Ends a running or paused session early as `stopped`, with a `session_stopped` activity. */
+  Rpc.make("StopSession", {
+    payload: { id: Id },
+    success: FocusSession,
+    error: Schema.Union([InvalidInput, SessionNotFound, SessionTransitionNotAllowed]),
+  }),
+  /** The running or paused session, or `null`. Completes one whose time ran out first. */
+  Rpc.make("GetActiveSession", {
+    success: Schema.NullOr(FocusSession),
+  }),
+  /** `/sessions`: grouped by day with focused minutes, newest first, paginated by `nextCursor`. */
+  Rpc.make("ListSessions", {
+    payload: ListSessionsInput,
+    success: SessionPage,
+    error: InvalidInput,
+  }),
+  /** The sessions started on a day, oldest first, with that day's focused minutes. */
+  Rpc.make("ListSessionsForDay", {
+    payload: { date: LocalDate },
+    success: SessionsForDay,
+    error: InvalidInput,
+  }),
+  /** Deletes a session and its activity, and returns its id. */
+  Rpc.make("DeleteSession", {
+    payload: { id: Id },
+    success: Schema.String,
+    error: Schema.Union([InvalidInput, SessionNotFound]),
   }),
 ).middleware(Authentication) {}

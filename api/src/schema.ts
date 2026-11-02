@@ -35,6 +35,9 @@ import {
   NOTE_BODY_MAX_LENGTH,
   PRIVACY,
   RELAY_POLICY,
+  SESSION_LABEL_MAX_LENGTH,
+  SESSION_MINUTES_MAX,
+  SESSION_STATUS,
   SYSTEM_TAG_KIND,
   TASK_DESCRIPTION_MAX_LENGTH,
   TASK_EXPECTED_MINUTES_MAX,
@@ -74,6 +77,7 @@ export const goalProgressMode = pgEnum("goal_progress_mode", GOAL_PROGRESS_MODE)
 export const goalStatus = pgEnum("goal_status", GOAL_STATUS);
 export const goalLinkItem = pgEnum("goal_link_item", GOAL_LINK_ITEM);
 export const goalProgressSource = pgEnum("goal_progress_source", GOAL_PROGRESS_SOURCE);
+export const focusSessionStatus = pgEnum("focus_session_status", SESSION_STATUS);
 
 /** One row per user, created by `ensureUserSetup` on the first app load. */
 export const UserSettings = pgTable("user_settings", {
@@ -459,6 +463,86 @@ export const Notes = pgTable(
 export type NoteRow = typeof Notes.$inferSelect;
 
 /**
+ * Focus sessions (`domain/sessions.ts`, architecture.md §11). `ends_at` is
+ * set exactly while running and recomputed on resume and extend, so the
+ * sweep finds expired sessions by it. A partial unique index keeps at most
+ * one running or paused session per user.
+ */
+export const FocusSessions = pgTable(
+  "focus_sessions",
+  {
+    id: id(),
+    userId: userId(),
+    label: text("label"),
+    plannedMinutes: integer("planned_minutes").notNull(),
+    status: focusSessionStatus("status").notNull(),
+    /** `started_at`'s day in the user's zone; per-day reads use it. */
+    localDate: date("local_date", { mode: "string" }).$type<LocalDate>().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    privacy: privacy("privacy").notNull(),
+    shareToLive: boolean("share_to_live").notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("focus_sessions_one_active_idx")
+      .on(t.userId)
+      .where(sql`${t.status} in ('running', 'paused')`),
+    // Serves `ListSessionsForDay` and (scanned backwards) `ListSessions`' order.
+    index("focus_sessions_user_local_date_idx").on(t.userId, t.localDate, t.startedAt, t.id),
+    // The sweep's lookup.
+    index("focus_sessions_expiry_idx").on(t.endsAt).where(sql`${t.status} = 'running'`),
+    check(
+      "focus_sessions_label_length",
+      sql`${t.label} is null or char_length(${t.label}) between 1 and ${sql.raw(String(SESSION_LABEL_MAX_LENGTH))}`,
+    ),
+    check(
+      "focus_sessions_planned_minutes",
+      sql`${t.plannedMinutes} between 1 and ${sql.raw(String(SESSION_MINUTES_MAX))}`,
+    ),
+    check("focus_sessions_ends_at", sql`(${t.status} = 'running') = (${t.endsAt} is not null)`),
+    check(
+      "focus_sessions_ended_at",
+      sql`(${t.status} in ('completed', 'stopped')) = (${t.endedAt} is not null)`,
+    ),
+  ],
+);
+export type FocusSessionRow = typeof FocusSessions.$inferSelect;
+
+/**
+ * Each running stretch of a session. Pausing closes the open one, resuming
+ * opens a new one; elapsed time is their sum. At most one is open per
+ * session, and only while it's running.
+ */
+export const FocusSessionSegments = pgTable(
+  "focus_session_segments",
+  {
+    id: id(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => FocusSessions.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("focus_session_segments_session_idx").on(t.sessionId, t.startedAt),
+    uniqueIndex("focus_session_segments_open_idx")
+      .on(t.sessionId)
+      .where(sql`${t.endedAt} is null`),
+    check(
+      "focus_session_segments_order",
+      sql`${t.endedAt} is null or ${t.endedAt} >= ${t.startedAt}`,
+    ),
+  ],
+);
+export type FocusSessionSegmentRow = typeof FocusSessionSegments.$inferSelect;
+
+/**
  * The single feed behind the live feed, diary and contribution graph
  * (architecture.md §5). Rows never copy titles, privacy or share flags:
  * readers join the subject for those.
@@ -497,6 +581,8 @@ export const relations = defineRelations(
     GoalLinks,
     GoalProgressEvents,
     Notes,
+    FocusSessions,
+    FocusSessionSegments,
     Activity,
   },
   () => ({}),

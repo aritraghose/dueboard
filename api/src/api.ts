@@ -14,6 +14,7 @@ import { Database } from "./domain/database.ts";
 import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
 import * as NotesService from "./domain/notes.ts";
+import * as SessionsService from "./domain/sessions.ts";
 import * as SettingsService from "./domain/settings.ts";
 import * as TagsService from "./domain/tags.ts";
 import * as TasksService from "./domain/tasks.ts";
@@ -71,6 +72,21 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
       namespaceId: 1004,
       simple: { limit: 120, period: 60 },
     });
+
+    // The focus-session sweep (architecture.md §11): every minute, complete
+    // the running sessions whose time ran out, even with the app closed.
+    // Reads also complete them lazily, so a late or missed run only delays
+    // the `session_completed` activity. Failures are logged, never thrown:
+    // the next minute's run retries, and a run is safe to repeat.
+    yield* Cloudflare.Workers.cron("* * * * *", () =>
+      SessionsService.sweepExpiredSessions().pipe(
+        Effect.tap((completed) =>
+          completed > 0 ? Effect.log(`Session sweep completed ${completed}`) : Effect.void,
+        ),
+        Effect.provideService(Database, db),
+        Effect.catchCause((cause) => Effect.logError("Session sweep failed", cause)),
+      ),
+    );
 
     // Resolves the session for each RPC from the cookies the web
     // stack's `/rpc` proxy forwards, and runs the handler as that user.
@@ -348,6 +364,51 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
           const user = yield* CurrentUser;
           return yield* NotesService.listNotes(user.id, input);
         }),
+      StartSession: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.startSession(user.id, input);
+        }),
+      PauseSession: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.pauseSession(user.id, id);
+        }),
+      ResumeSession: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.resumeSession(user.id, id);
+        }),
+      ExtendSession: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.extendSession(user.id, input);
+        }),
+      StopSession: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.stopSession(user.id, id);
+        }),
+      GetActiveSession: () =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.getActiveSession(user.id);
+        }),
+      ListSessions: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.listSessions(user.id, input);
+        }),
+      ListSessionsForDay: ({ date }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.listSessionsForDay(user.id, date);
+        }),
+      DeleteSession: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SessionsService.deleteSession(user.id, id);
+        }),
     }).pipe(Layer.provide(Layer.succeed(Database, db)));
 
     // One Worker serves two things: Better Auth's routes (proxied by the web
@@ -372,6 +433,7 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
     return serve;
   }).pipe(
     Effect.provide(Auth.layer),
+    Effect.provide(Cloudflare.Workers.CronEventSourceLive),
     Effect.provide(Cloudflare.Workers.RateLimitBinding),
     Effect.provide(Cloudflare.Hyperdrive.ConnectBinding),
   ),

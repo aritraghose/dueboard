@@ -121,6 +121,19 @@ export type GoalProgressSource = typeof GoalProgressSource.Type;
 export const ACTIVITY_SUBJECT = ["task", "habit", "goal", "session", "note"] as const;
 export type ActivitySubject = (typeof ACTIVITY_SUBJECT)[number];
 
+/**
+ * A focus session is `running` or `paused` while active (at most one per
+ * user), then `completed` when its time runs out or `stopped` when it ends
+ * early (by the user, or because a new session replaced it).
+ */
+export const SESSION_STATUS = ["running", "paused", "completed", "stopped"] as const;
+export const SessionStatus = Schema.Literals(SESSION_STATUS);
+export type SessionStatus = typeof SessionStatus.Type;
+
+/** What can be done to an active session. */
+export const SESSION_ACTION = ["pause", "resume", "extend", "stop"] as const;
+export type SessionAction = (typeof SESSION_ACTION)[number];
+
 // ─── Limits ──────────────────────────────────────────────────────────────────
 
 export const TAG_NAME_MAX_LENGTH = 30;
@@ -170,6 +183,14 @@ export const NOTE_PAGE_SIZE_DEFAULT = 50;
 export const NOTE_PAGE_SIZE_MAX = 100;
 /** `ListNotes` cursors are `<date>|<ISO timestamp>|<uuid>`; this only bounds the request body. */
 export const NOTE_CURSOR_MAX_LENGTH = 160;
+
+export const SESSION_LABEL_MAX_LENGTH = 100;
+/** Ten hours; bounds both a start and the total after extends. */
+export const SESSION_MINUTES_MAX = 600;
+export const SESSION_PAGE_SIZE_DEFAULT = 30;
+export const SESSION_PAGE_SIZE_MAX = 100;
+/** `ListSessions` cursors are `<date>|<ISO timestamp>|<uuid>`; this only bounds the request body. */
+export const SESSION_CURSOR_MAX_LENGTH = 160;
 
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
@@ -468,6 +489,44 @@ export const ListNotesInput = Schema.Struct({
 });
 export type ListNotesInput = typeof ListNotesInput.Type;
 
+/** A session's planned length, or what an extend adds: 1–600 whole minutes. */
+export const SessionMinutes = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: SESSION_MINUTES_MAX }));
+
+/** An optional session label: trimmed, 1–100 characters, one line. */
+export const SessionLabel = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isBetweenLength(1, SESSION_LABEL_MAX_LENGTH),
+  Schema.makeFilter((value: string) => !/[\r\n]/.test(value) || "A label is a single line"),
+);
+
+/**
+ * Starts a session now. While another is running or paused this fails with
+ * `ActiveSessionExists`, unless `replaceActive` is set: then the other one
+ * is stopped and this one started in the same transaction. `privacy` and
+ * `shareToLive` default to the user's settings.
+ */
+export const StartSessionInput = Schema.Struct({
+  minutes: SessionMinutes,
+  label: Schema.optionalKey(SessionLabel),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+  replaceActive: Schema.optionalKey(Schema.Boolean),
+});
+export type StartSessionInput = typeof StartSessionInput.Type;
+
+/** Adds minutes to a running or paused session; the total stays within 600. */
+export const ExtendSessionInput = Schema.Struct({ id: Id, minutes: SessionMinutes });
+export type ExtendSessionInput = typeof ExtendSessionInput.Type;
+
+/** `/sessions`: newest day first, newest session first. Pass the previous page's `nextCursor`. */
+export const ListSessionsInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(SESSION_CURSOR_MAX_LENGTH))),
+  limit: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: SESSION_PAGE_SIZE_MAX })),
+  ),
+});
+export type ListSessionsInput = typeof ListSessionsInput.Type;
+
 /** Decodes a service's input, failing with {@link InvalidInput}. */
 export const decodeInput =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -719,6 +778,56 @@ export class NotePage extends Schema.Class<NotePage>("NotePage")({
   nextCursor: Schema.NullOr(Schema.String),
 }) {}
 
+export class FocusSession extends Schema.Class<FocusSession>("FocusSession")({
+  id: Schema.String,
+  label: Schema.NullOr(Schema.String),
+  /** The planned length, extends included. */
+  plannedMinutes: Schema.Number,
+  status: SessionStatus,
+  /** The user's local day when it started. */
+  localDate: LocalDate,
+  startedAt: Schema.Date,
+  /** Set exactly while `running`: when the time runs out. Count down from it. */
+  endsAt: Schema.NullOr(Schema.Date),
+  /** Set exactly once `completed` or `stopped`. */
+  endedAt: Schema.NullOr(Schema.Date),
+  /** Time spent running (the sum of its segments), as of the response. */
+  elapsedMs: Schema.Number,
+  /** Planned time not yet spent, as of the response; 0 once ended. */
+  remainingMs: Schema.Number,
+  privacy: Privacy,
+  shareToLive: Schema.Boolean,
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}) {}
+
+/** A day's sessions, oldest first, with the minutes focused that day (whole minutes, rounded down). */
+export class SessionsForDay extends Schema.Class<SessionsForDay>("SessionsForDay")({
+  date: LocalDate,
+  focusedMinutes: Schema.Number,
+  sessions: Schema.Array(FocusSession),
+}) {}
+
+/**
+ * One day in a `SessionPage`, newest session first. `focusedMinutes` counts
+ * every session that day, including ones on the next page.
+ */
+export class SessionDay extends Schema.Class<SessionDay>("SessionDay")({
+  date: LocalDate,
+  focusedMinutes: Schema.Number,
+  sessions: Schema.Array(FocusSession),
+}) {}
+
+/**
+ * A page of `ListSessions`, grouped by day, newest day first. Pages split by
+ * session, so a day can continue on the next page: merge it into the last group.
+ */
+export class SessionPage extends Schema.Class<SessionPage>("SessionPage")({
+  days: Schema.Array(SessionDay),
+  /** `null` on the last page. */
+  nextCursor: Schema.NullOr(Schema.String),
+}) {}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Input that fails a rule its Schema can't express, or that skipped the RPC decode (Tibo). */
@@ -781,3 +890,29 @@ export class NoteLimitReached extends Schema.TaggedError<NoteLimitReached>()("No
   message: Schema.String,
   limit: Schema.Number,
 }) {}
+
+export class SessionNotFound extends Schema.TaggedError<SessionNotFound>()("SessionNotFound", {
+  message: Schema.String,
+  id: Schema.String,
+}) {}
+
+/**
+ * Starting a session while another is running or paused, without
+ * `replaceActive`. Carries that session so the client can ask to replace it.
+ */
+export class ActiveSessionExists extends Schema.TaggedError<ActiveSessionExists>()(
+  "ActiveSessionExists",
+  {
+    message: Schema.String,
+    session: FocusSession,
+  },
+) {}
+
+/** Pausing a paused session, resuming a running one, or changing one that has ended. Carries its status now. */
+export class SessionTransitionNotAllowed extends Schema.TaggedError<SessionTransitionNotAllowed>()(
+  "SessionTransitionNotAllowed",
+  {
+    message: Schema.String,
+    status: SessionStatus,
+  },
+) {}

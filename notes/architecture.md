@@ -35,7 +35,7 @@ There are two kinds of data, and each lives where it fits:
                       ├─ AskAgent (public Q&A, walled off) ── reads ONLY the owner's
                       │                                        ask settings ──────┘
                       └─ ⇄ other users' TiboAgent DOs (relays)
-                     Cron sweep Worker: auto-completes expired focus sessions
+                     ApiWorker cron (every minute): auto-completes expired focus sessions
                      AI Gateway (BYOK Meta key) ◀── every model call
                      Vectorize: Tibo memory embeddings (namespace = user id)
 ```
@@ -47,7 +47,7 @@ There are two kinds of data, and each lives where it fits:
 | **Website** | `DueboardWeb` (`web/`) | TanStack Start UI. Proxies `/rpc`, `/api/auth/*` and `/agents/*` to private Workers. |
 | **ApiWorker** | `DueboardApi` (`api/`) | Effect RPC API + Better Auth. Hosts the domain services. `workersDev: false`. |
 | **AgentWorker** | `DueboardApi` | Hosts `TiboAgent` and `AskAgent` Durable Objects. `workersDev: false`. |
-| **Session sweep** (cron) | `DueboardApi` | Runs every minute to complete focus sessions whose time ran out. It can be a `scheduled` handler on the ApiWorker if Alchemy supports it there. |
+| **Session sweep** (cron) | `DueboardApi` | A `* * * * *` cron on the ApiWorker itself (`Cloudflare.Workers.cron` in `api.ts`) that completes focus sessions whose time ran out. |
 
 ### Existing conventions to keep
 
@@ -109,7 +109,7 @@ plain `date`**, interpreted in the owner's time zone.
 | `goal_links` | `goal_id`, `item_type` (`habit`\|`task`), `item_id`, `amount` (default 1) | A habit check-in adds `amount` per tap. Settling a task adds `amount`. Undoing reverses it. |
 | `goal_progress_events` | `goal_id`, `user_id`, `delta`, `value_after`, `source` (`manual`\|`habit`\|`task`), `source_id?`, `source_date?`, `created_at` | Progress history, used by Live and for undo. `source_date` is a habit check-in's day: undos take back at most what that day (or task) added. |
 | `notes` | `id`, `user_id`, `body` (1–60 chars, `CHECK`), `local_date`, `privacy`, `share_to_live`, `created_at`, `updated_at` | Several per day, at most 50. Written only for today in the user's zone; `local_date` never changes. Index `(user_id, local_date, created_at, id)`. |
-| `focus_sessions` | `id`, `user_id`, `label?`, `planned_minutes`, `status` (`running`\|`paused`\|`completed`\|`stopped`), `started_at`, `ends_at?`, `ended_at?`, `privacy`, `share_to_live` | **Partial unique index on `user_id` WHERE status IN ('running','paused')**, so the database enforces one active session. `ends_at` is recomputed on resume and extend so the sweep can find expired ones. |
+| `focus_sessions` | `id`, `user_id`, `label?` (≤ 100), `planned_minutes` (1–600), `status` (`running`\|`paused`\|`completed`\|`stopped`), `local_date` (start day in the user's zone), `started_at`, `ends_at?`, `ended_at?`, `privacy`, `share_to_live` | **Partial unique index on `user_id` WHERE status IN ('running','paused')**, so the database enforces one active session. `ends_at` is set exactly while running and recomputed on resume and extend so the sweep can find expired ones; `ended_at` is set exactly once completed or stopped. |
 | `focus_session_segments` | `session_id`, `started_at`, `ended_at?` | Pause and resume history. Elapsed time is the sum of the segments. |
 | `activity` | `id`, `user_id` (actor), `kind`, `subject_type`, `subject_id`, `occurred_at`, `local_date`, `meta jsonb` | The single feed behind Live, diary and contribution graph (§5). Indexes on `(user_id, occurred_at desc)` and `(user_id, local_date)`. |
 | `connection_requests` | `id`, `from_user_id`, `to_user_id`, `status` (`pending`\|`accepted`\|`declined`\|`cancelled`), `created_at` | |
