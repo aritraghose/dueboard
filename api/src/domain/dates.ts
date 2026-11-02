@@ -84,3 +84,29 @@ export const addDays = (date: LocalDate, days: number): LocalDate => {
 
 /** The Sunday on or before `date`. Weeks start on Sunday. */
 export const startOfWeek = (date: LocalDate): LocalDate => addDays(date, -toUtc(date).getUTCDay());
+
+/** Whole days from `from` to `to` (negative when `to` is earlier). */
+export const daysBetween = (from: LocalDate, to: LocalDate): number =>
+  Math.round((toUtc(to).getTime() - toUtc(from).getTime()) / 86_400_000);
+
+/** 0 = Sunday … 6 = Saturday. */
+export const dayOfWeek = (date: LocalDate): number => toUtc(date).getUTCDay();
+
+/** The number of days in `date`'s month. */
+export const daysInMonth = (date: LocalDate): number => {
+  const [y, m] = date.split("-").map(Number) as [number, number];
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+};
+
+/** The first day of `date`'s month, moved by `months` (negative goes back). */
+export const startOfMonth = (date: LocalDate, months = 0): LocalDate => {
+  const [y, m] = date.split("-").map(Number) as [number, number];
+  return fromUtc(new Date(Date.UTC(y, m - 1 + months, 1)));
+};
+
+/** Months from `from`'s month to `to`'s month, ignoring the days. */
+export const monthsBetween = (from: LocalDate, to: LocalDate): number => {
+  const [fy, fm] = from.split("-").map(Number) as [number, number];
+  const [ty, tm] = to.split("-").map(Number) as [number, number];
+  return (ty - fy) * 12 + (tm - fm);
+};

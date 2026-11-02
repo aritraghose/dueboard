@@ -253,7 +253,7 @@ are sequential: each assumes the previous ones are done.
 - [x] 2 App shell and design system
 - [x] 3 Tasks backend
 - [x] 4 Tasks UI
-- [ ] 5 Habits backend
+- [x] 5 Habits backend
 - [ ] 6 Habits UI
 - [ ] 7 Goals backend
 - [ ] 8 Goals UI
@@ -354,3 +354,16 @@ Add a dated line whenever a decision changes during a build thread.
   - **Importance**: rows show a soft amber pill with one star and the number; the card has a star track with the level in words (Low, Minor, Medium, High, Critical; `IMPORTANCE_LABEL`) and a pop on pick (`--animate-star-pop`). Tokens `--importance-soft` and `--importance-ink`.
   - **New task** on `/now` floats at the bottom right of the task list, just above the tab rows; the list keeps bottom padding so it never covers the last row.
   - **Hideable top row on `/now` only**: `topBar.hideable` in the route's `staticData`, toggled by the button in the day card's top-left corner (`hooks/use-top-bar-hidden.ts`, localStorage `dueboard-now-top-bar-hidden`). Visible by default. Hidden, `/now` takes the full height (its `h-[calc(…)]` values change with it).
+- 2026-11-02 (step 5): **Habits backend.** Tables `habits`, `habit_pauses`, `habit_checkins` (migration `20261102155146_habits`), pure engine `api/src/domain/habit-rules.ts` (tested), service `habits.ts`, 11 RPCs.
+  - **Migration by hand**: generated with the same `drizzle-kit generate --dialect postgresql --schema ./src/schema.ts --out ./migrations` Alchemy runs (from `api/`, no dev server), then the folder renamed to `_habits`.
+  - **Schedule input** is one `schedule` object (`HabitSchedule`: `kind`, `targetCount`, `periodUnit`/`periodLength` for flexible, `weekdays` or `monthDays` for specific days), set and replaced as a whole, so switching kinds never leaves stale columns. Days are deduped and sorted. `specific_days` stores `day` × 1.
+  - **Multi-month periods** (the prompt left them open) are blocks of calendar months starting with `start_date`'s month ("every 2 months" from Nov 20 → Nov–Dec, Jan–Feb). 1-week and 1-month periods can be partial in the first period; days before `start_date` are never due and their taps don't count.
+  - **Progress is the whole period's total**, not "as of" the day: once a week's target is met, every day of that week (earlier ones too) reads `complete`. Taps on paused days still count toward their period.
+  - **Pauses** cover `[start_date, end_date)` in the user's zone: pausing starts today, resuming ends the pause today (so today is due again), and a pause opened and closed the same day is deleted. **Archiving opens a pause too**, so archived days never break the streak, and `ResumeHabit` also restores an archived habit. Pausing an archived habit is `InvalidInput`.
+  - **Streak**: walking back from the current period (or scheduled day), a complete one counts (even with paused days), the current one never breaks it, an incomplete one with any paused day is skipped, anything else ends it. Reads load all of a habit's taps (fine at v1 scale).
+  - **Check-ins**: `CheckInNotAllowed` with `reason` `future` | `too_old` (> 30 days back) | `not_due` (also for undo) | `not_active` (archived). A paused habit can still be backfilled on days before its pause. Taps past the target are allowed (they'll count toward linked goals). Undo with no taps that day is a no-op. Writes lock the habit row.
+  - **`habit_completed`**: one row per period, found by `meta->>'periodStart'`. It's dated on the **check-in's day** (`recordActivity` gained a `localDate` override), so a backfilled completion counts on the contribution graph where it belongs. A rule edit keeps check-ins and old rows; a re-completion of a period that already has a row doesn't add another.
+  - **`ListHabitsForDay`** leaves out archived habits and habits not scheduled that day; `allChecked` = nothing due and at least one settled. Each entry (`HabitOnDay`) carries `schedule` text, `status`, `progress` (period, done/target), `countOnDay` and `streak` as of today; check-ins return the same shape.
+  - **Goal seam**: `onHabitCheckIn(tx, habit, delta)` in `habits.ts` (no-op). `deleteHabit` has no goal seam yet: step 7 decides whether deleting reverses goal progress and must delete the habit's `goal_links` there.
+  - **Browser**: `rpc.ts` re-exports `describeSchedule`, `periodFor`, `progressFor`, `dayStatus`, `isScheduledOn` and `streak`.
+  - **Manual check**: like step 3, against a throwaway Docker `postgres:17` with every migration applied, calling the services (38 checks: 5/day, 3×/week all week, pause/resume/archive, activity add/remove, backfill dating, refusals, isolation, the schedule `CHECK`).

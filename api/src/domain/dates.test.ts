@@ -3,9 +3,14 @@ import * as Schema from "effect/Schema";
 import {
   LocalDate,
   addDays,
+  dayOfWeek,
+  daysBetween,
+  daysInMonth,
   isLocalDate,
   isValidTimeZone,
   localDateOf,
+  monthsBetween,
+  startOfMonth,
   startOfWeek,
   todayIn,
 } from "./dates.ts";
@@ -101,5 +106,38 @@ describe("startOfWeek", () => {
     expect(startOfWeek(d("2026-11-07"))).toBe(d("2026-11-01")); // Saturday
     expect(startOfWeek(d("2026-11-04"))).toBe(d("2026-11-01")); // Wednesday
     expect(startOfWeek(d("2027-01-01"))).toBe(d("2026-12-27")); // across a year
+  });
+});
+
+describe("calendar helpers", () => {
+  test("daysBetween counts whole days, across years and DST", () => {
+    expect(daysBetween(d("2026-11-01"), d("2026-11-01"))).toBe(0);
+    expect(daysBetween(d("2026-03-07"), d("2026-03-09"))).toBe(2);
+    expect(daysBetween(d("2026-12-31"), d("2027-01-01"))).toBe(1);
+    expect(daysBetween(d("2026-11-05"), d("2026-11-01"))).toBe(-4);
+    expect(daysBetween(d("2024-01-01"), d("2025-01-01"))).toBe(366);
+  });
+
+  test("dayOfWeek is 0 on Sunday", () => {
+    expect(dayOfWeek(d("2026-11-01"))).toBe(0);
+    expect(dayOfWeek(d("2026-11-07"))).toBe(6);
+  });
+
+  test("daysInMonth handles February in leap years", () => {
+    expect(daysInMonth(d("2026-02-10"))).toBe(28);
+    expect(daysInMonth(d("2024-02-10"))).toBe(29);
+    expect(daysInMonth(d("2000-02-01"))).toBe(29);
+    expect(daysInMonth(d("2100-02-01"))).toBe(28);
+    expect(daysInMonth(d("2026-11-30"))).toBe(30);
+    expect(daysInMonth(d("2026-12-01"))).toBe(31);
+  });
+
+  test("startOfMonth and monthsBetween", () => {
+    expect(startOfMonth(d("2026-11-17"))).toBe(d("2026-11-01"));
+    expect(startOfMonth(d("2026-11-17"), 2)).toBe(d("2027-01-01"));
+    expect(startOfMonth(d("2026-01-31"), -1)).toBe(d("2025-12-01"));
+    expect(monthsBetween(d("2026-11-30"), d("2027-01-01"))).toBe(2);
+    expect(monthsBetween(d("2026-11-30"), d("2026-11-01"))).toBe(0);
+    expect(monthsBetween(d("2027-01-01"), d("2026-10-31"))).toBe(-3);
   });
 });

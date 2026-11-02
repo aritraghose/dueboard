@@ -11,6 +11,7 @@ import { RpcSerialization, RpcServer } from "effect/rpc";
 import { Auth } from "./auth.ts";
 import { Hyperdrive } from "./database.ts";
 import { Database } from "./domain/database.ts";
+import * as HabitsService from "./domain/habits.ts";
 import * as SettingsService from "./domain/settings.ts";
 import * as TagsService from "./domain/tags.ts";
 import * as TasksService from "./domain/tasks.ts";
@@ -194,6 +195,61 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         Effect.gen(function* () {
           const user = yield* CurrentUser;
           return yield* TasksService.listTasks(user.id, input);
+        }),
+      CreateHabit: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.createHabit(user.id, input);
+        }),
+      UpdateHabit: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.updateHabit(user.id, input);
+        }),
+      PauseHabit: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.pauseHabit(user.id, id);
+        }),
+      ResumeHabit: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.resumeHabit(user.id, id);
+        }),
+      ArchiveHabit: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.archiveHabit(user.id, id);
+        }),
+      DeleteHabit: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.deleteHabit(user.id, id);
+        }),
+      CheckInHabit: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.checkIn(user.id, input);
+        }),
+      UndoCheckInHabit: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.undoCheckIn(user.id, input);
+        }),
+      ListHabitsForDay: ({ date }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.listHabitsForDay(user.id, date);
+        }),
+      ListHabits: () =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.listHabits(user.id);
+        }),
+      GetHabit: ({ id }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* HabitsService.getHabit(user.id, id);
         }),
     }).pipe(Layer.provide(Layer.succeed(Database, db)));
 

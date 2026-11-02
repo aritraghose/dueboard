@@ -5,8 +5,16 @@ import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
 import { LocalDate } from "./domain/dates.ts";
 import {
+  CheckInNotAllowed,
+  CreateHabitInput,
   CreateTagInput,
   CreateTaskInput,
+  Habit,
+  HabitCheckInInput,
+  HabitNotFound,
+  HabitOnDay,
+  HabitSummary,
+  HabitsForDay,
   Id,
   InvalidInput,
   ListTasksInput,
@@ -25,6 +33,7 @@ import {
   TaskPage,
   TasksForDay,
   UnscheduledTasks,
+  UpdateHabitInput,
   UpdateTagInput,
   UpdateTaskInput,
 } from "./domain/model.ts";
@@ -32,6 +41,15 @@ import {
 // The domain's values, inputs and errors, for the browser.
 export * from "./domain/model.ts";
 export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/dates.ts";
+// The pure habit engine, so the UI words and computes schedules like the API.
+export {
+  dayStatus,
+  describeSchedule,
+  isScheduledOn,
+  periodFor,
+  progressFor,
+  streak,
+} from "./domain/habit-rules.ts";
 
 /**
  * Shared domain + RPC contract.
@@ -166,5 +184,73 @@ export class ApiRpcs extends RpcGroup.make(
     payload: ListTasksInput,
     success: TaskPage,
     error: InvalidInput,
+  }),
+  /**
+   * `startDate` defaults to today, `privacy` and `shareToLive` to the user's
+   * settings. `InvalidInput` when the schedule's fields don't fit its kind.
+   */
+  Rpc.make("CreateHabit", {
+    payload: CreateHabitInput,
+    success: Habit,
+    error: InvalidInput,
+  }),
+  /** A partial update; a new `schedule` replaces the rule and keeps the check-ins. */
+  Rpc.make("UpdateHabit", {
+    payload: UpdateHabitInput,
+    success: Habit,
+    error: Schema.Union([InvalidInput, HabitNotFound]),
+  }),
+  /** Pauses from today; paused days are never due and never break the streak. */
+  Rpc.make("PauseHabit", {
+    payload: { id: Id },
+    success: Habit,
+    error: Schema.Union([InvalidInput, HabitNotFound]),
+  }),
+  /** Makes a paused or archived habit active again from today. */
+  Rpc.make("ResumeHabit", {
+    payload: { id: Id },
+    success: Habit,
+    error: Schema.Union([InvalidInput, HabitNotFound]),
+  }),
+  Rpc.make("ArchiveHabit", {
+    payload: { id: Id },
+    success: Habit,
+    error: Schema.Union([InvalidInput, HabitNotFound]),
+  }),
+  /** Deletes a habit with its check-ins, pauses and activity, and returns its id. */
+  Rpc.make("DeleteHabit", {
+    payload: { id: Id },
+    success: Schema.String,
+    error: Schema.Union([InvalidInput, HabitNotFound]),
+  }),
+  /**
+   * One tap on a day (today or up to 30 days back, and due). Meeting the
+   * period's target records a `habit_completed` activity.
+   */
+  Rpc.make("CheckInHabit", {
+    payload: HabitCheckInInput,
+    success: HabitOnDay,
+    error: Schema.Union([InvalidInput, HabitNotFound, CheckInNotAllowed]),
+  }),
+  /** Takes back one tap; dropping below the target removes the `habit_completed` row. */
+  Rpc.make("UndoCheckInHabit", {
+    payload: HabitCheckInInput,
+    success: HabitOnDay,
+    error: Schema.Union([InvalidInput, HabitNotFound, CheckInNotAllowed]),
+  }),
+  /** `/now`'s habits for a day: due and settled, and whether all are checked. */
+  Rpc.make("ListHabitsForDay", {
+    payload: { date: LocalDate },
+    success: HabitsForDay,
+    error: InvalidInput,
+  }),
+  /** `/habits`: every habit with its schedule, streak, progress and last 12 weeks. */
+  Rpc.make("ListHabits", {
+    success: Schema.Array(HabitSummary),
+  }),
+  Rpc.make("GetHabit", {
+    payload: { id: Id },
+    success: HabitSummary,
+    error: Schema.Union([InvalidInput, HabitNotFound]),
   }),
 ).middleware(Authentication) {}

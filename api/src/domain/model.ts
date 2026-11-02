@@ -62,6 +62,29 @@ export const TASK_DATE_ROLE = ["assigned", "deadline", "both"] as const;
 export const TaskDateRole = Schema.Literals(TASK_DATE_ROLE);
 export type TaskDateRole = typeof TaskDateRole.Type;
 
+/**
+ * `flexible`: `target_count` times per period of `period_length` ×
+ * `period_unit` (daily-with-a-count is `day` × 1). `specific_days`:
+ * `target_count` taps on each listed weekday or month day.
+ */
+export const HABIT_SCHEDULE_KIND = ["flexible", "specific_days"] as const;
+export const HabitScheduleKind = Schema.Literals(HABIT_SCHEDULE_KIND);
+export type HabitScheduleKind = typeof HabitScheduleKind.Type;
+
+export const HABIT_PERIOD_UNIT = ["day", "week", "month"] as const;
+export const HabitPeriodUnit = Schema.Literals(HABIT_PERIOD_UNIT);
+export type HabitPeriodUnit = typeof HabitPeriodUnit.Type;
+
+/** `paused` and `archived` habits always have an open pause row. */
+export const HABIT_STATUS = ["active", "paused", "archived"] as const;
+export const HabitStatus = Schema.Literals(HABIT_STATUS);
+export type HabitStatus = typeof HabitStatus.Type;
+
+/** A habit on a day: not due, due (target not met yet), or complete for its period or day. */
+export const HABIT_DAY_STATUS = ["not_due", "due", "complete"] as const;
+export const HabitDayStatus = Schema.Literals(HABIT_DAY_STATUS);
+export type HabitDayStatus = typeof HabitDayStatus.Type;
+
 /** What every activity row can record. See architecture.md §5. */
 export const ACTIVITY_KIND = [
   "task_settled",
@@ -96,6 +119,15 @@ export const TASK_PAGE_SIZE_DEFAULT = 50;
 export const TASK_PAGE_SIZE_MAX = 100;
 /** `ListTasks` cursors are `<ISO timestamp>|<uuid>`; this only bounds the request body. */
 export const TASK_CURSOR_MAX_LENGTH = 128;
+
+export const HABIT_TITLE_MAX_LENGTH = 200;
+export const HABIT_DESCRIPTION_MAX_LENGTH = 2000;
+export const HABIT_TARGET_MAX = 100;
+export const HABIT_PERIOD_LENGTH_MAX = 365;
+/** Check-ins (and undos) reach back this many days before today. */
+export const HABIT_CHECKIN_DAYS_BACK = 30;
+/** `ListHabits`' history: this many weeks, ending with the current one. */
+export const HABIT_HISTORY_WEEKS = 12;
 
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
@@ -202,6 +234,76 @@ export const ListTasksInput = Schema.Struct({
 });
 export type ListTasksInput = typeof ListTasksInput.Type;
 
+export const HabitTitle = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isBetweenLength(1, HABIT_TITLE_MAX_LENGTH),
+);
+export const HabitDescription = Schema.String.check(Schema.isMaxLength(HABIT_DESCRIPTION_MAX_LENGTH));
+
+/**
+ * A habit's rule, set and replaced as a whole. `flexible` needs `periodUnit`
+ * and `periodLength` and no days; `specific_days` needs exactly one of
+ * `weekdays` (0 = Sun … 6 = Sat) or `monthDays` (1–31; a day past the
+ * month's end falls on its last day). Days are deduplicated and sorted.
+ */
+export const HabitSchedule = Schema.Struct({
+  kind: HabitScheduleKind,
+  targetCount: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: HABIT_TARGET_MAX })),
+  periodUnit: Schema.optionalKey(HabitPeriodUnit),
+  periodLength: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: HABIT_PERIOD_LENGTH_MAX })),
+  ),
+  weekdays: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 6 }))).check(
+        Schema.isMaxLength(7),
+      ),
+    ),
+  ),
+  monthDays: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 31 }))).check(
+        Schema.isMaxLength(31),
+      ),
+    ),
+  ),
+});
+export type HabitSchedule = typeof HabitSchedule.Type;
+
+/**
+ * `startDate` defaults to today in the user's zone; `privacy` and
+ * `shareToLive` to their settings defaults. New habits start `active`.
+ */
+export const CreateHabitInput = Schema.Struct({
+  title: HabitTitle,
+  description: Schema.optionalKey(Schema.NullOr(HabitDescription)),
+  schedule: HabitSchedule,
+  startDate: Schema.optionalKey(LocalDate),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+});
+export type CreateHabitInput = typeof CreateHabitInput.Type;
+
+/**
+ * A partial update: an omitted key is left as it is, and `null` clears the
+ * description. A new `schedule` replaces the rule; check-ins are kept. The
+ * status changes through Pause, Resume and Archive only.
+ */
+export const UpdateHabitInput = Schema.Struct({
+  id: Id,
+  title: Schema.optionalKey(HabitTitle),
+  description: Schema.optionalKey(Schema.NullOr(HabitDescription)),
+  schedule: Schema.optionalKey(HabitSchedule),
+  startDate: Schema.optionalKey(LocalDate),
+  privacy: Schema.optionalKey(Privacy),
+  shareToLive: Schema.optionalKey(Schema.Boolean),
+});
+export type UpdateHabitInput = typeof UpdateHabitInput.Type;
+
+/** A tap (or its undo) on `date`, a day in the user's zone: today or up to 30 days back. */
+export const HabitCheckInInput = Schema.Struct({ id: Id, date: LocalDate });
+export type HabitCheckInInput = typeof HabitCheckInInput.Type;
+
 /** Decodes a service's input, failing with {@link InvalidInput}. */
 export const decodeInput =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -278,6 +380,81 @@ export class TaskPage extends Schema.Class<TaskPage>("TaskPage")({
   nextCursor: Schema.NullOr(Schema.String),
 }) {}
 
+export class Habit extends Schema.Class<Habit>("Habit")({
+  id: Schema.String,
+  title: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  scheduleKind: HabitScheduleKind,
+  targetCount: Schema.Number,
+  /** `day` × 1 for `specific_days`. */
+  periodUnit: HabitPeriodUnit,
+  periodLength: Schema.Number,
+  /** Set (non-empty) only for weekday habits. */
+  weekdays: Schema.NullOr(Schema.Array(Schema.Number)),
+  /** Set (non-empty) only for month-day habits. */
+  monthDays: Schema.NullOr(Schema.Array(Schema.Number)),
+  startDate: LocalDate,
+  status: HabitStatus,
+  privacy: Privacy,
+  shareToLive: Schema.Boolean,
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+}) {}
+
+/** Taps in the period (flexible) or on the day (specific days) containing some date. */
+export class HabitProgress extends Schema.Class<HabitProgress>("HabitProgress")({
+  /** The period's first and last days; the same day for `specific_days`. */
+  periodStart: LocalDate,
+  periodEnd: LocalDate,
+  done: Schema.Number,
+  target: Schema.Number,
+  complete: Schema.Boolean,
+}) {}
+
+/** One day's taps. */
+export class HabitCheckin extends Schema.Class<HabitCheckin>("HabitCheckin")({
+  date: LocalDate,
+  count: Schema.Number,
+}) {}
+
+/** A habit as it stands on `date` (what `/now` shows, and what a check-in returns). */
+export class HabitOnDay extends Schema.Class<HabitOnDay>("HabitOnDay")({
+  habit: Habit,
+  /** `describeSchedule`: "3 times a week", "Every Mon, Wed, Fri". */
+  schedule: Schema.String,
+  date: LocalDate,
+  status: HabitDayStatus,
+  progress: HabitProgress,
+  /** Taps on `date` itself, which an undo can take back. */
+  countOnDay: Schema.Number,
+  /** As of today, not `date`. */
+  streak: Schema.Number,
+}) {}
+
+/**
+ * `/now`'s habits for a day: `due` (target not met yet) and `settled` (met
+ * this period or day), both oldest first. Paused, archived and unscheduled
+ * habits are left out. `allChecked` is true when at least one habit is
+ * scheduled that day and none is still due.
+ */
+export class HabitsForDay extends Schema.Class<HabitsForDay>("HabitsForDay")({
+  date: LocalDate,
+  due: Schema.Array(HabitOnDay),
+  settled: Schema.Array(HabitOnDay),
+  allChecked: Schema.Boolean,
+}) {}
+
+/** `/habits`: a habit with its streak, current progress and recent taps. */
+export class HabitSummary extends Schema.Class<HabitSummary>("HabitSummary")({
+  habit: Habit,
+  schedule: Schema.String,
+  streak: Schema.Number,
+  /** The period (or scheduled day) containing today. */
+  progress: HabitProgress,
+  /** Days with taps over the last 12 weeks (from the Sunday 11 weeks before this one), oldest first. */
+  history: Schema.Array(HabitCheckin),
+}) {}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Input that fails a rule its Schema can't express, or that skipped the RPC decode (Tibo). */
@@ -309,4 +486,18 @@ export class SystemTagLocked extends Schema.TaggedError<SystemTagLocked>()("Syst
 export class TaskNotFound extends Schema.TaggedError<TaskNotFound>()("TaskNotFound", {
   message: Schema.String,
   id: Schema.String,
+}) {}
+
+export class HabitNotFound extends Schema.TaggedError<HabitNotFound>()("HabitNotFound", {
+  message: Schema.String,
+  id: Schema.String,
+}) {}
+
+export const CHECK_IN_REFUSAL = ["future", "too_old", "not_due", "not_active"] as const;
+export type CheckInRefusal = (typeof CHECK_IN_REFUSAL)[number];
+
+/** A tap (or undo) on a future day, more than 30 days back, a day the habit isn't due, or a paused or archived habit. */
+export class CheckInNotAllowed extends Schema.TaggedError<CheckInNotAllowed>()("CheckInNotAllowed", {
+  message: Schema.String,
+  reason: Schema.Literals(CHECK_IN_REFUSAL),
 }) {}
