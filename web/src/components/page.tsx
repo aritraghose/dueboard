@@ -1,5 +1,6 @@
-import type { LucideIcon } from "lucide-react";
+import { type LucideIcon, PlusIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -69,4 +70,33 @@ export function PageEmpty({
  */
 export function Page({ children }: { children: ReactNode }) {
   return <main className="flex w-full flex-1 flex-col gap-6 px-3 pt-3 md:px-6 md:pt-4">{children}</main>;
+}
+
+/**
+ * A page's "New …" button. From `md` up it sits in the header with its
+ * label; on phones it floats as a round "+" on the right, just above
+ * Tibo's default spot.
+ */
+export function CreateButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Button
+      onClick={onClick}
+      disabled={disabled}
+      aria-keyshortcuts="N"
+      aria-label={label}
+      title={`${label} (N)`}
+      className="max-md:fixed max-md:right-4 max-md:bottom-[calc(10.25rem+env(safe-area-inset-bottom))] max-md:z-40 max-md:size-12 max-md:rounded-full max-md:shadow-lg max-md:[&_svg:not([class*='size-'])]:size-5"
+    >
+      <PlusIcon />
+      <span className="max-md:hidden">{label}</span>
+    </Button>
+  );
 }

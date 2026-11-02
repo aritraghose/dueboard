@@ -60,6 +60,8 @@
 
   /* Done states ("All habits checked"), and Live's dot. */
   --success: oklch(0.52 0.13 155);
+  /* Success text on a near-white fill (a picked tab), kept as strong as on the tinted list. */
+  --success-ink: oklch(0.42 0.12 155);
 
   /*
    * Tasks: importance stars, and the "Due today" badge. Built from the tag
@@ -188,11 +190,38 @@
       transform: scale(1.25);
     }
   }
+  /* A habit's ring pops on each tap (it re-mounts its key to replay). */
+  --animate-ring-pop: ring-pop 300ms cubic-bezier(0.3, 1.5, 0.5, 1);
+  @keyframes ring-pop {
+    0% {
+      transform: scale(0.88);
+    }
+    55% {
+      transform: scale(1.08);
+    }
+  }
+  /*
+   * "All habits checked": the one celebration. Rings in the habit tag's
+   * color spread out from the check once; the reduced-motion rule (and
+   * `useReducedMotion` in `habit-section.tsx`) skips it.
+   */
+  --animate-habit-burst: habit-burst 900ms cubic-bezier(0.15, 0.8, 0.3, 1) both;
+  @keyframes habit-burst {
+    0% {
+      transform: scale(0.4);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
   --color-tibo: var(--tibo);
   --color-tibo-foreground: var(--tibo-foreground);
   --color-tibo-soft: var(--tibo-soft);
   --color-chrome: var(--chrome);
   --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
   --color-importance: var(--importance);
   --color-importance-soft: var(--importance-soft);
   --color-importance-ink: var(--importance-ink);
@@ -287,6 +316,7 @@
   --composer-border: var(--input);
   --card-glow: linear-gradient(120deg, oklch(0.55 0.11 190 / 55%), oklch(0.65 0.13 75 / 45%));
   --success: oklch(0.8 0.15 155);
+  --success-ink: var(--success);
   /* The nav: matte black, a step up from the page's pure black. */
   --sidebar: #121212;
   --sidebar-foreground: #f5f5f5;

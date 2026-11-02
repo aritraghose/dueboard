@@ -112,15 +112,13 @@ export function failureMessage(exit: Exit.Exit<unknown, unknown>, fallback: stri
 }
 
 /**
- * Task and tag writes. Each call is its own short-lived atom on the app's
- * registry, so overlapping calls (settling two tasks quickly) never cancel
- * or answer for each other, as one shared mutation atom would. Each returns
- * its `Exit`; the caller decides how to show a failure.
+ * Runs one RPC call as its own short-lived atom on the app's registry, so
+ * overlapping calls never cancel or answer for each other, as one shared
+ * mutation atom would. Resolves to the call's `Exit`.
  */
-export function useTaskActions() {
+export function useRun() {
   const registry = useContext(RegistryContext);
-
-  const run = useCallback(
+  return useCallback(
     <A, E>(effect: Effect.Effect<A, E, ApiClient | Reactivity.Reactivity>) => {
       const atom = ApiClient.runtime.fn((_: void) => effect);
       const release = registry.mount(atom);
@@ -131,6 +129,17 @@ export function useTaskActions() {
     },
     [registry],
   );
+}
+
+/**
+ * Task and tag writes. Each call is its own short-lived atom on the app's
+ * registry, so overlapping calls (settling two tasks quickly) never cancel
+ * or answer for each other, as one shared mutation atom would. Each returns
+ * its `Exit`; the caller decides how to show a failure.
+ */
+export function useTaskActions() {
+  const registry = useContext(RegistryContext);
+  const run = useRun();
 
   return useMemo(
     () => ({

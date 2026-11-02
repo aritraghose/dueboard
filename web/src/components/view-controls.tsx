@@ -66,7 +66,7 @@ export function ViewControls({
         />
       )}
 
-      <div className="ml-auto flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5 max-sm:-ml-2.5 sm:ml-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className={cn(sorted && "text-foreground")}>

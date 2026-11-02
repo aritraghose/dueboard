@@ -8,7 +8,6 @@ import {
   CheckCheckIcon,
   ChevronDownIcon,
   ListChecksIcon,
-  PlusIcon,
   SearchIcon,
   SearchXIcon,
   TagIcon,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 import { LayoutGroup } from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Page, PageEmpty, PageHeader } from "@/components/page";
+import { CreateButton, Page, PageEmpty, PageHeader } from "@/components/page";
 import { TaskDialog } from "@/components/task-card";
 import { TagChip } from "@/components/tag-chip";
 import { TaskList } from "@/components/task-list";
@@ -92,13 +91,10 @@ function Tasks() {
   return (
     <Page>
       <PageHeader title="Tasks" description="Everything you need to do, dated or not.">
-        <Button disabled={!today} onClick={newTask} aria-keyshortcuts="N" title="New task (N)">
-          <PlusIcon />
-          New task
-        </Button>
+        <CreateButton label="New task" disabled={!today} onClick={newTask} />
       </PageHeader>
 
-      <div className="flex w-full max-w-3xl flex-col gap-4 pb-8">
+      <div className="flex w-full flex-col gap-4 pb-8">
         <div className="flex flex-wrap items-center gap-2">
           <Tabs value={view} onValueChange={(next) => setSearch({ view: next === "all" ? undefined : (next as Exclude<View, "all">) })}>
             <TabsList>
@@ -114,7 +110,7 @@ function Tasks() {
           <ViewControls
             view={display}
             onChange={setDisplay}
-            className="ml-auto"
+            className="sm:ml-auto"
             groups={[
               { value: "auto", label: "Day" },
               { value: "tag", label: "Tag" },
@@ -433,7 +429,7 @@ function ResultList({
             {section.heading && (
               <h2
                 className={cn(
-                  "px-2 text-sm font-semibold",
+                  "px-2 text-xs font-medium",
                   section.today || !section.byDay ? "text-foreground" : "text-muted-foreground",
                 )}
               >

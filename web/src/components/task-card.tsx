@@ -4,7 +4,6 @@ import {
   TASK_EXPECTED_MINUTES_MAX,
   TASK_STATUS,
   TASK_TITLE_MAX_LENGTH,
-  type Privacy,
   type Task,
   type TaskStatus,
   type UpdateTaskInput,
@@ -36,6 +35,7 @@ import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
 import type { TaskDialogTarget } from "@/hooks/use-task-dialog";
 import { failureMessage, taskAtom, useTags, useTaskActions } from "@/hooks/use-tasks";
 import { type LocalDate, formatDay, localDateOf } from "@/lib/dates";
+import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 import { formatMinutes } from "@/lib/tasks";
 
 // The task card: a dialog with every field of one task, the unset ones as
@@ -43,17 +43,6 @@ import { formatMinutes } from "@/lib/tasks";
 // fields and adds the task with "Add task" (or Enter in the title).
 
 const STATUS_LABEL: Record<TaskStatus, string> = { idle: "Idle", working: "Working", settled: "Settled" };
-const PRIVACY_LABEL: Record<Privacy, string> = {
-  public: "Public",
-  connections: "Connections",
-  private: "Private",
-};
-const PRIVACY_HINT: Record<Privacy, string> = {
-  public: "Anyone can see it in your diary.",
-  connections: "Your connections can see it in your diary.",
-  private: "Only you can see it. Live shows that you did something, not what.",
-};
-
 type Field = Exclude<keyof UpdateTaskInput, "id"> | "status";
 type Values = Pick<Task, Field>;
 type Errors = Partial<Record<Field | "form", string>>;

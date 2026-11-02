@@ -121,6 +121,7 @@ export function DateField({
   today,
   min,
   max,
+  required = false,
   onChange,
 }: {
   label: string;
@@ -128,6 +129,8 @@ export function DateField({
   today: LocalDate;
   min?: LocalDate | null | undefined;
   max?: LocalDate | null | undefined;
+  /** No clear button (a habit's start date). */
+  required?: boolean;
   onChange: (date: LocalDate | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -166,7 +169,7 @@ export function DateField({
           />
         </PopoverContent>
       </Popover>
-      {value !== null && (
+      {value !== null && !required && (
         <Button type="button" variant="ghost" size="icon-sm" aria-label={`Clear ${label.toLowerCase()}`} onClick={() => onChange(null)}>
           <XIcon />
         </Button>

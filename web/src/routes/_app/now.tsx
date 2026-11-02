@@ -1,12 +1,14 @@
-import type { Task } from "@dueboard/api/rpc";
+import type { Habit, Task } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { ChevronDownIcon, PanelRightOpenIcon, PanelTopCloseIcon, PanelTopOpenIcon, PlusIcon, RepeatIcon, TargetIcon, TimerIcon } from "lucide-react";
+import { CheckCheckIcon, ChevronDownIcon, PanelRightOpenIcon, PanelTopCloseIcon, PanelTopOpenIcon, PlusIcon, RepeatIcon, TargetIcon, TimerIcon } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { DayStepper, NowClock } from "@/components/day-navigator";
+import { HabitDialog } from "@/components/habit-dialog";
+import { DueHabits, SettledHabits } from "@/components/habit-section";
 import { LiveCard } from "@/components/live-card";
 import { TaskDialog } from "@/components/task-card";
 import { TagChip } from "@/components/tag-chip";
@@ -20,11 +22,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
+import { useHabitDialog } from "@/hooks/use-habit-dialog";
+import { type DayHabits, useDayHabits, useHabitActions } from "@/hooks/use-habits";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
 import { useTaskDialog } from "@/hooks/use-task-dialog";
 import { tasksForDayAtom, unscheduledAtom, useOptimisticStatus, useTagMap, useTags, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
 import { setTopBarHidden, useTopBarHidden } from "@/hooks/use-top-bar-hidden";
-import { useViewOptions } from "@/hooks/use-view-options";
+import { type ViewOptions, useViewOptions } from "@/hooks/use-view-options";
 import { type LocalDate, formatDay, isLocalDate } from "@/lib/dates";
 import { groupByTag, sortTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
@@ -87,10 +91,14 @@ function Now() {
   const date = searchDate ?? today;
   const [liveCollapsed, setLiveCollapsed] = useLiveCollapsed();
   const dialog = useTaskDialog();
-  const newTask = () => {
-    if (date) dialog.openNew(date);
+  const habitDialog = useHabitDialog();
+  const [view, setView] = useViewOptions("now");
+  // N adds what the list shows: a habit in the Habits view, a task otherwise.
+  const newItem = () => {
+    if (view.show === "habits") habitDialog.openNew();
+    else if (date) dialog.openNew(date);
   };
-  useKeyShortcut("n", newTask);
+  useKeyShortcut("n", newItem);
   const topBarHidden = useTopBarHidden();
 
   const changeDate = useCallback(
@@ -161,7 +169,16 @@ function Now() {
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
               {date && today ? (
-                <DayBody date={date} today={today} onDay={onDay} onOpenTask={dialog.openTask} onNewTask={newTask} />
+                <DayBody
+                  date={date}
+                  today={today}
+                  onDay={onDay}
+                  view={view}
+                  onViewChange={setView}
+                  onOpenTask={dialog.openTask}
+                  onEditHabit={habitDialog.openHabit}
+                  onNew={newItem}
+                />
               ) : (
                 <DayBodySkeleton />
               )}
@@ -173,6 +190,15 @@ function Now() {
               open={dialog.open}
               version={dialog.version}
               onOpenChange={dialog.setOpen}
+              today={today}
+            />
+          )}
+          {today && (
+            <HabitDialog
+              target={habitDialog.target}
+              open={habitDialog.open}
+              version={habitDialog.version}
+              onOpenChange={habitDialog.setOpen}
               today={today}
             />
           )}
@@ -196,24 +222,31 @@ function Now() {
 
 /**
  * The day card's body: the view row (show, sort, group), the day's open
- * tasks with New task floating at their bottom right, then the Settled /
- * Sessions / Unscheduled and habits / goals tab rows. Unscheduled shows on
- * every day, not only today (planning.md, step 4 decision).
+ * tasks and due habits (as the Show choice says) with New task or New habit
+ * floating at their bottom right, then the Settled / Sessions / Unscheduled
+ * and habits / goals tab rows. Unscheduled shows on every day, not only
+ * today (planning.md, step 4 decision).
  */
 function DayBody({
   date,
   today,
   onDay,
+  view,
+  onViewChange,
   onOpenTask,
-  onNewTask,
+  onEditHabit,
+  onNew,
 }: {
   date: LocalDate;
   today: LocalDate;
   onDay: string;
+  view: ViewOptions;
+  onViewChange: (patch: Partial<ViewOptions>) => void;
   onOpenTask: (task: Task) => void;
-  onNewTask: () => void;
+  onEditHabit: (habit: Habit) => void;
+  onNew: () => void;
 }) {
-  const [view, setView] = useViewOptions("now");
+  const habits = useDayHabits(date);
   const tagList = useTags();
   const dayResult = useAtomValue(tasksForDayAtom(date));
   const unscheduledResult = useAtomValue(unscheduledAtom(date));
@@ -258,11 +291,46 @@ function DayBody({
   const failed = AsyncResult.isFailure(dayResult) || AsyncResult.isFailure(unscheduledResult);
   const rowProps = { tags, today, onStatusChange: change, onOpen: onOpenTask, statusOf };
 
+  // In All, habits show only while some are due: once they're all checked,
+  // the habits tab below says so.
+  const habitsInline = view.show === "all" && habits.due.length > 0;
+  const tasksBody = failed ? (
+      <EmptyState>
+        Couldn't load your tasks.
+        <Button variant="outline" size="sm" onClick={() => void reload()}>
+          Try again
+        </Button>
+      </EmptyState>
+    ) : !day ? (
+      <TaskRowsSkeleton />
+    ) : open.length > 0 ? (
+      view.group === "tag" ? (
+        groupByTag(open, tagList ?? []).map(({ tag, tasks }) => (
+          <section key={tag?.id ?? "other"} aria-label={tag?.name ?? "Other"} className="flex flex-col gap-0.5 pt-2 first:pt-0">
+            <h3 className="px-2">
+              {tag ? <TagChip name={tag.name} color={tag.color} /> : <span className="text-xs text-muted-foreground">Other</span>}
+            </h3>
+            <TaskList tasks={tasks} label={tag?.name ?? "Other"} {...rowProps} />
+          </section>
+        ))
+      ) : (
+        <TaskList tasks={open} label={`Tasks ${onDay}`} {...rowProps} />
+      )
+    ) : settled.length > 0 && dayTasks.length > 0 ? (
+      <EmptyState className={cn("text-success", habitsInline && "flex-none")}>Everything {onDay} is settled.</EmptyState>
+    ) : (
+      <EmptyState className={cn(habitsInline && "flex-none")}>No tasks {onDay}. Add one with New task, or press N.</EmptyState>
+    );
+
+  const newLabel = view.show === "habits" ? "New habit" : "New task";
+  // Settled holds the day's checked-off habits too (goals join in step 8).
+  const settledCount = day && unscheduled && habits.loaded ? settledList.length + habits.settled.length : null;
+
   return (
     <LayoutGroup>
       <ViewControls
         view={view}
-        onChange={setView}
+        onChange={onViewChange}
         kinds
         groups={[
           { value: "auto", label: "None" },
@@ -273,48 +341,31 @@ function DayBody({
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <section aria-label="Tasks" className="-mx-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-0.5 pb-14">
-          {view.show === "habits" || view.show === "goals" ? (
-            <EmptyState>
-              {view.show === "habits"
-                ? "Your habits will show here once you can add them."
-                : "Your goals will show here once you can add them."}
-            </EmptyState>
-          ) : failed ? (
-            <EmptyState>
-              Couldn't load your tasks.
-              <Button variant="outline" size="sm" onClick={() => void reload()}>
-                Try again
-              </Button>
-            </EmptyState>
-          ) : !day ? (
-            <TaskRowsSkeleton />
-          ) : open.length > 0 ? (
-            view.group === "tag" ? (
-              groupByTag(open, tagList ?? []).map(({ tag, tasks }) => (
-                <section key={tag?.id ?? "other"} aria-label={tag?.name ?? "Other"} className="flex flex-col gap-0.5 pt-2 first:pt-0">
-                  <h3 className="px-2">
-                    {tag ? <TagChip name={tag.name} color={tag.color} /> : <span className="text-xs text-muted-foreground">Other</span>}
-                  </h3>
-                  <TaskList tasks={tasks} label={tag?.name ?? "Other"} {...rowProps} />
-                </section>
-              ))
-            ) : (
-              <TaskList tasks={open} label={`Tasks ${onDay}`} {...rowProps} />
-            )
-          ) : settled.length > 0 && dayTasks.length > 0 ? (
-            <EmptyState className="text-success">Everything {onDay} is settled.</EmptyState>
+          {view.show === "habits" ? (
+            <HabitsView habits={habits} date={date} today={today} onDay={onDay} onEdit={onEditHabit} />
+          ) : view.show === "goals" ? (
+            <EmptyState>Your goals will show here once you can add them.</EmptyState>
           ) : (
-            <EmptyState>Nothing planned {onDay}. Add one with New task, or press N.</EmptyState>
+            <>
+              {tasksBody}
+              {habitsInline && (
+                <section aria-label="Habits" className="flex flex-col gap-2 pt-4">
+                  <h3 className="px-2 text-xs font-medium text-muted-foreground">Habits</h3>
+                  <DueHabits habits={habits} date={date} today={today} onEdit={onEditHabit} allChecked={false} />
+                </section>
+              )}
+            </>
           )}
         </section>
         <Button
-          className="absolute right-0 bottom-1 rounded-full shadow-(--card-shadow)"
-          onClick={onNewTask}
+          className="absolute right-0 bottom-1 rounded-full shadow-(--card-shadow) max-sm:size-10"
+          onClick={onNew}
           aria-keyshortcuts="N"
-          title="New task (N)"
+          aria-label={newLabel}
+          title={`${newLabel} (N)`}
         >
           <PlusIcon />
-          New task
+          <span className="max-sm:hidden">{newLabel}</span>
         </Button>
       </div>
 
@@ -323,12 +374,15 @@ function DayBody({
         tabs={[
           {
             value: "settled",
-            label: <Counted label="Settled" count={day && unscheduled ? settledList.length : null} />,
+            label: <Counted label="Settled" count={settledCount} />,
             content:
-              settledList.length > 0 ? (
-                <TaskList tasks={settledList} label="Settled" {...rowProps} />
+              settledList.length > 0 || habits.settled.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  {settledList.length > 0 && <TaskList tasks={settledList} label="Settled" {...rowProps} />}
+                  <SettledHabits habits={habits} date={date} today={today} emptyText="" />
+                </div>
               ) : (
-                `Tasks you settle ${onDay} move here.`
+                `Tasks and habits you settle ${onDay} move here.`
               ),
           },
           {
@@ -354,13 +408,20 @@ function DayBody({
         tabs={[
           {
             value: "habits",
-            label: (
-              <>
-                <RepeatIcon />
-                No habits due
-              </>
+            label: <HabitsTabLabel habits={habits} />,
+            done: habits.allChecked,
+            content: (
+              <SettledHabits
+                habits={habits}
+                date={date}
+                today={today}
+                emptyText={
+                  habits.loaded && habits.due.length === 0
+                    ? `No habits are due ${onDay}.`
+                    : `Habits you check off ${onDay} move here.`
+                }
+              />
             ),
-            content: `Habits due ${onDay} show here, and the ones you've checked.`,
           },
           {
             value: "goals",
@@ -376,6 +437,71 @@ function DayBody({
       />
 
     </LayoutGroup>
+  );
+}
+
+/**
+ * The Habits view: the due cards, or "All habits checked".
+ */
+function HabitsView({
+  habits,
+  date,
+  today,
+  onDay,
+  onEdit,
+}: {
+  habits: DayHabits;
+  date: LocalDate;
+  today: LocalDate;
+  onDay: string;
+  onEdit: (habit: Habit) => void;
+}) {
+  const { reload } = useHabitActions();
+  if (habits.failed) {
+    return (
+      <EmptyState>
+        Couldn't load your habits.
+        <Button variant="outline" size="sm" onClick={() => void reload()}>
+          Try again
+        </Button>
+      </EmptyState>
+    );
+  }
+  if (!habits.loaded) return <TaskRowsSkeleton />;
+  if (habits.due.length === 0 && habits.settled.length === 0) {
+    return <EmptyState>No habits due {onDay}. Add one with New habit, or press N.</EmptyState>;
+  }
+  // Checked-off habits are in the Settled tab below.
+  return (
+    <div className="px-2">
+      <DueHabits habits={habits} date={date} today={today} onEdit={onEdit} />
+    </div>
+  );
+}
+
+/** The habits tab's title is the day's habit status. */
+function HabitsTabLabel({ habits }: { habits: DayHabits }) {
+  if (habits.allChecked) {
+    return (
+      <>
+        <CheckCheckIcon />
+        All habits checked
+      </>
+    );
+  }
+  if (habits.loaded && habits.due.length > 0) {
+    return (
+      <>
+        <RepeatIcon />
+        <Counted label="Habits due" count={habits.due.length} />
+      </>
+    );
+  }
+  return (
+    <>
+      <RepeatIcon />
+      {habits.loaded ? "No habits due" : "Habits"}
+    </>
   );
 }
 
@@ -504,8 +630,11 @@ function DayTabs({
                 key={value}
                 value={value}
                 className={cn(
-                  "gap-1 px-1.5 text-[0.8125rem] sm:gap-1.5 sm:px-3 sm:text-sm",
-                  done && "text-success data-active:text-success dark:text-success",
+                  // The text keeps its color on hover and when picked; in dark
+                  // mode a dim outline marks the picked tab instead.
+                  "gap-1 px-1.5 text-[0.8125rem] hover:text-foreground/60 data-active:hover:text-foreground sm:gap-1.5 sm:px-3 sm:text-sm dark:hover:text-muted-foreground dark:data-active:border-white/25 dark:data-active:text-muted-foreground",
+                  done &&
+                    "text-success hover:text-success data-active:text-success-ink data-active:hover:text-success-ink dark:text-success dark:hover:text-success dark:data-active:text-success",
                 )}
               >
                 {title}

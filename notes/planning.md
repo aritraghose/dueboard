@@ -254,7 +254,7 @@ are sequential: each assumes the previous ones are done.
 - [x] 3 Tasks backend
 - [x] 4 Tasks UI
 - [x] 5 Habits backend
-- [ ] 6 Habits UI
+- [x] 6 Habits UI
 - [ ] 7 Goals backend
 - [ ] 8 Goals UI
 - [ ] 9 Notes
@@ -367,3 +367,15 @@ Add a dated line whenever a decision changes during a build thread.
   - **Goal seam**: `onHabitCheckIn(tx, habit, delta)` in `habits.ts` (no-op). `deleteHabit` has no goal seam yet: step 7 decides whether deleting reverses goal progress and must delete the habit's `goal_links` there.
   - **Browser**: `rpc.ts` re-exports `describeSchedule`, `periodFor`, `progressFor`, `dayStatus`, `isScheduledOn` and `streak`.
   - **Manual check**: like step 3, against a throwaway Docker `postgres:17` with every migration applied, calling the services (38 checks: 5/day, 3×/week all week, pause/resume/archive, activity add/remove, backfill dating, refusals, isolation, the schedule `CHECK`).
+- 2026-11-02 (step 6): **Habits UI.** `components/habit-section.tsx` (`/now`), `habit-dialog.tsx` + `schedule-builder.tsx` (create/edit), `habit-ring.tsx`, `routes/_app/habits.tsx`; data in `hooks/use-habits.ts`, wording in `lib/habits.ts`.
+  - **Where habits show on `/now`**: Show = Habits lists the due cards, then that day's Settled habits. Show = All lists tasks, then the due cards under a small "Habits" heading. The bottom habits tab's title is the status ("Habits due 2", "No habits due", or "All habits checked" in `--success`), and its content is the day's Settled habits. N and the floating button add a habit in the Habits view and a task otherwise.
+  - **Taps**: a whole card is the tap target. A habit's taps go to the API one after another (a per-habit promise queue), so 5 quick taps land as 5 in order. The screen shows the newest answer plus the unanswered taps until the refetched list agrees (`useHabitTaps`). A card that meets its target lingers full for 650 ms, then moves to Settled (shared `layoutId`s). Undo is the arrow on a card or a settled row, or "Undo" in the toast. The toast reuses one id per habit, so quick taps update one toast instead of stacking.
+  - **Celebration**: "All habits checked" replaces the cards when nothing is left. Rings burst from the check (`--animate-habit-burst`) only when the user's own tap got there, not on load. `useReducedMotion` and the global reduced-motion rule skip it. Each tap pops the ring (`--animate-ring-pop`).
+  - **Ring**: one segment per tap up to 12, a smooth arc above that, in the `habit` tag's color (`data-tag`, from `useHabitColor()`). Track `stroke-tag/20`, since `tag-soft` vanished in dark mode.
+  - **Read-only days**: future days show what will be due, and days more than 30 back show a note. Cards there aren't buttons (`checkInWindow` in `lib/habits.ts` mirrors the API's limits).
+  - **Hints**: when the target is above 1, the card shows "x of N today / this week / this month", or "by <period end>" for multi-unit periods. "That …" is used when today isn't in the period shown. With a target of 1, it shows the schedule sentence instead.
+  - **Form**: one form saved as a whole ("Add habit" / "Save"), unlike the task card's per-field saves, because a schedule's fields depend on each other. Editing sends only the changed keys, and an unchanged schedule isn't sent (a new one replaces the rule). The presets map to `HabitSchedule` in `lib/habits.ts` (`toSchedule` / `draftFor`): a saved rule opens on the preset that fits it, or on Custom. The preview is the API's own `describeSchedule` (already re-exported by `rpc.ts`), so there is no copy of it. The start date can't be cleared (`DateField` gained `required`).
+  - **`/habits`**: `?status=paused|archived` (absent = Active), with counts in the tabs. The rows are a divided list, not cards, each with a ring, the schedule sentence, the current period's hint, the streak ("3 weeks in a row") and a 12-week heatmap (CSS grid, a column per week with Sunday on top). Full cells meet the day's share of the target (the target for per-day rules, any tap otherwise), half cells have some taps, faint cells are before the start date, and future cells are blank. Its menu has Edit, Pause/Resume, Archive/Restore, and Delete behind an AlertDialog.
+  - **Shared code**: `useRun()` (one short-lived atom per call) moved out of `useTaskActions` in `hooks/use-tasks.ts` so habit writes use it too. `PRIVACY_LABEL`/`PRIVACY_HINT` moved to `lib/privacy.ts`.
+  - **Gotcha**: `api/lib` was stale (built before step 5), so the browser couldn't decode habit RPCs. It was rebuilt with `tsc -b` (dev servers stopped). It still fails only on the old `agent.ts(41)` error, but emits.
+
