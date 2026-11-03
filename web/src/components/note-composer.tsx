@@ -1,17 +1,11 @@
-import { type Note, PRIVACY, type Privacy } from "@dueboard/api/rpc";
+import type { Note, Privacy } from "@dueboard/api/rpc";
 import * as Exit from "effect/Exit";
-import { ArrowUpIcon, ChevronDownIcon, EyeOffIcon, RadioIcon } from "lucide-react";
+import { ArrowUpIcon } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import { toast } from "sonner";
+import { LiveToggle, PrivacyPill } from "@/components/privacy-controls";
 import { type MenuUser, UserAvatar } from "@/components/user-menu";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   InputGroup,
   InputGroupAddon,
@@ -25,8 +19,8 @@ import { useKeyShortcut } from "@/hooks/use-key-shortcut";
 import { useNoteActions } from "@/hooks/use-notes";
 import { failureMessage } from "@/hooks/use-tasks";
 import type { LocalDate } from "@/lib/dates";
-import { NOTE_BODY_MAX_LENGTH, NOTE_WARN_AT, PRIVACY_ICON, cleanNoteBody } from "@/lib/notes";
-import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
+import { NOTE_BODY_MAX_LENGTH, NOTE_WARN_AT, cleanNoteBody } from "@/lib/notes";
+import { PRIVACY_HINT } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
 // Writing notes: 60 characters, for today. The compact box sits at the
@@ -191,7 +185,6 @@ export function NoteComposer({
   const shownPrivacy = privacy ?? settings?.defaultPrivacy ?? "connections";
   const shownShare = shareToLive ?? settings?.defaultShareToLive ?? true;
   const body = cleanNoteBody(text);
-  const PrivacyIcon = PRIVACY_ICON[shownPrivacy];
 
   // `N` (the app's "new" key) focuses the box.
   useKeyShortcut("n", () => document.getElementById(inputId)?.focus());
@@ -231,51 +224,8 @@ export function NoteComposer({
           {PRIVACY_HINT[shownPrivacy]}
         </p>
         <div className="flex flex-wrap items-center gap-1 border-t pt-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 rounded-full px-2 text-xs text-primary hover:text-primary dark:text-foreground"
-                aria-label={`Who can see it: ${PRIVACY_LABEL[shownPrivacy]}`}
-              >
-                <PrivacyIcon />
-                {PRIVACY_LABEL[shownPrivacy]}
-                <ChevronDownIcon className="opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-72">
-              <DropdownMenuRadioGroup value={shownPrivacy} onValueChange={(value) => setPrivacy(value as Privacy)}>
-                {PRIVACY.map((value) => {
-                  const Icon = PRIVACY_ICON[value];
-                  return (
-                    <DropdownMenuRadioItem key={value} value={value} className="items-start py-2">
-                      <Icon className="mt-0.5" />
-                      <span className="flex flex-col gap-0.5">
-                        <span>{PRIVACY_LABEL[value]}</span>
-                        <span className="text-xs text-muted-foreground">{PRIVACY_HINT[value]}</span>
-                      </span>
-                    </DropdownMenuRadioItem>
-                  );
-                })}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-pressed={shownShare}
-            onClick={() => setShareToLive(!shownShare)}
-            className={cn(
-              "h-6 rounded-full px-2 text-xs",
-              shownShare ? "text-success-ink hover:text-success-ink" : "text-muted-foreground",
-            )}
-          >
-            {shownShare ? <RadioIcon /> : <EyeOffIcon />}
-            {shownShare ? "On Live" : "Off Live"}
-          </Button>
+          <PrivacyPill value={shownPrivacy} onChange={setPrivacy} />
+          <LiveToggle value={shownShare} onChange={setShareToLive} />
           <div className="ml-auto flex items-center gap-2.5">
             <NoteRing length={text.length} />
             <span aria-hidden="true" className="h-5 w-px bg-border" />

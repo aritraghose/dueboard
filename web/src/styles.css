@@ -82,6 +82,15 @@
   --note-limit: var(--tag-orange);
   --note-limit-ink: var(--tag-orange-ink);
 
+  /*
+   * Focus sessions: the countdown's draining bar, the running dot and the
+   * header timer. Indigo from the tag palette, so it follows it in dark
+   * mode and keeps sessions apart from tasks' teal; marigold stays Tibo's.
+   */
+  --focus: var(--tag-indigo);
+  --focus-soft: var(--tag-indigo-soft);
+  --focus-ink: var(--tag-indigo-ink);
+
   /* Cream: the "Start a session" pill. */
   --cream: oklch(0.95 0.05 86);
   --cream-foreground: oklch(0.36 0.06 70);
@@ -244,6 +253,21 @@
       opacity: 0;
     }
   }
+  /*
+   * A running session's dot breathes slowly (the header timer and the
+   * widget). The reduced-motion rule below stops it.
+   */
+  --animate-focus-breathe: focus-breathe 2.4s ease-in-out infinite;
+  @keyframes focus-breathe {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.8);
+    }
+  }
   --color-tibo: var(--tibo);
   --color-tibo-foreground: var(--tibo-foreground);
   --color-tibo-soft: var(--tibo-soft);
@@ -258,6 +282,9 @@
   --color-note-meter: var(--note-meter);
   --color-note-limit: var(--note-limit);
   --color-note-limit-ink: var(--note-limit-ink);
+  --color-focus: var(--focus);
+  --color-focus-soft: var(--focus-soft);
+  --color-focus-ink: var(--focus-ink);
   --color-cream: var(--cream);
   --color-bubble-me: var(--bubble-me);
   --color-bubble-me-foreground: var(--bubble-me-foreground);

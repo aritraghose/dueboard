@@ -5,8 +5,8 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { CheckIcon, ChevronDownIcon, PanelRightOpenIcon, PanelTopCloseIcon, PanelTopOpenIcon, PlusIcon, TimerIcon } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { toast } from "sonner";
 import { DayStepper, NowClock } from "@/components/day-navigator";
+import { SessionIndicator, SessionList, SessionWidget } from "@/components/focus-session";
 import { GoalDialog } from "@/components/goal-dialog";
 import { CompletedGoals, DayGoalCards } from "@/components/goal-progress";
 import { HabitDialog } from "@/components/habit-dialog";
@@ -30,6 +30,7 @@ import { type DayGoals, useDayGoals, useGoalActions } from "@/hooks/use-goals";
 import { useHabitDialog } from "@/hooks/use-habit-dialog";
 import { type DayHabits, useDayHabits, useHabitActions } from "@/hooks/use-habits";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
+import { sessionsForDayAtom, useOpenSessionsTab, useSessionActions, useSessionsTabRequest, useTimerSession } from "@/hooks/use-sessions";
 import { useTaskDialog } from "@/hooks/use-task-dialog";
 import { tasksForDayAtom, unscheduledAtom, useOptimisticStatus, useTagMap, useTags, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
 import { setTopBarHidden, useTopBarHidden } from "@/hooks/use-top-bar-hidden";
@@ -49,7 +50,7 @@ type NowSearch = {
  * day (tasks, habits and goals, then at its bottom the Settled / Sessions /
  * Unscheduled tab row with a fold chevron) takes two thirds, Live (with a
  * note box) one third, and the day card takes it all when Live is collapsed.
- * Sessions (11) and Live (14) are placeholders until their build steps.
+ * Live (14) is a placeholder until its build step.
  */
 export const Route = createFileRoute("/_app/now")({
   // `date` is always set, even to `undefined`: the router merges this over
@@ -58,21 +59,29 @@ export const Route = createFileRoute("/_app/now")({
     date: typeof search.date === "string" && isLocalDate(search.date) ? search.date : undefined,
   }),
   head: () => ({ meta: [{ title: "Now · Dueboard" }] }),
-  staticData: { topBar: { start: StartSessionButton, center: TopBarClock, hideable: true } },
+  staticData: { topBar: { start: StartSessionButton, center: TopBarClock, hideable: true, session: false } },
   component: Now,
 });
 
 /**
- * In the top row: start a focus session, on a cream pill. Once sessions
- * exist (step 11), a running session's countdown takes this button's place.
+ * In the top row: start a focus session, on a cream pill. It opens today's
+ * Sessions tab, where the start form is. While a session is running or
+ * paused, its timer takes this button's place.
  */
 function StartSessionButton() {
+  const { session } = useTimerSession();
+  const openTab = useOpenSessionsTab();
+  const navigate = Route.useNavigate();
+  if (session) return <SessionIndicator />;
   return (
     <Button
       variant="ghost"
       size="sm"
       className="rounded-full bg-cream text-cream-foreground ring-1 ring-cream-foreground/10 hover:bg-cream/80! hover:text-cream-foreground! dark:ring-0"
-      onClick={() => toast("Focus sessions are on the way.")}
+      onClick={() => {
+        openTab();
+        void navigate({ search: { date: undefined }, replace: true });
+      }}
     >
       <TimerIcon />
       <span className="md:hidden">Start</span>
@@ -271,6 +280,11 @@ function DayBody({
   const unscheduledResult = useAtomValue(unscheduledAtom(date));
   const { reload } = useTaskActions();
   const tags = useTagMap();
+  const sessionsResult = useAtomValue(sessionsForDayAtom(date));
+  const daySessions = AsyncResult.isSuccess(sessionsResult) ? sessionsResult.value.sessions : undefined;
+  const { session: activeSession } = useTimerSession();
+  const { reload: reloadSessions } = useSessionActions();
+  const [tabRequested, tabRequestHandled] = useSessionsTabRequest();
 
   const day = AsyncResult.isSuccess(dayResult) ? dayResult.value : undefined;
   const unscheduled = AsyncResult.isSuccess(unscheduledResult) ? unscheduledResult.value : undefined;
@@ -332,10 +346,16 @@ function DayBody({
     day && unscheduled && habits.loaded && goals.loaded
       ? settledList.length + settledHabits + completedGoals
       : null;
-  // Nothing left: no open tasks, due habits or active goals, and something
-  // was settled. (No sessions exist yet; step 11 adds "none running or paused".)
+  // Nothing left: no open tasks, due habits or active goals, no session
+  // running or paused today, and something was settled.
+  const sessionGoing = date === today && Boolean(activeSession);
   const everythingSettled =
-    settledCount !== null && open.length === 0 && dueHabits === 0 && activeGoals === 0 && settledCount > 0;
+    settledCount !== null &&
+    open.length === 0 &&
+    dueHabits === 0 &&
+    activeGoals === 0 &&
+    !sessionGoing &&
+    settledCount > 0;
   const tasksBody = failed ? (
       <EmptyState>
         Couldn't load your tasks.
@@ -435,6 +455,8 @@ function DayBody({
 
       <DayTabs
         label="settled, sessions and unscheduled"
+        request={tabRequested && date === today ? "sessions" : null}
+        onRequestHandled={tabRequestHandled}
         tabs={[
           {
             value: "settled",
@@ -452,8 +474,27 @@ function DayBody({
           },
           {
             value: "sessions",
-            label: <Counted label="Sessions" count={0} />,
-            content: `Focus sessions from ${onDay} show here.`,
+            label: <Counted label="Sessions" count={daySessions ? daySessions.length : null} />,
+            contentClassName: date === today ? "max-h-[min(26rem,52dvh)]!" : undefined,
+            content:
+              date === today ? (
+                <SessionWidget sessions={daySessions} />
+              ) : AsyncResult.isFailure(sessionsResult) ? (
+                <EmptyState className="py-4">
+                  Couldn't load the sessions.
+                  <Button variant="outline" size="sm" onClick={() => void reloadSessions()}>
+                    Try again
+                  </Button>
+                </EmptyState>
+              ) : !daySessions ? (
+                <TaskRowsSkeleton />
+              ) : daySessions.length > 0 ? (
+                <SessionList sessions={daySessions} label={`Sessions ${onDay}`} />
+              ) : date < today ? (
+                `No focus sessions ${onDay}.`
+              ) : (
+                "Focus sessions start on the day itself. Come back then."
+              ),
           },
           {
             value: "unscheduled",
@@ -660,30 +701,46 @@ type DayTab = {
   /** The tab's title, with its count. */
   readonly label: ReactNode;
   readonly content: ReactNode;
+  /** Replaces the content's default height cap. */
+  readonly contentClassName?: string | undefined;
 };
 
 /**
  * A row of tabs in the day card, with its own fold chevron beside it. The
  * tabs only switch what shows; the chevron alone folds and unfolds. It
- * starts folded.
+ * starts folded. `request` names a tab to open and unfold (the top row's
+ * "Start a session"); `onRequestHandled` is called once it's shown.
  */
 function DayTabs({
   label,
   tabs,
   defaultOpen = false,
+  request = null,
+  onRequestHandled,
 }: {
   label: string;
   tabs: readonly DayTab[];
   defaultOpen?: boolean;
+  request?: string | null;
+  onRequestHandled?: () => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [tab, setTab] = useState(tabs[0]?.value ?? "");
   const contentId = useId();
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!request) return;
+    setTab(request);
+    setOpen(true);
+    onRequestHandled?.();
+    requestAnimationFrame(() => rowRef.current?.scrollIntoView({ block: "nearest" }));
+  }, [request, onRequestHandled]);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <Tabs value={tab} onValueChange={setTab} className="gap-2" aria-label={label}>
-        <div className="flex items-center gap-1">
+        <div ref={rowRef} className="flex items-center gap-1">
           <TabsList className="min-w-0">
             {tabs.map(({ value, label: title }) => (
               <TabsTrigger
@@ -712,8 +769,13 @@ function DayTabs({
           </CollapsibleTrigger>
         </div>
         <CollapsibleContent id={contentId}>
-          {tabs.map(({ value, content }) => (
-            <TabsContent key={value} value={value} className="max-h-[min(14rem,30dvh)] overflow-y-auto">
+          {tabs.map(({ value, content, contentClassName }) => (
+            <TabsContent
+              key={value}
+              value={value}
+              // On phones the last row can scroll clear of Tibo's floating button.
+              className={cn("max-h-[min(14rem,30dvh)] overflow-y-auto max-md:pb-12", contentClassName)}
+            >
               {typeof content === "string" ? <Placeholder>{content}</Placeholder> : content}
             </TabsContent>
           ))}

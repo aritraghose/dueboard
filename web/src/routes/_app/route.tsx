@@ -1,5 +1,6 @@
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/app-sidebar";
+import { SessionSync } from "@/components/focus-session";
 import { MobileNav } from "@/components/mobile-nav";
 import { TiboFab } from "@/components/tibo-fab";
 import { TiboProvider } from "@/components/tibo-panel";
@@ -38,6 +39,7 @@ function AppLayout() {
 
   return (
     <TiboProvider userId={user.id}>
+      <SessionSync />
       <SidebarProvider defaultOpen={sidebarOpen}>
         <AppSidebar user={user} />
         <div className="flex min-h-svh min-w-0 flex-1 flex-col">
