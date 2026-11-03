@@ -30,8 +30,8 @@
   /*
    * Dueboard's light palette: cream washing into teal (the page and cards
    * are gradients, `--page-gradient` and `--card-gradient`), deep-teal ink
-   * and actions, and marigold as Tibo's own color. Dark mode (`.dark` below) is
-   * neutral black instead. See notes/planning.md (Decision log, step 2).
+   * and actions; Tibo is black and white, like the logo. Dark mode (`.dark`
+   * below) is neutral black instead. See notes/planning.md (Decision log, step 2).
    */
   --background: oklch(0.972 0.016 110);
   --foreground: oklch(0.26 0.04 200);
@@ -65,7 +65,7 @@
 
   /*
    * Tasks: importance stars, and the "Due today" badge. Built from the tag
-   * palette, so they follow it in dark mode; marigold stays Tibo's.
+   * palette, so they follow it in dark mode.
    */
   --importance: var(--tag-amber);
   --importance-soft: var(--tag-amber-soft);
@@ -76,7 +76,7 @@
   /*
    * Notes: the composer's fill line toward 60 characters, and the warning
    * for the last 10 (meter and countdown). From the tag palette, so they
-   * follow it in dark mode; marigold stays Tibo's.
+   * follow it in dark mode.
    */
   --note-meter: var(--tag-teal);
   --note-limit: var(--tag-orange);
@@ -85,7 +85,7 @@
   /*
    * Focus sessions: the countdown's draining bar, the running dot and the
    * header timer. Indigo from the tag palette, so it follows it in dark
-   * mode and keeps sessions apart from tasks' teal; marigold stays Tibo's.
+   * mode and keeps sessions apart from tasks' teal.
    */
   --focus: var(--tag-indigo);
   --focus-soft: var(--tag-indigo-soft);
@@ -136,13 +136,34 @@
   --sidebar-border: oklch(0.89 0.04 180);
   --sidebar-ring: oklch(0.6 0.1 190);
 
-  /* Tibo's marigold: the Tibo button, the "today" mark, Tibo's surfaces. */
-  --tibo: oklch(0.82 0.15 78);
-  --tibo-foreground: oklch(0.25 0.04 60);
-  --tibo-soft: oklch(0.95 0.045 85);
+  /*
+   * Tibo, from its avatar (`components/tibo-mark.tsx`): two of the
+   * black-and-white logo's strokes closed into rings on a disc. `--tibo` is
+   * Tibo's surfaces (the Tibo button, the "today" mark), a teal a step
+   * darker than the nav's, and `--tibo-disc` the avatar's light-teal disc,
+   * so it shows on the button. The rings are the logo's grays, darker
+   * outside, and `--tibo-glow` its bright dot.
+   */
+  --tibo: oklch(0.85 0.06 185);
+  --tibo-foreground: oklch(0.24 0.05 200);
+  --tibo-soft: oklch(0.93 0.035 182);
+  --tibo-disc: oklch(0.93 0.035 182);
+  --tibo-ring-outer: #3d3d3d;
+  --tibo-ring-inner: #6e6e6e;
+  --tibo-glow: #ffffff;
 
   /* The phone top row, over scrolling content. */
   --chrome: oklch(0.96 0.03 170 / 70%);
+
+  /*
+   * Settings' Tibo usage meter: the share of this month's requests used, a
+   * deep-teal bar and knob filling a darker-cream track, turning orange from
+   * 80% and red once used up.
+   */
+  --usage: oklch(0.37 0.075 195);
+  --usage-track: oklch(0.89 0.055 85);
+  --usage-low: var(--tag-orange);
+  --usage-empty: var(--destructive);
 
   /*
    * Tag palette. Keys match `TAG_COLOR` in api/src/domain/model.ts.
@@ -188,14 +209,32 @@
   --text-title: 1.625rem;
   --text-title--line-height: 1.15;
   --text-title--letter-spacing: -0.03em;
-  /* Tibo blinks now and then. The reduced-motion rule below stops it. */
-  --animate-tibo-blink: tibo-blink 7s ease-in-out infinite;
-  @keyframes tibo-blink {
-    0%, 92%, 100% {
-      transform: scaleY(1);
+  /*
+   * Tibo's rings turn every few seconds, the outer clockwise and the inner
+   * counter-clockwise: one eased turn, then a rest. Calling Tibo restarts
+   * the cycle, so they turn at once (`TiboMark`'s `spin`). The
+   * reduced-motion rule below stops it.
+   */
+  --animate-tibo-spin: tibo-spin 6s infinite;
+  --animate-tibo-spin-reverse: tibo-spin-reverse 6s infinite;
+  @keyframes tibo-spin {
+    0% {
+      transform: rotate(0deg);
+      animation-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1);
     }
-    95% {
-      transform: scaleY(0.1);
+    20%,
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes tibo-spin-reverse {
+    0% {
+      transform: rotate(0deg);
+      animation-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1);
+    }
+    20%,
+    100% {
+      transform: rotate(-360deg);
     }
   }
   /* A picked importance star pops once. */
@@ -271,7 +310,13 @@
   --color-tibo: var(--tibo);
   --color-tibo-foreground: var(--tibo-foreground);
   --color-tibo-soft: var(--tibo-soft);
+  --color-tibo-disc: var(--tibo-disc);
+  --color-tibo-glow: var(--tibo-glow);
   --color-chrome: var(--chrome);
+  --color-usage: var(--usage);
+  --color-usage-track: var(--usage-track);
+  --color-usage-low: var(--usage-low);
+  --color-usage-empty: var(--usage-empty);
   --color-success: var(--success);
   --color-success-ink: var(--success-ink);
   --color-importance: var(--importance);
@@ -338,8 +383,8 @@
    * Dark mode is neutral black, after T3 Code: page and cards the same deep
    * black, cards set apart by a border and a slight shadow, hairlines from
    * #141414 to #292929,
-   * #f5f5f5 text and #a1a1a1 for quiet text. Marigold stays the one color:
-   * Tibo's.
+   * #f5f5f5 text and #a1a1a1 for quiet text. Tibo stays black and white,
+   * like the logo.
    */
   --background: #080808;
   --foreground: #f5f5f5;
@@ -385,9 +430,17 @@
   --sidebar-border: #1c1c1c;
   --sidebar-ring: #737373;
 
-  --tibo: oklch(0.84 0.14 80);
-  --tibo-foreground: oklch(0.24 0.04 60);
-  --tibo-soft: oklch(0.27 0.05 75);
+  /* Tibo's disc a step up from the page's black, so it stays a circle. */
+  --tibo: #1c1c1c;
+  --tibo-foreground: #f5f5f5;
+  --tibo-soft: #1f1f1f;
+  --tibo-disc: #1c1c1c;
+  --tibo-ring-outer: #777777;
+  --tibo-ring-inner: #bbbbbb;
+
+  /* The usage meter: a white bar and knob on the nav's matte black. */
+  --usage: #f5f5f5;
+  --usage-track: var(--sidebar);
 
   --chrome: rgb(0 0 0 / 80%);
 

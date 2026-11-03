@@ -1,8 +1,8 @@
 import {
   BookOpenIcon,
-  InboxIcon,
-  LayoutGridIcon,
+  LibraryIcon,
   ListChecksIcon,
+  MessageCircleIcon,
   NotebookPenIcon,
   RadioIcon,
   RepeatIcon,
@@ -10,7 +10,7 @@ import {
   SettingsIcon,
   SunriseIcon,
   TargetIcon,
-  TrophyIcon,
+  TrendingUpIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,8 +38,8 @@ export type NavItem = {
 /** The top of the sidebar, and the phone tab bar (with Profile after it). */
 export const MAIN_NAV: readonly NavItem[] = [
   { to: "/now", label: "Now", icon: SunriseIcon },
-  { to: "/inbox", label: "Inbox", icon: InboxIcon },
-  { to: "/boards", label: "Boards", icon: LayoutGridIcon },
+  { to: "/inbox", label: "Inbox", icon: MessageCircleIcon },
+  { to: "/boards", label: "Boards", icon: LibraryIcon },
 ];
 
 export type Board = NavItem & {
@@ -93,7 +93,7 @@ export const SETTINGS_NAV: NavItem = { to: "/settings", label: "Settings", icon:
 export const DISCOVER_NAV: NavItem = { to: "/discover", label: "Discover", icon: SearchIcon };
 
 /** Points among connections or everyone. In the desktop sidebar after Discover. */
-export const LEADERBOARD_NAV: NavItem = { to: "/leaderboard", label: "Leaderboard", icon: TrophyIcon };
+export const LEADERBOARD_NAV: NavItem = { to: "/leaderboard", label: "Leaderboard", icon: TrendingUpIcon };
 
 /**
  * The cards `/boards` shows after the boards: places that aren't boards but
@@ -104,7 +104,7 @@ export const BOARD_EXTRAS: readonly Board[] = [
   {
     to: "/leaderboard",
     label: "Leaderboard",
-    icon: TrophyIcon,
+    icon: TrendingUpIcon,
     description: "Who's scoring most, among your connections or everyone.",
   },
   {

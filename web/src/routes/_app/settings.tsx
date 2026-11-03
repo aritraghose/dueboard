@@ -1,6 +1,7 @@
 import {
   PRIVACY,
   RELAY_POLICY,
+  type AiUsage,
   type Privacy,
   type RelayPolicy,
   type SettingsPatch,
@@ -28,7 +29,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { resetLine, useAiUsage, usageLine } from "@/hooks/use-ai-usage";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { resetLine, useAiUsage } from "@/hooks/use-ai-usage";
 import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
 import { useUpdateSettings } from "@/hooks/use-settings";
 import { socialOverviewAtom, useSocialActions } from "@/hooks/use-social";
@@ -378,6 +380,96 @@ function Tibo() {
   );
 }
 
+// The knob's width, in px: the bar runs from its center at 0% to its
+// center at 100%, so it never hangs past the track.
+const KNOB = 14;
+
+/**
+ * How much of this month's Tibo requests you've used: a percentage and a
+ * bar that fills toward 100%, with a knob at its end. Deep teal, orange
+ * from 80%, red once they're all used. Hovering or tapping the bar shows
+ * how many are left.
+ */
+function UsageMeter({ usage }: { usage: AiUsage }) {
+  const { used, remaining, limit } = usage;
+  const share = limit > 0 ? Math.min(used / limit, 1) : 1;
+  const tone = remaining === 0 ? "empty" : share >= 0.8 ? "low" : "ok";
+  // Under 1% still reads as some use, not none.
+  const percent = used > 0 && share < 0.01 ? "<1" : String(Math.round(share * 100));
+  const left = `${remaining} of ${limit} ${limit === 1 ? "request" : "requests"} left`;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex w-full flex-col gap-2 text-sm">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-muted-foreground">
+          <span
+            className={cn(
+              "mr-1 text-2xl font-semibold text-foreground tabular-nums",
+              tone === "low" && "text-usage-low",
+              tone === "empty" && "text-usage-empty",
+            )}
+          >
+            {percent}%
+          </span>
+          used
+        </p>
+        <p className="text-xs text-muted-foreground">{resetLine(usage)}</p>
+      </div>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${percent}% of Tibo requests used, ${left}`}
+            // A tap toggles the count too (a tooltip alone only opens on hover).
+            onClick={(event) => {
+              event.preventDefault();
+              setOpen((was) => !was);
+            }}
+            className="group/usage -my-1 block w-full rounded-full py-1 outline-none"
+          >
+            <div
+              role="meter"
+              aria-valuemin={0}
+              aria-valuemax={limit}
+              aria-valuenow={used}
+              aria-valuetext={`${percent}% used, ${left}`}
+              className="relative h-2 rounded-full bg-usage-track"
+            >
+              <div
+                className={cn(
+                  "absolute inset-y-0 left-0 rounded-full bg-usage transition-[width]",
+                  tone === "low" && "bg-usage-low",
+                  tone === "empty" && "bg-usage-empty",
+                )}
+                style={{ width: `calc(${KNOB / 2}px + (100% - ${KNOB}px) * ${share})` }}
+              />
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "absolute top-1/2 -translate-1/2 rounded-full bg-usage transition-[left] group-focus-visible/usage:ring-3 group-focus-visible/usage:ring-ring/50",
+                  tone === "low" && "bg-usage-low",
+                  tone === "empty" && "bg-usage-empty",
+                )}
+                style={{
+                  width: KNOB,
+                  height: KNOB,
+                  left: `calc(${KNOB / 2}px + (100% - ${KNOB}px) * ${share})`,
+                }}
+              />
+            </div>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{left}</TooltipContent>
+      </Tooltip>
+      {tone === "empty" && (
+        <p className="text-xs text-usage-empty">
+          You've used this month's requests. Tibo can reply again once they reset.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** This month's AI messages: replies, check-ins, relays and Ask answers all count. */
 function AiUsageRow() {
   const { usage, failed } = useAiUsage();
@@ -385,25 +477,9 @@ function AiUsageRow() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   return (
-    <Row title="Messages this month">
+    <Row title="Tibo Requests this month">
       {usage ? (
-        <div className="flex w-full flex-col gap-2 text-sm">
-          <div
-            role="meter"
-            aria-label="AI messages used"
-            aria-valuemin={0}
-            aria-valuemax={usage.limit}
-            aria-valuenow={usage.used}
-            className="h-2 overflow-hidden rounded-full bg-muted"
-          >
-            <div
-              className="h-full rounded-full bg-tibo"
-              style={{ width: `${usage.limit > 0 ? (usage.used / usage.limit) * 100 : 100}%` }}
-            />
-          </div>
-          <p>{usageLine(usage)}</p>
-          <p className="text-xs text-muted-foreground">{resetLine(usage)}</p>
-        </div>
+        <UsageMeter usage={usage} />
       ) : (
         <p className="text-sm text-muted-foreground">{failed && mounted ? "Couldn't load your usage." : "Loading…"}</p>
       )}

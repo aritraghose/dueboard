@@ -172,9 +172,10 @@ function CreateTask({ date, today, onClose }: { date: LocalDate | null; today: L
         goals={<ItemGoalsField itemType="task" value={goals.drafts} onChange={goals.edit} />}
       />
 
-      <DialogFooter className="mx-0! mb-0! items-center">
+      {/* One row on every width: Cancel at the left edge, the action at the right. */}
+      <DialogFooter className="mx-0! mb-0! flex-row! flex-wrap items-center justify-between!">
         {errors.form && (
-          <p role="alert" className="mr-auto text-sm text-destructive">
+          <p role="alert" className="basis-full text-sm text-destructive">
             {errors.form}
           </p>
         )}

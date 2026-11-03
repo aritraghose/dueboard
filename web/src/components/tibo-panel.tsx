@@ -26,16 +26,20 @@ export function TiboProvider({ userId, children }: { userId: string; children: R
 
 export function TiboButton() {
   const { open, setOpen } = useTibo();
+  // Each click turns Tibo's rings at once.
+  const [spins, setSpins] = useState(0);
   return (
     <Button
       className="h-8 gap-1.5 rounded-full bg-tibo pr-3 pl-1.5 text-tibo-foreground shadow-sm hover:bg-tibo/85 max-sm:pr-1.5"
       aria-label="Open Tibo"
       aria-haspopup="dialog"
       aria-expanded={open}
-      onClick={() => setOpen(true)}
+      onClick={() => {
+        setSpins((n) => n + 1);
+        setOpen(true);
+      }}
     >
-      {/* A lighter face than the marigold button behind it, in both themes. */}
-      <TiboMark className="size-6 [&_path:first-child]:fill-white/55" />
+      <TiboMark spin={spins} className="size-6" />
       <span className="max-sm:sr-only">Tibo</span>
     </Button>
   );

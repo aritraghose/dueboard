@@ -19,7 +19,7 @@ import { DEFAULT_DRAFT, type ScheduleDraft, draftFor, draftProblem, toSchedule }
 import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 
 // The habit card: one form for creating and editing a habit, saved as a
-// whole with "Add habit" or "Save". Unlike the task card, a habit's fields
+// whole with "Initialize Habit" or "Save". Unlike the task card, a habit's fields
 // hang together (the schedule especially), so nothing saves halfway. The
 // goals it moves save with it, after the habit itself.
 
@@ -133,7 +133,7 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
     setSaving(false);
     if (Exit.isSuccess(exit)) {
       onClose();
-      toast(habit ? "Habit saved" : "Habit added");
+      toast(habit ? "Habit saved" : "Habit initialized");
     } else {
       setError(failureMessage(exit, habit ? "Couldn't save the habit." : "Couldn't add the habit."));
     }
@@ -232,9 +232,10 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
         </Row>
       </dl>
 
-      <DialogFooter className="mx-0! mb-0! items-center">
+      {/* One row on every width: Cancel at the left edge, the action at the right. */}
+      <DialogFooter className="mx-0! mb-0! flex-row! flex-wrap items-center justify-between!">
         {error && (
-          <p role="alert" className="mr-auto text-sm text-destructive">
+          <p role="alert" className="basis-full text-sm text-destructive">
             {error}
           </p>
         )}
@@ -242,7 +243,7 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
           Cancel
         </Button>
         <Button type="submit" disabled={!canSave}>
-          {habit ? "Save" : "Add habit"}
+          {habit ? "Save" : "Initialize Habit"}
         </Button>
       </DialogFooter>
     </form>

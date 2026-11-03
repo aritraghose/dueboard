@@ -32,6 +32,8 @@ export function TiboFab({ className }: { className?: string }) {
   const { setOpen } = useTibo();
   const slots = useTopBarSlots();
   const [position, setPosition] = useState<Position | null>(null);
+  // Each tap turns Tibo's rings at once.
+  const [spins, setSpins] = useState(0);
   const button = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ x: number; y: number; from: Position; moved: boolean } | null>(null);
   const justDragged = useRef(false);
@@ -102,17 +104,19 @@ export function TiboFab({ className }: { className?: string }) {
           justDragged.current = false;
           return;
         }
+        setSpins((n) => n + 1);
         setOpen(true);
       }}
       style={position ? { right: position.right, bottom: position.bottom } : undefined}
       className={cn(
-        "fixed z-40 grid size-12 touch-none place-items-center rounded-full bg-tibo shadow-lg ring-4 ring-tibo/25 outline-none select-none focus-visible:ring-ring/60",
+        // No fill of its own: Tibo's avatar is the button, with a shadow to float.
+        "fixed z-40 grid size-12 touch-none place-items-center rounded-full shadow-lg outline-none select-none focus-visible:ring-4 focus-visible:ring-ring/60",
         // Default spot: the right edge, just above the floating nav.
         !position && "right-4 bottom-[calc(6.5rem+env(safe-area-inset-bottom))]",
         className,
       )}
     >
-      <TiboMark className="size-8 [&_path:first-child]:fill-white/55" />
+      <TiboMark spin={spins} className="size-12" />
     </button>
   );
 }

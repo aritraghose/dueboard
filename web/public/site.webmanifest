@@ -1,0 +1,17 @@
+{
+	"name": "Dueboard",
+	"short_name": "Dueboard",
+	"description": "Everything that's due, on one board.",
+	"start_url": "/now",
+	"icons": [
+		{
+			"src": "/logo.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any"
+		}
+	],
+	"theme_color": "#f8f3e3",
+	"background_color": "#111111",
+	"display": "standalone"
+}

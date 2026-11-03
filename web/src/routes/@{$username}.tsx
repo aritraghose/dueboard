@@ -11,6 +11,7 @@ import {
   UserRoundXIcon,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { AppLogo } from "@/components/app-logo";
 import { AppShell } from "@/components/app-shell";
 import { ConnectionActions } from "@/components/connection-actions";
 import { ContributionGraph } from "@/components/contribution-graph";
@@ -86,7 +87,11 @@ function PublicFrame({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col">
       <header className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-4">
-        <Link to="/" className="font-heading text-lg font-semibold tracking-tight">
+        <Link
+          to="/"
+          className="flex items-center gap-2 font-heading text-lg font-semibold tracking-tight"
+        >
+          <AppLogo className="size-7" />
           Dueboard
         </Link>
         <ThemeSwitcher className="ml-auto" />

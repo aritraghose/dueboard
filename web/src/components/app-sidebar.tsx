@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { AppLogo } from "@/components/app-logo";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
@@ -103,32 +104,8 @@ function BoardLinks() {
   );
 }
 
-/** Dueboard's check mark: the rail's top item. */
-function BrandMark({ className }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "grid size-6 shrink-0 place-items-center rounded-[0.45rem] bg-primary text-primary-foreground",
-        className,
-      )}
-    >
-      <svg viewBox="0 0 16 16" className="size-3.5!">
-        <path
-          d="M3.5 8.5 6.5 11.5 12.5 4.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </span>
-  );
-}
-
 /**
- * The top of the rail. Collapsed, it's the brand mark, which turns into an
+ * The top of the rail. Collapsed, it's the logo, which turns into an
  * "expand" icon on hover or focus. Expanded, it's the wordmark with a
  * collapse button. Ctrl/⌘+B toggles too.
  */
@@ -144,7 +121,7 @@ function BrandToggle() {
             onClick={toggleSidebar}
             className={cn("group/brand", railButton)}
           >
-            <BrandMark className="group-hover/brand:hidden group-focus-visible/brand:hidden" />
+            <AppLogo className="group-hover/brand:hidden group-focus-visible/brand:hidden" />
             <PanelLeftOpenIcon className="hidden size-[1.125rem]! group-hover/brand:block group-focus-visible/brand:block" />
             <span className="sr-only">Expand menu</span>
           </SidebarMenuButton>
@@ -158,7 +135,7 @@ function BrandToggle() {
       <SidebarMenuItem className="flex items-center gap-1">
         <SidebarMenuButton asChild className="flex-1 font-semibold tracking-[-0.03em]">
           <Link to="/now">
-            <BrandMark />
+            <AppLogo />
             <span className="text-[1.0625rem]">Dueboard</span>
           </Link>
         </SidebarMenuButton>

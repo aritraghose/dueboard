@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
+import { AppLogo } from "@/components/app-logo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +46,8 @@ function SignIn() {
 
   return (
     <Card className="w-full max-w-sm">
-      <CardHeader className="text-center">
+      <CardHeader className="justify-items-center text-center">
+        <AppLogo className="mb-1 size-12" />
         <CardTitle className="font-heading text-2xl">Dueboard</CardTitle>
         <CardDescription>Sign in to see what's due.</CardDescription>
       </CardHeader>
