@@ -14,7 +14,7 @@ type Relations = typeof relations;
 
 /**
  * The Drizzle database every domain service queries. Provided per Worker by
- * `../api.ts` (over Hyperdrive), and later by the internal entrypoint Tibo's
+ * `../api.ts` (over Hyperdrive), and by the DomainWorker (`../DomainWorker.ts`) that Tibo.s
  * tools call. Services take the acting user id as an argument and scope
  * every query to it; they never read it from here.
  */

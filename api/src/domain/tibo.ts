@@ -6,7 +6,7 @@ import { Database, orDieOnDbError, type Executor } from "./database.ts";
 import { FALLBACK_TIME_ZONE } from "./dates.ts";
 
 // What the `TiboAgent` Durable Object reads from Postgres (through the
-// internal path, `../internal.ts`), and the queue of threads to wipe after
+// DomainWorker, `../DomainWorker.ts`), and the queue of threads to wipe after
 // account deletion.
 
 /** The user facts every Tibo turn needs. */

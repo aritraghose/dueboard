@@ -1,6 +1,7 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Effect from "effect/Effect";
-import ApiWorker from "./api.ts";
+import type { DomainBinding } from "./domain-client.ts";
+import DomainWorker from "./DomainWorker.ts";
 import { LIMITS, bindingProps } from "./limits.ts";
 
 /**
@@ -42,10 +43,10 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     // Each turn is a paid model call, and chat messages arrive over the
     // WebSocket, past the web stack's HTTP rate limits (`./limits.ts`).
     CHAT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.chat.name, bindingProps(LIMITS.chat)),
-    // The ApiWorker, for the AI quota ledger, Tibo's profile facts and the
-    // wipe queue through its internal path (`./internal-client.ts`) until
-    // step 18's internal binding.
-    API: ApiWorker,
+    // The domain services, as this agent's user only (`./DomainWorker.ts`):
+    // Tibo's tools, the today snapshot, the AI quota ledger, the profile
+    // facts and the wipe queue. Bound here and nowhere else.
+    DOMAIN: DomainWorker,
   },
   // Wipes deleted accounts' Tibo threads (`./agent.ts`).
   crons: ["*/5 * * * *"],
@@ -53,8 +54,8 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
 
 export default AgentWorker;
 
-// `InferEnv` types an RpcWorker binding by its RPC shape; the agent only
-// uses its `fetch`.
-export type AgentEnv = Omit<Cloudflare.InferEnv<typeof AgentWorker>, "API"> & {
-  API: Fetcher;
+// The DomainWorker's methods are typed by `DomainBinding`: `InferEnv` would
+// give their Effect signatures, and the agent awaits plain promises.
+export type AgentEnv = Omit<Cloudflare.InferEnv<typeof AgentWorker>, "DOMAIN"> & {
+  DOMAIN: DomainBinding;
 };

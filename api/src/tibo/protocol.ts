@@ -27,7 +27,55 @@ export interface TiboMessage {
   readonly seen?: boolean;
   /** The message this one replies to, as it was when quoted. */
   readonly replyTo?: TiboQuote;
+  /** What Tibo did during this turn, shown under the turn's last bubble. */
+  readonly receipts?: readonly TiboReceipt[];
+  /** Actions Tibo is holding for the user's go-ahead, on the turn's last bubble. */
+  readonly confirm?: TiboConfirm;
 }
+
+/** What a receipt or a held action is about, so the app can show the item's own card. */
+export type TiboItemKind = "task" | "habit" | "goal" | "note" | "session" | "tag";
+
+export interface TiboItemRef {
+  readonly kind: TiboItemKind;
+  readonly id: string;
+  /** Its name when Tibo acted (the only name left once it's deleted). */
+  readonly title?: string;
+}
+
+/** One thing Tibo did: "Created task: Call mom · Tomorrow". */
+export interface TiboReceipt {
+  readonly text: string;
+  /** What happened, in a word or two: "Created", "Checked in", "Deleted". */
+  readonly verb?: string;
+  readonly item?: TiboItemRef;
+  /** It was tried and failed (only after a confirmation; the reply explains other failures). */
+  readonly failed?: boolean;
+}
+
+/** One held action: "Delete task: Gym", and the item it's about. */
+export interface TiboHeldItem {
+  readonly text: string;
+  readonly item?: TiboItemRef;
+}
+
+/**
+ * Destructive or surprising actions waiting for the user (deleting, stopping
+ * or replacing a session, more than three changes in one reply, making
+ * something public). One at a time: a newer one expires the older.
+ */
+export interface TiboConfirm {
+  readonly actionId: string;
+  /** One per held action. Plain strings in threads from before items were added. */
+  readonly items: readonly (TiboHeldItem | string)[];
+  readonly status: TiboConfirmStatus;
+}
+
+/** A held action, whichever shape it was stored in. */
+export const heldItem = (item: TiboHeldItem | string): TiboHeldItem =>
+  typeof item === "string" ? { text: item } : item;
+
+export type TiboConfirmStatus = "pending" | "confirmed" | "cancelled" | "expired";
 
 /** A quoted message: who wrote it and the start of its text. */
 export interface TiboQuote {
@@ -47,7 +95,9 @@ export type TiboClientFrame =
     }
   | { readonly type: "loadOlder"; readonly beforeId: string }
   /** The user reacts to one of Tibo's messages; `null` takes the reaction back. */
-  | { readonly type: "react"; readonly messageId: string; readonly emoji: string | null };
+  | { readonly type: "react"; readonly messageId: string; readonly emoji: string | null }
+  /** The user's answer to a `confirm` on one of Tibo's bubbles. */
+  | { readonly type: "confirm"; readonly actionId: string; readonly approve: boolean };
 
 /** Agent → client. Broadcast to every tab of the user unless noted. */
 export type TiboServerFrame =
@@ -61,6 +111,13 @@ export type TiboServerFrame =
   | { readonly type: "bubble"; readonly message: TiboMessage }
   /** A reaction changed: Tibo's on a user message, or the user's on Tibo's (`null`: removed). */
   | { readonly type: "reaction"; readonly messageId: string; readonly emoji: string | null }
+  /** A stored message changed (its receipts or confirmation): replace it. */
+  | { readonly type: "updated"; readonly message: TiboMessage }
+  /**
+   * Tibo changed the user's data: the reactivity keys whose lists the app
+   * should load again ("tasks", "habits", …).
+   */
+  | { readonly type: "changed"; readonly keys: readonly string[] }
   /** Tibo read these user messages. */
   | { readonly type: "seen"; readonly messageIds: readonly string[] }
   /** Tibo finished replying, whatever the outcome. */
@@ -85,6 +142,8 @@ export const TIBO_OLDER_PAGE = 50;
 export const TIBO_MAX_BUBBLES = 5;
 /** Reactions the user can pick for Tibo's messages. */
 export const TIBO_QUICK_REACTIONS = ["❤️", "😂", "👍", "😮", "😢", "🙏"] as const;
+/** How long Tibo holds actions for the user's go-ahead, in ms. */
+export const TIBO_CONFIRM_TTL_MS = 30 * 60 * 1000;
 /** The longest quote kept with a reply, in characters. */
 export const TIBO_QUOTE_LENGTH = 280;
 /** Below this many messages left, the composer says how many. */

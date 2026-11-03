@@ -3,9 +3,9 @@
 //
 // The model separates bubbles with a line holding only `---` (the persona
 // asks for it). A delimiter was chosen over a `send_message` tool: it works
-// with plain text streaming, needs no tool-calling support from Muse Spark
-// (not verified yet, architecture.md §7.4), and a reply that ignores it still
-// arrives, as one bubble. Bubbles are emitted as soon as their delimiter
+// with plain text streaming, keeps tool calls for real actions, and a reply
+// that ignores it still arrives, as one bubble. The agent also breaks a
+// bubble at the end of each tool step. Bubbles are emitted as soon as their delimiter
 // streams in, so the first can be "typed" while the model writes the rest.
 
 export const BUBBLE_DELIMITER = "---";
@@ -57,6 +57,11 @@ export class BubbleSplitter {
       newline = this.pending.indexOf("\n");
     }
     return out;
+  }
+
+  /** Whether any bubble came out so far. */
+  get emittedAny() {
+    return this.emitted > 0;
   }
 
   /** The reply's reaction, once, as soon as its line has streamed in. */

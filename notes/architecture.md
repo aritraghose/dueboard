@@ -29,9 +29,9 @@ There are two kinds of data, and each lives where it fits:
     └────────────────────────▶│ env.AGENT                (one place for rules       ▲
                               ▼                           and permissions)          │
                      AgentWorker (api/src/agent.ts)            ▲                    │
-                      ├─ TiboAgent DO (one per user) ──────────┘ internal service  │
-                      │   SQLite: thread, memory, summaries      binding, acts AS  │
-                      │   alarms: proactive check-ins            the DO's user     │
+                      ├─ TiboAgent DO (one per user) ──────────┘ DomainWorker      │
+                      │   SQLite: thread, memory, summaries      (env.DOMAIN, RPC  │
+                      │   alarms: proactive check-ins            only), as the DO's user
                       ├─ AskAgent (public Q&A, walled off) ── reads ONLY the owner's
                       │                                        ask settings ──────┘
                       └─ ⇄ other users' TiboAgent DOs (relays)
@@ -47,6 +47,7 @@ There are two kinds of data, and each lives where it fits:
 | **Website** | `DueboardWeb` (`web/`) | TanStack Start UI. Proxies `/rpc`, `/api/auth/*` and `/agents/*` to private Workers. |
 | **ApiWorker** | `DueboardApi` (`api/`) | Effect RPC API + Better Auth. Hosts the domain services. `workersDev: false`. |
 | **AgentWorker** | `DueboardApi` | Hosts `TiboAgent` and `AskAgent` Durable Objects. `workersDev: false`. |
+| **DomainWorker** | `DueboardApi` | Tibo's private door to the domain services: Worker RPC methods only, no HTTP routes, bound into AgentWorker alone (`env.DOMAIN`). `workersDev: false`. |
 | **Session sweep** (cron) | `DueboardApi` | A `* * * * *` cron on the ApiWorker itself (`Cloudflare.Workers.cron` in `api.ts`) that completes focus sessions whose time ran out. |
 
 ### Existing conventions to keep
@@ -72,10 +73,16 @@ Two callers use them:
 
 1. **RPC handlers** (`api/src/api.ts`): `CurrentUser` from the cookie session.
 2. **Tibo tools**: through an **internal service binding** from AgentWorker to
-   ApiWorker. It exposes a Worker RPC entrypoint that accepts `actorUserId`. It
+   the **DomainWorker** (`api/src/DomainWorker.ts`), a private Effect Worker
+   with Worker RPC methods and no HTTP routes. Its `run(actorUserId, rpc,
+   payload)` runs one of the same `ApiRpcs` handlers the UI calls
+   (`api/src/handlers.ts`, shared with the ApiWorker), with the same payload
+   decoding, for the RPCs in `TIBO_RPCS` (`api/src/domain-client.ts`) only. It
    is bound only to AgentWorker, never proxied by the Website, so a browser
    cannot reach it. The `TiboAgent` passes `this.name` (its own user id), so
-   Tibo can only ever act as its own user.
+   Tibo can only ever act as its own user. (Not an entrypoint on the
+   ApiWorker: Alchemy's Effect Workers export only their default entrypoint,
+   which the Website binds.)
 
 Pure logic with no I/O, such as habit scheduling, visibility rules and date
 math, lives in plain modules (`api/src/domain/*-rules.ts`) with `bun test` unit
@@ -326,7 +333,25 @@ Live and diary; search the conversation; relay (§7.5).
 
 - Destructive or surprising actions (delete, stop a running session, a bulk
   change) must ask the user to confirm first.
-- Muse Spark's tool calling must be verified before the tool layer is built.
+- **Built (step 18)**: `api/src/tibo/tools.ts` (the tools, Zod schemas),
+  `actions.ts` (turn ledger, pending actions, the confirmation design),
+  `snapshot.ts` (today snapshot), `views.ts` (compact JSON for the model),
+  `dates.ts`. Muse Spark's tool calling was verified first (planning.md's
+  decision log). Limits: 8 model steps and 20 tool calls per turn; the turn
+  is still one message of quota.
+- **Confirmation**: a held call isn't run; the tool answers
+  `needs_confirmation`. At the turn's end the held calls become one pending
+  action in DO SQLite (`pending_actions`, 30 minutes, one at a time) and
+  Confirm/Cancel buttons on the turn's last bubble (`meta.confirm`). A tap
+  runs the stored calls as summarized (no model call, no charge). A typed
+  yes goes through `confirm_action`, offered only when the turn was started
+  by a user message newer than the action. Relay turns (step 21) must not
+  offer it.
+- **Receipts**: each change adds an entry to `meta.receipts` on the turn's last
+  bubble ("Created task: Call mom · Tomorrow", with its verb and item), which
+  the app shows as the item's own live card (`web/src/components/tibo-items.tsx`). The model sees receipts and
+  held actions as an app note after its turn. The agent sends `changed` with
+  the reactivity keys, and the app invalidates those lists.
 
 ### 7.5 Relays (Tibo ⇄ Tibo)
 
@@ -403,7 +428,7 @@ user** (§8).
 - **Built (step 16)**:
   - **Tables**: `ai_usage` (`user_id`, `period` `YYYY-MM` in the user's zone, `units`; PK both) and `ai_usage_events` (`id`, `user_id`, `units`, `reason` `tibo_reply`|`tibo_proactive`|`relay`|`ask_answer`, `ref?`, `created_at`).
   - **Domain** (`domain/usage.ts`, pure rules in `usage-rules.ts`): `getUsage(userId)` → `AiUsage { used, limit, remaining, period, resetsAt }` in whole messages; `canSpend(userId, units)`; `recordUsage(userId, units, reason, ref?)` (atomic upsert plus an event, returns the new usage); `chargeSplit(userA, userB, unitsEach, reason, ref?)` (one transaction). The quota comes from the `AiQuota` service, which the ApiWorker reads from `AI_MONTHLY_MESSAGE_QUOTA` (Effect `Config`, default 300).
-  - **Callers outside the ApiWorker** use its internal path `/internal/usage/{get,check,record,charge-split}` (JSON POST, `api/src/internal.ts`) through `usageClient(env.API)` (`api/src/internal-client.ts`). Only the AgentWorker binds it for this; the website forwards only `/rpc` and `/api/auth/*`. Step 18's internal binding replaces the path behind the same calls.
+  - **Callers outside the ApiWorker** use the DomainWorker's `usageGet`, `usageCheck`, `usageRecord` and `usageChargeSplit` methods through `usageClient(env.DOMAIN)` (`api/src/domain-client.ts`). Step 18 replaced the ApiWorker's `/internal/*` path with them; it no longer exists.
   - **Chat contract** (kept by step 17's `TiboAgent`): before the model call, `check(user, 2)`; out of quota, the agent sends `limitReached` and makes no model call. Once a bubble or reaction was shown, `record(user, 2, "tibo_reply", turnId)`. The UI hides the composer when the usage is 0 or `limitReached` arrives, and shows its own notice.
 
 ## 9. Rate limiting and abuse protection

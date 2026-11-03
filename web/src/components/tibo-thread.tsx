@@ -2,11 +2,31 @@ import { MAX_CHAT_MESSAGE_LENGTH } from "@dueboard/api/limits";
 import {
   TIBO_LOW_USAGE,
   TIBO_QUICK_REACTIONS,
+  heldItem,
+  type TiboConfirm,
+  type TiboHeldItem,
   type TiboMessage,
   type TiboQuote,
 } from "@dueboard/api/tibo";
 import { Link } from "@tanstack/react-router";
-import { CheckCheckIcon, CheckIcon, ClockIcon, ReplyIcon, SendIcon, XIcon } from "lucide-react";
+import {
+  CheckCheckIcon,
+  CheckIcon,
+  CircleCheckIcon,
+  CircleXIcon,
+  ClockIcon,
+  HandIcon,
+  NotebookPenIcon,
+  PencilIcon,
+  ReplyIcon,
+  SendIcon,
+  SquareIcon,
+  TagIcon,
+  TimerIcon,
+  Trash2Icon,
+  XIcon,
+  type LucideIcon,
+} from "lucide-react";
 import * as React from "react";
 import { Markdown } from "@/components/markdown";
 import { TiboMark } from "@/components/tibo-mark";
@@ -36,6 +56,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
+import { TiboItemsProvider, TiboReceipts } from "@/components/tibo-items";
 import { useTibo, useTiboThread } from "@/hooks/use-tibo";
 import type { TiboThreadState } from "@/lib/tibo-store";
 import { cn } from "@/lib/utils";
@@ -79,39 +100,42 @@ export function TiboThread({
       aria-label="Tibo"
       className={cn("relative flex flex-col overflow-hidden text-card-foreground", className)}
     >
-      <MessageScrollerProvider autoScroll>
-        <ThreadHeader thread={thread} headerEnd={headerEnd} />
-        <div className="min-h-0 flex-1">
-          {!thread.loaded ? (
-            <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Spinner />
-              Loading your chat…
-            </div>
-          ) : thread.messages.length === 0 && thread.pending.length === 0 ? (
-            <ThreadEmpty canSend={thread.connected && !thread.limitReached} send={store.send} />
-          ) : (
-            <ThreadMessages
-              thread={thread}
-              loadOlder={store.loadOlder}
-              onReply={setReplyTo}
-              onReact={store.react}
-            />
-          )}
-        </div>
-        {/* A little narrower than the thread on wide screens. */}
-        <div className="flex flex-col gap-2 px-3 pt-2 pb-3 md:mx-auto md:w-[88%] md:px-4">
-          {thread.limitReached ? (
-            <LimitNotice onNavigate={onNavigate} />
-          ) : (
-            <Composer
-              thread={thread}
-              send={store.send}
-              replyTo={replyTo}
-              clearReply={() => setReplyTo(null)}
-            />
-          )}
-        </div>
-      </MessageScrollerProvider>
+      <TiboItemsProvider>
+        <MessageScrollerProvider autoScroll>
+          <ThreadHeader thread={thread} headerEnd={headerEnd} />
+          <div className="min-h-0 flex-1">
+            {!thread.loaded ? (
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Spinner />
+                Loading your chat…
+              </div>
+            ) : thread.messages.length === 0 && thread.pending.length === 0 ? (
+              <ThreadEmpty canSend={thread.connected && !thread.limitReached} send={store.send} />
+            ) : (
+              <ThreadMessages
+                thread={thread}
+                loadOlder={store.loadOlder}
+                onReply={setReplyTo}
+                onReact={store.react}
+                onConfirm={store.confirm}
+              />
+            )}
+          </div>
+          {/* A little narrower than the thread on wide screens. */}
+          <div className="flex flex-col gap-2 px-3 pt-2 pb-3 md:mx-auto md:w-[88%] md:px-4">
+            {thread.limitReached ? (
+              <LimitNotice onNavigate={onNavigate} />
+            ) : (
+              <Composer
+                thread={thread}
+                send={store.send}
+                replyTo={replyTo}
+                clearReply={() => setReplyTo(null)}
+              />
+            )}
+          </div>
+        </MessageScrollerProvider>
+      </TiboItemsProvider>
     </section>
   );
 }
@@ -202,9 +226,14 @@ type Entry =
       seen: boolean;
       replyTo?: TiboQuote;
     }
-  | { kind: "error"; key: string; side: "tibo"; body: string; at: number };
+  | { kind: "error"; key: string; side: "tibo"; body: string; at: number }
+  /** Your answer to actions Tibo held, centered after the message that asked. */
+  | { kind: "notice"; key: string; side: "center"; at: number; confirm: TiboConfirm };
 
-type Group = { key: string; side: "user" | "tibo"; day: string | null; entries: Entry[] };
+/** A bubble: anything but a notice. */
+type BubbleEntry = Exclude<Entry, { kind: "notice" }>;
+
+type Group = { key: string; side: "user" | "tibo" | "center"; day: string | null; entries: Entry[] };
 
 const dayKey = (at: number) => new Date(at).toDateString();
 
@@ -217,8 +246,8 @@ function groupEntries(thread: TiboThreadState): Group[] {
   const entries: Entry[] = [
     ...thread.messages
       .filter((message) => message.role !== "system_event")
-      .map(
-        (message: TiboMessage): Entry => ({
+      .flatMap((message: TiboMessage): Entry[] => [
+        {
           kind: "message",
           // A message you sent keeps its key from optimistic copy to stored row.
           key: message.clientId ?? message.id,
@@ -229,8 +258,11 @@ function groupEntries(thread: TiboThreadState): Group[] {
           seen: message.seen === true,
           ...(message.reaction ? { reaction: message.reaction } : {}),
           ...(message.replyTo ? { replyTo: message.replyTo } : {}),
-        }),
-      ),
+        },
+        ...(message.confirm && message.confirm.status !== "pending"
+          ? [{ kind: "notice", key: `${message.id}:confirm`, side: "center", at: message.createdAt, confirm: message.confirm } as const]
+          : []),
+      ]),
     ...thread.pending.map(
       (pending): Entry => ({
         kind: "message",
@@ -254,7 +286,14 @@ function groupEntries(thread: TiboThreadState): Group[] {
     const day = dayKey(entry.at);
     const last = groups.at(-1);
     const lastEntry = last?.entries.at(-1);
-    if (last && lastEntry && last.side === entry.side && day === lastDay && entry.at - lastEntry.at < GROUP_GAP_MS) {
+    if (
+      last &&
+      lastEntry &&
+      entry.side !== "center" &&
+      last.side === entry.side &&
+      day === lastDay &&
+      entry.at - lastEntry.at < GROUP_GAP_MS
+    ) {
       last.entries.push(entry);
     } else {
       groups.push({ key: entry.key, side: entry.side, day: day === lastDay ? null : day, entries: [entry] });
@@ -268,6 +307,7 @@ function groupEntries(thread: TiboThreadState): Group[] {
 type EntryActions = {
   onReply: (message: TiboMessage) => void;
   onReact: (messageId: string, emoji: string | null) => void;
+  onConfirm: (actionId: string, approve: boolean) => void;
 };
 
 function ThreadMessages({
@@ -276,7 +316,8 @@ function ThreadMessages({
   ...actions
 }: { thread: TiboThreadState; loadOlder: () => void } & EntryActions) {
   const groups = groupEntries(thread);
-  const latestKey = groups.at(-1)?.entries.at(-1)?.key;
+  // The newest bubble shows its time; a notice after it isn't a bubble.
+  const latestKey = groups.findLast((group) => group.side !== "center")?.entries.at(-1)?.key;
   // The bubble you tapped: it shows its time, Reply, and reactions on Tibo's.
   const [selected, setSelected] = React.useState<string | null>(null);
 
@@ -341,13 +382,17 @@ function ThreadMessages({
                 <p className="mb-4 text-center text-xs text-muted-foreground">This is where it all began.</p>
               )}
               {group.day && <DaySeparator at={group.entries[0]?.at ?? Date.now()} />}
-              <GroupView
-                group={group}
-                latestKey={latestKey}
-                selected={selected}
-                select={(key) => setSelected((current) => (current === key ? null : key))}
-                {...actions}
-              />
+              {group.side === "center" ? (
+                group.entries.map((entry) => entry.kind === "notice" && <ConfirmNotice key={entry.key} confirm={entry.confirm} />)
+              ) : (
+                <GroupView
+                  group={group}
+                  latestKey={latestKey}
+                  selected={selected}
+                  select={(key) => setSelected((current) => (current === key ? null : key))}
+                  {...actions}
+                />
+              )}
             </MessageScrollerItem>
           ))}
           {thread.typing && (
@@ -435,6 +480,7 @@ function GroupView({
   select: (key: string) => void;
 } & EntryActions) {
   const tibo = group.side === "tibo";
+  const side = tibo ? "tibo" : "user";
   return (
     <Message align={tibo ? "start" : "end"} className="items-end">
       {tibo && (
@@ -443,11 +489,11 @@ function GroupView({
         </MessageAvatar>
       )}
       <MessageContent className={cn("gap-0.5", tibo ? "pr-8" : "pl-10")}>
-        {group.entries.map((entry, index) => (
+        {group.entries.filter((entry): entry is BubbleEntry => entry.kind !== "notice").map((entry, index) => (
           <EntryView
             key={entry.key}
             entry={entry}
-            corners={cornerClass(group.side, index, group.entries.length)}
+            corners={cornerClass(side, index, group.entries.length)}
             latest={entry.key === latestKey}
             selected={selected === entry.key}
             select={() => select(entry.key)}
@@ -534,8 +580,9 @@ function EntryView({
   select,
   onReply,
   onReact,
+  onConfirm,
 }: {
-  entry: Entry;
+  entry: BubbleEntry;
   corners: string;
   latest: boolean;
   selected: boolean;
@@ -631,6 +678,9 @@ function EntryView({
           )}
         </Bubble>
       </div>
+      {tibo && message && (message.receipts || message.confirm) && (
+        <TurnActions message={message} onConfirm={onConfirm} />
+      )}
       {(latest || selected) && (
         <p className="px-1 pt-0.5 text-[0.6875rem] text-muted-foreground">
           {entry.kind === "error" ? (
@@ -661,6 +711,139 @@ function EntryView({
 }
 
 /** One tick once your message is stored, two once Tibo has read it; in the bubble's corner. */
+/**
+ * Under the last bubble of a Tibo turn: the cards of what it changed, and
+ * the actions it's holding for your go-ahead. Your answer shows as a
+ * notice in the middle of the thread (`ConfirmNotice`).
+ */
+function TurnActions({
+  message,
+  onConfirm,
+}: {
+  message: TiboMessage;
+  onConfirm: EntryActions["onConfirm"];
+}) {
+  const { receipts = [], confirm } = message;
+  if (receipts.length === 0 && confirm?.status !== "pending") return null;
+  return (
+    <div className="flex w-full max-w-[min(85%,24rem)] flex-col gap-2 pt-1.5">
+      {receipts.length > 0 && <TiboReceipts receipts={receipts} />}
+      {confirm?.status === "pending" && <ConfirmCard confirm={confirm} onConfirm={onConfirm} />}
+    </div>
+  );
+}
+
+/** "Delete task: Gym" → what to do, and to what. */
+const splitHeld = (text: string) => {
+  const colon = text.indexOf(": ");
+  return colon === -1 ? { action: text, target: null } : { action: text.slice(0, colon), target: text.slice(colon + 2) };
+};
+
+const KIND_ICON: Record<string, LucideIcon> = {
+  task: SquareIcon,
+  habit: CircleCheckIcon,
+  goal: CircleCheckIcon,
+  note: NotebookPenIcon,
+  session: TimerIcon,
+  tag: TagIcon,
+};
+
+/** The icon for a held action: a bin for deletes, a stop for stops, else the item's kind. */
+const heldIcon = ({ text, item }: TiboHeldItem): LucideIcon =>
+  text.startsWith("Delete") ? Trash2Icon : text.startsWith("Stop") ? SquareIcon : item ? (KIND_ICON[item.kind] ?? PencilIcon) : PencilIcon;
+
+/**
+ * What Tibo is holding, one row per action, with Cancel and Confirm side by
+ * side across the bottom. Only a delete's or stop's icon is red. Both
+ * buttons wait once one is tapped.
+ */
+function ConfirmCard({ confirm, onConfirm }: { confirm: TiboConfirm; onConfirm: EntryActions["onConfirm"] }) {
+  const [answer, setAnswer] = React.useState<boolean | null>(null);
+  const items = confirm.items.map(heldItem);
+  const choose = (approve: boolean) => {
+    setAnswer(approve);
+    onConfirm(confirm.actionId, approve);
+  };
+  return (
+    <div
+      role="group"
+      aria-label="Waiting for your go-ahead"
+      className="w-full animate-in overflow-hidden rounded-2xl border border-bubble-tibo-border bg-bubble-tibo text-bubble-tibo-foreground shadow-sm fade-in-0 slide-in-from-top-1 motion-reduce:animate-none"
+    >
+      <p className="flex items-center gap-1.5 px-3.5 pt-2.5 pb-1.5 text-xs font-medium text-muted-foreground">
+        <HandIcon aria-hidden="true" className="size-3.5" />
+        {items.length === 1 ? "Needs your go-ahead" : `${items.length} changes need your go-ahead`}
+      </p>
+      <ul className="flex flex-col px-1.5">
+        {items.map((item, index) => {
+          const Icon = heldIcon(item);
+          const { action, target } = splitHeld(item.text);
+          const danger = item.text.startsWith("Delete") || item.text.startsWith("Stop");
+          return (
+            <li key={index} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5">
+              <span
+                className={cn(
+                  "grid size-7 shrink-0 place-items-center rounded-lg",
+                  danger ? "bg-destructive/10 text-destructive" : "bg-tibo-soft text-tibo-foreground",
+                )}
+              >
+                <Icon aria-hidden="true" className="size-3.5" />
+              </span>
+              <span className="flex min-w-0 flex-col text-sm leading-5">
+                {target ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">{action}</span>
+                    <span className="font-medium wrap-break-word">{target}</span>
+                  </>
+                ) : (
+                  <span className="font-medium wrap-break-word">{action}</span>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-1.5 grid grid-cols-2 gap-2 border-t border-bubble-tibo-border bg-tibo-soft/40 p-2">
+        <Button variant="outline" disabled={answer !== null} onClick={() => choose(false)}>
+          {answer === false && <Spinner />}
+          Cancel
+        </Button>
+        <Button disabled={answer !== null} onClick={() => choose(true)}>
+          {answer === true && <Spinner />}
+          Confirm
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const NOTICE: Record<Exclude<TiboConfirm["status"], "pending">, { icon: LucideIcon; label: string }> = {
+  confirmed: { icon: CircleCheckIcon, label: "You confirmed" },
+  cancelled: { icon: CircleXIcon, label: "You cancelled" },
+  expired: { icon: ClockIcon, label: "Expired before you answered" },
+};
+
+/** Your answer to held actions, in the middle of the thread like an app event. */
+function ConfirmNotice({ confirm }: { confirm: TiboConfirm }) {
+  if (confirm.status === "pending") return null;
+  const { icon: Icon, label } = NOTICE[confirm.status];
+  const items = confirm.items.map((item) => heldItem(item).text);
+  return (
+    <div role="status" className="mx-auto my-1 flex max-w-[85%] flex-col items-center gap-1 text-center">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+        <Icon aria-hidden="true" className="size-3.5" />
+        {label}
+      </span>
+      {items.map((item, index) => (
+        <span key={index} className="text-xs text-muted-foreground">
+          {item}
+        </span>
+      ))}
+      {confirm.status !== "confirmed" && <span className="text-xs text-muted-foreground">Nothing changed.</span>}
+    </div>
+  );
+}
+
 function Ticks({ sending, seen }: { sending: boolean; seen: boolean }) {
   const Icon = sending ? ClockIcon : seen ? CheckCheckIcon : CheckIcon;
   return (

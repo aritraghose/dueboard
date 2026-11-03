@@ -22,6 +22,9 @@ const HABIT_WRITES = [...HABITS, "goals"];
 /** `/habits`: every habit, with streak, progress and the last 12 weeks. */
 export const habitListAtom = ApiClient.query("ListHabits", undefined, { reactivityKeys: HABITS });
 
+/** One habit with its streak, progress and the last 12 weeks. */
+export const habitAtom = (id: string) => ApiClient.query("GetHabit", { id }, { reactivityKeys: HABITS });
+
 /** Habit writes, each its own call (see `useRun`). Each returns its `Exit`. */
 export function useHabitActions() {
   const run = useRun();

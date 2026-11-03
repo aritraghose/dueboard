@@ -132,7 +132,7 @@ function TaskRow({ task, status, tag, today, showAssigned, onStatusChange, onOpe
 }
 
 /** The set fields, and nothing for the unset ones. Renders nothing when none are set. */
-function TaskMeta({
+export function TaskMeta({
   task,
   status,
   tag,

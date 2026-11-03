@@ -2,7 +2,7 @@
 
 import { getAgentByName, routeAgentRequest } from "agents";
 import type { AgentEnv } from "./AgentWorker.ts";
-import { tiboClient } from "./internal-client.ts";
+import { tiboClient } from "./domain-client.ts";
 import { TiboAgent } from "./tibo/TiboAgent.ts";
 
 export { TiboAgent };
@@ -13,7 +13,7 @@ export { TiboAgent };
  * next run, and wiping an already empty agent is harmless.
  */
 async function wipeDeletedThreads(env: AgentEnv) {
-  const tibo = tiboClient(env.API);
+  const tibo = tiboClient(env.DOMAIN);
   const { userIds } = await tibo.pendingWipes();
   const done: string[] = [];
   for (const userId of userIds) {

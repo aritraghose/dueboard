@@ -13,10 +13,10 @@ import { fits, limitFor, periodOf, toAiUsage } from "./usage-rules.ts";
 // their local midnight on the 1st. Recording never refuses: the check
 // before the call is the gate, so a race can only overshoot by one turn.
 //
-// Callers outside the ApiWorker reach these through its internal path
-// (`../internal.ts`) until step 18's internal binding.
+// The AgentWorker reaches these through the DomainWorker
+// (`../DomainWorker.ts`).
 
-/** The monthly quota in messages (`AI_MONTHLY_MESSAGE_QUOTA`), provided by `../api.ts`. */
+/** The monthly quota in messages (`AI_MONTHLY_MESSAGE_QUOTA`), provided by `../api.ts` and `../DomainWorker.ts`. */
 export class AiQuota extends Context.Service<AiQuota, { readonly monthlyMessages: number }>()(
   "api/AiQuota",
 ) {}

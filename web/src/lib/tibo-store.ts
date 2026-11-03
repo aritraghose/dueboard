@@ -66,6 +66,8 @@ export function createTiboStore() {
   let viewers = 0;
   // Told when a turn was charged, so the usage RPC's copy (Settings) refreshes.
   let onCharged: (() => void) | undefined;
+  // Told which lists Tibo changed, so the app loads them again.
+  let onChanged: ((keys: readonly string[]) => void) | undefined;
 
   const set = (patch: Partial<TiboThreadState>) => {
     state = { ...state, ...patch };
@@ -110,6 +112,14 @@ export function createTiboStore() {
         });
         return;
       }
+      case "updated":
+        set({
+          messages: state.messages.map((message) => (message.id === frame.message.id ? frame.message : message)),
+        });
+        return;
+      case "changed":
+        onChanged?.(frame.keys);
+        return;
       case "reaction":
         set({
           messages: state.messages.map((message) => {
@@ -195,6 +205,10 @@ export function createTiboStore() {
     react(messageId: string, emoji: string | null) {
       socket?.send(JSON.stringify({ type: "react", messageId, emoji }));
     },
+    /** Your answer to actions Tibo is holding; the bubble updates when the agent confirms. */
+    confirm(actionId: string, approve: boolean) {
+      socket?.send(JSON.stringify({ type: "confirm", actionId, approve }));
+    },
     loadOlder() {
       const oldest = state.messages[0];
       if (!socket || !oldest || !state.hasMore || state.loadingOlder) return;
@@ -203,6 +217,9 @@ export function createTiboStore() {
     },
     onCharged(listener: (() => void) | undefined) {
       onCharged = listener;
+    },
+    onChanged(listener: ((keys: readonly string[]) => void) | undefined) {
+      onChanged = listener;
     },
     /** From the usage RPC, so a fresh load knows the month is used up. */
     syncUsage(remaining: number, limit: number) {

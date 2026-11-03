@@ -113,8 +113,8 @@
   --bubble-tibo-border: oklch(0.88 0.035 185);
   /* Your message's double tick once Tibo has read it: bright on your teal bubble. */
   --tick-seen: oklch(0.86 0.11 190);
-  /* The dot on the Tibo button when it said something you haven't seen. */
-  --tibo-unread: var(--tag-orange);
+  /* The dot on the Tibo button when it said something you haven't seen: a light teal. */
+  --tibo-unread: oklch(0.78 0.11 185);
   /* The message box's edge: a cream leaning toward the teal around it. */
   --composer-border: oklch(0.77 0.09 95);
   /* The message box's fill: a light teal, a shade under the nav's. */
@@ -483,6 +483,7 @@
   --tibo-foreground: #f5f5f5;
   --tibo-soft: #1f1f1f;
   --tibo-disc: #1c1c1c;
+  --tibo-unread: oklch(0.84 0.1 185);
   --tibo-ring-outer: #777777;
   --tibo-ring-inner: #bbbbbb;
 

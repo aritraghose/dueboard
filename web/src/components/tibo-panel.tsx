@@ -1,5 +1,6 @@
 import { ClientOnly } from "@tanstack/react-router";
 import { useAgent } from "agents/react";
+import * as Reactivity from "effect/reactivity/Reactivity";
 import { XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { TiboMark } from "@/components/tibo-mark";
@@ -9,6 +10,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { useAiUsage } from "@/hooks/use-ai-usage";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useRun } from "@/hooks/use-tasks";
 import { TiboContext, useTibo, useTiboThread } from "@/hooks/use-tibo";
 import { createTiboStore, type TiboStore } from "@/lib/tibo-store";
 import { cn } from "@/lib/utils";
@@ -60,6 +62,13 @@ function TiboConnection({ userId, store }: { userId: string; store: TiboStore })
     store.onCharged(refresh);
     return () => store.onCharged(undefined);
   }, [store, refresh]);
+  // Tibo changed tasks, habits…: the lists on screen (and the next ones
+  // opened) load again.
+  const run = useRun();
+  useEffect(() => {
+    store.onChanged((keys) => void run(Reactivity.invalidate([...keys])));
+    return () => store.onChanged(undefined);
+  }, [store, run]);
   return null;
 }
 

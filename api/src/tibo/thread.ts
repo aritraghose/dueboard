@@ -8,7 +8,14 @@
 // step 19's `search_conversation`. `seq` orders the thread and is the FTS
 // rowid; `id` is the stable public id.
 
-import { TIBO_QUOTE_LENGTH, type TiboMessage, type TiboQuote, type TiboRole } from "./protocol.ts";
+import {
+  TIBO_QUOTE_LENGTH,
+  type TiboConfirm,
+  type TiboMessage,
+  type TiboQuote,
+  type TiboReceipt,
+  type TiboRole,
+} from "./protocol.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS messages (
@@ -42,6 +49,8 @@ export type MessageMeta = {
   readonly reaction?: string;
   readonly seen?: boolean;
   readonly replyTo?: TiboQuote;
+  readonly receipts?: readonly TiboReceipt[];
+  readonly confirm?: TiboConfirm;
 } & Record<string, unknown>;
 
 type Row = {
@@ -66,6 +75,8 @@ const toMessage = (row: Row): TiboMessage => {
     ...(typeof meta.reaction === "string" ? { reaction: meta.reaction } : {}),
     ...(meta.seen === true ? { seen: true } : {}),
     ...(meta.replyTo ? { replyTo: meta.replyTo } : {}),
+    ...(Array.isArray(meta.receipts) && meta.receipts.length > 0 ? { receipts: meta.receipts } : {}),
+    ...(meta.confirm ? { confirm: meta.confirm } : {}),
   };
 };
 
@@ -154,6 +165,32 @@ export class Thread {
       )
       .toArray()[0];
     return row ? toMessage(row) : null;
+  }
+
+  /** Sets one meta key on a message (JSON value); `null` if there's no such message. */
+  setMeta(id: string, key: "receipts" | "confirm", value: unknown): TiboMessage | null {
+    const row = this.sql
+      .exec<Row>(
+        `UPDATE messages SET meta = json_set(coalesce(meta, '{}'), '$.' || ?, json(?))
+         WHERE id = ? RETURNING *`,
+        key,
+        JSON.stringify(value),
+        id,
+      )
+      .toArray()[0];
+    return row ? toMessage(row) : null;
+  }
+
+  /** The order of the newest row (0 for an empty thread). */
+  lastSeq(): number {
+    return this.sql.exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM messages`).one().seq ?? 0;
+  }
+
+  /** The order of the newest message the user wrote (0 if none). */
+  lastUserSeq(): number {
+    return (
+      this.sql.exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM messages WHERE role = 'user'`).one().seq ?? 0
+    );
   }
 
   /** Marks every unread user message as seen; returns their ids. */
