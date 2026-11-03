@@ -171,8 +171,8 @@ export const CONNECTION_STATE = [
 export const ConnectionState = Schema.Literals(CONNECTION_STATE);
 export type ConnectionState = typeof ConnectionState.Type;
 
-/** A profile's tabs that list items: completed ones only, and the diary (those plus notes). */
-export const PROFILE_FEED = ["tasks", "habits", "goals", "sessions", "diary"] as const;
+/** A profile's tabs that list completed items. The Diary tab reads `GetDiary`. */
+export const PROFILE_FEED = ["tasks", "habits", "goals", "sessions"] as const;
 export const ProfileFeed = Schema.Literals(PROFILE_FEED);
 export type ProfileFeed = typeof ProfileFeed.Type;
 
@@ -646,6 +646,26 @@ export const GetLiveInput = Schema.Struct({
   cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(PROFILE_ITEMS_CURSOR_MAX_LENGTH))),
 });
 export type GetLiveInput = typeof GetLiveInput.Type;
+
+/**
+ * One page of a diary, newest day first. `cursor` is the previous page's
+ * `nextCursor` (its oldest day); `from` starts the page on that day or the
+ * nearest earlier one with entries (jump to a date).
+ */
+export const GetDiaryInput = Schema.Struct({
+  username: UsernameInput,
+  cursor: Schema.optionalKey(LocalDate),
+  from: Schema.optionalKey(LocalDate),
+});
+export type GetDiaryInput = typeof GetDiaryInput.Type;
+
+/** The contribution graph's days, defaulting to the last 53 Sunday-starting weeks in the owner's zone. */
+export const GetContributionGraphInput = Schema.Struct({
+  username: UsernameInput,
+  from: Schema.optionalKey(LocalDate),
+  to: Schema.optionalKey(LocalDate),
+});
+export type GetContributionGraphInput = typeof GetContributionGraphInput.Type;
 
 export const GetLeaderboardInput = Schema.Struct({
   scope: LeaderboardScope,
@@ -1141,6 +1161,53 @@ export class LivePage extends Schema.Class<LivePage>("LivePage")({
   nextCursor: Schema.NullOr(Schema.String),
   /** Whether the viewer has any connections (the empty state points to people search when not). */
   hasConnections: Schema.Boolean,
+}) {}
+
+/** One diary entry: an activity row joined to its item. */
+export class DiaryEntry extends Schema.Class<DiaryEntry>("DiaryEntry")({
+  /** The activity row's id. */
+  id: Schema.String,
+  kind: ActivityKind,
+  /** The task's or habit's title, the goal's name, the session's label (may be `null`) or the note's body. */
+  title: Schema.NullOr(Schema.String),
+  occurredAt: Schema.Date,
+  privacy: Privacy,
+  /** Goal moves carry `percent` and `rose`; sessions `minutes` (planned when completed, focused when stopped). */
+  meta: LiveEventMeta,
+}) {}
+
+export class DiaryDay extends Schema.Class<DiaryDay>("DiaryDay")({
+  /** The owner's local day. */
+  date: LocalDate,
+  /** Newest first. */
+  entries: Schema.Array(DiaryEntry),
+}) {}
+
+export class DiaryPage extends Schema.Class<DiaryPage>("DiaryPage")({
+  days: Schema.Array(DiaryDay),
+  /** Pass as `cursor` for older days; `null` at the diary's start. */
+  nextCursor: Schema.NullOr(LocalDate),
+}) {}
+
+export class ContributionDay extends Schema.Class<ContributionDay>("ContributionDay")({
+  date: LocalDate,
+  count: Schema.Number,
+}) {}
+
+/**
+ * Counts per local day of settled tasks, completed habits, completed goals
+ * and completed sessions, private ones included. No titles, kinds or
+ * privacy: the graph never says what was done.
+ */
+export class ContributionGraph extends Schema.Class<ContributionGraph>("ContributionGraph")({
+  /** A Sunday. */
+  from: LocalDate,
+  to: LocalDate,
+  /** The owner's today. */
+  today: LocalDate,
+  /** Days with a count above zero, oldest first. */
+  days: Schema.Array(ContributionDay),
+  total: Schema.Number,
 }) {}
 
 /** Kind-specific numbers for a Path step; unset ones are `null`. */

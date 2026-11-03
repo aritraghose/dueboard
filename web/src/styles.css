@@ -557,3 +557,25 @@
     ),
     linear-gradient(to top, color-mix(in oklch, var(--tag-solid) 30%, var(--tag-soft)), var(--tag-soft));
 }
+
+/*
+ * A contribution graph's squares (`/@username`), in the owner's user color
+ * (`data-tag` on the graph): an empty day is the muted surface, then four
+ * steps from the soft shade to the solid one. Both themes work, since the
+ * dark palette's soft shade is the dark end.
+ */
+.contribution-cell {
+  background: var(--muted);
+}
+.contribution-cell[data-level="1"] {
+  background: color-mix(in oklch, var(--tag-solid) 30%, var(--tag-soft));
+}
+.contribution-cell[data-level="2"] {
+  background: color-mix(in oklch, var(--tag-solid) 55%, var(--tag-soft));
+}
+.contribution-cell[data-level="3"] {
+  background: color-mix(in oklch, var(--tag-solid) 80%, var(--tag-soft));
+}
+.contribution-cell[data-level="4"] {
+  background: color-mix(in oklch, var(--tag-solid) 75%, var(--tag-ink));
+}

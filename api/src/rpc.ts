@@ -11,6 +11,7 @@ import {
   ConnectionNotAllowed,
   ConnectionRequestNotFound,
   ConnectionRequestRef,
+  ContributionGraph,
   CreateGoalInput,
   CreateHabitInput,
   CreateNoteInput,
@@ -18,6 +19,9 @@ import {
   CreateTaskInput,
   Day,
   DeleteAccountInput,
+  DiaryPage,
+  GetContributionGraphInput,
+  GetDiaryInput,
   GetLeaderboardInput,
   GetLiveInput,
   GetProfileItemsInput,
@@ -190,6 +194,22 @@ export class PublicRpcs extends RpcGroup.make(
   Rpc.make("GetProfileItems", {
     payload: GetProfileItemsInput,
     success: ProfileItemPage,
+    error: Schema.Union([InvalidInput, UserNotFound]),
+  }),
+  /**
+   * A diary, newest day first, a few days a page: everything for its owner
+   * (`/diary`), what `canSeeItem` allows for anyone else, whatever the
+   * share flag says.
+   */
+  Rpc.make("GetDiary", {
+    payload: GetDiaryInput,
+    success: DiaryPage,
+    error: Schema.Union([InvalidInput, UserNotFound]),
+  }),
+  /** A profile's contribution graph: counts per day, private items included, nothing else. */
+  Rpc.make("GetContributionGraph", {
+    payload: GetContributionGraphInput,
+    success: ContributionGraph,
     error: Schema.Union([InvalidInput, UserNotFound]),
   }),
 ).middleware(OptionalAuthentication) {}

@@ -180,7 +180,7 @@ These live in one module, `api/src/domain/visibility.ts` (pure rules in
 `visibility-rules.ts`), and every reader must go through it. It also builds
 the rules as SQL conditions (`canSeeItemSql`, `liveActorSql`, the
 activity-subject joins), so readers filter in the database. The profile
-tabs (`GetProfileItems`) and Live (`GetLive`, `domain/live.ts`) use it:
+tabs (`GetProfileItems`), the diary (`GetDiary`) and Live (`GetLive`, `domain/live.ts`) use it:
 
 ```
 canSeeItem(viewer, owner, privacy):
@@ -200,13 +200,18 @@ live (viewer = signed-in user):
            (settled tasks, habits checked, goals moved, sessions completed)
   window   the last `days` days in the viewer's zone (2 on /now, 7 on /live)
 
-diary (/diary for yourself, /@username for others):
+diary (/diary for yourself, /@username for others; GetDiary, domain/diary.ts):
   rows where canSeeItem(viewer, owner, privacy), whatever share_to_live is
+  kinds    settled tasks, completed habits, goal moves and completions, notes,
+           completed and stopped sessions (a goal's move is hidden the day it completes)
+  paging   by the owner's local_date, newest first, ≤ 7 days or ~60 entries a page
 
 contribution graph:
   counts per local_date of task_settled, habit_completed, goal_completed and
   session_completed, INCLUDING private items (counts only, no details).
-  session_stopped does not count.
+  session_stopped does not count. 53 Sunday-starting weeks ending on the
+  owner's today (GetContributionGraph), read through
+  activity_user_local_date_idx; no rollup table.
 ```
 
 Strangers never see Live. They only see public diary items and the graph

@@ -1,21 +1,70 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BookOpenIcon } from "lucide-react";
-import { Page, PageEmpty, PageHeader } from "@/components/page";
+import { format } from "date-fns";
+import { CalendarSearchIcon } from "lucide-react";
+import { useState } from "react";
+import { DiaryView } from "@/components/diary-view";
+import { Page, PageHeader } from "@/components/page";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useTimeZone } from "@/hooks/use-bootstrap";
+import { useToday } from "@/hooks/use-now";
+import { type LocalDate, WEEK_STARTS_ON, isLocalDate, todayIn } from "@/lib/dates";
 
+/** `/diary`: the user's own days, everything included. `day` jumps to a date. */
 export const Route = createFileRoute("/_app/diary")({
+  // Every key is always returned (see the decision log on `validateSearch`).
+  validateSearch: (search: Record<string, unknown>): { day?: LocalDate | undefined } => ({
+    day: typeof search.day === "string" && isLocalDate(search.day) ? search.day : undefined,
+  }),
   head: () => ({ meta: [{ title: "Diary · Dueboard" }] }),
   component: Diary,
 });
 
+const toDate = (date: LocalDate) => {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return new Date(y, m - 1, d);
+};
+
 function Diary() {
+  const { user } = Route.useRouteContext();
+  const { day } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const timeZone = useTimeZone();
+  const today = useToday(timeZone) ?? todayIn(timeZone);
+  const [open, setOpen] = useState(false);
+  const jump = (date: LocalDate | undefined) => void navigate({ search: { day: date }, replace: true });
+
   return (
     <Page>
-      <PageHeader title="Diary" description="Your days, as they happened." />
-      <PageEmpty
-        icon={BookOpenIcon}
-        title="Your diary is empty"
-        description="Settled tasks, checked habits, finished goals, notes and sessions collect here, one day at a time."
-      />
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 pb-8">
+        <PageHeader title="Diary" description="Your days as they happened, private things included.">
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline">
+                <CalendarSearchIcon />
+                Jump to a date
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto! p-0!">
+              <Calendar
+                mode="single"
+                selected={day ? toDate(day) : undefined}
+                defaultMonth={toDate(day ?? today)}
+                weekStartsOn={WEEK_STARTS_ON}
+                disabled={{ after: toDate(today) }}
+                today={toDate(today)}
+                onSelect={(date) => {
+                  if (date) jump(format(date, "yyyy-MM-dd") as LocalDate);
+                  setOpen(false);
+                }}
+                autoFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </PageHeader>
+        <DiaryView username={user.username} self today={today} from={day ?? null} onShowLatest={() => jump(undefined)} />
+      </div>
     </Page>
   );
 }

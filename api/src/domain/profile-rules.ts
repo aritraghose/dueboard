@@ -3,15 +3,14 @@ import type { ActivityKind, ProfileFeed } from "./model.ts";
 // Pure rules for a profile's item tabs (`profile-items.ts`).
 
 /**
- * The activity a profile tab lists: completed items only. The diary is all
- * of them plus notes. Stopped sessions and goal progress never show.
+ * The activity a profile tab lists: completed items only. Stopped sessions
+ * and goal progress never show (the diary, `diary-rules.ts`, has them).
  */
 export const FEED_KINDS: Record<ProfileFeed, readonly ActivityKind[]> = {
   tasks: ["task_settled"],
   habits: ["habit_completed"],
   goals: ["goal_completed"],
   sessions: ["session_completed"],
-  diary: ["task_settled", "habit_completed", "goal_completed", "session_completed", "note_created"],
 };
 
 /** A page cursor: the last item's time and id. */

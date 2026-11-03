@@ -2,10 +2,8 @@ import type { ActivityKind, LocalDate, ProfileFeed as Feed, ProfileItem } from "
 import { useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import {
-  BookOpenIcon,
   CheckIcon,
   ListChecksIcon,
-  NotebookPenIcon,
   RepeatIcon,
   TargetIcon,
   TimerIcon,
@@ -19,15 +17,14 @@ import { profileItemsAtom, useSocialActions } from "@/hooks/use-social";
 import { PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_LABEL } from "@/lib/privacy";
 
-// A profile tab's list: the owner's completed items (and notes, in the
-// diary) the viewer may see, newest first, grouped by day.
+// A profile tab's list: the owner's completed items the viewer may see,
+// newest first, grouped by day. The diary has its own view (`diary-view.tsx`).
 
 const KIND: Partial<Record<ActivityKind, { icon: LucideIcon; verb: string; fallback: string }>> = {
   task_settled: { icon: ListChecksIcon, verb: "Settled a task", fallback: "A task" },
   habit_completed: { icon: RepeatIcon, verb: "Met a habit goal", fallback: "A habit" },
   goal_completed: { icon: TargetIcon, verb: "Completed a goal", fallback: "A goal" },
   session_completed: { icon: TimerIcon, verb: "Finished a focus session", fallback: "Focus session" },
-  note_created: { icon: NotebookPenIcon, verb: "Wrote a note", fallback: "A note" },
 };
 
 const EMPTY: Record<Feed, { icon: LucideIcon; self: string; other: string }> = {
@@ -35,7 +32,6 @@ const EMPTY: Record<Feed, { icon: LucideIcon; self: string; other: string }> = {
   habits: { icon: RepeatIcon, self: "Habit goals you meet show here.", other: "No completed habits to show." },
   goals: { icon: TargetIcon, self: "Goals you complete show here.", other: "No completed goals to show." },
   sessions: { icon: TimerIcon, self: "Focus sessions you finish show here.", other: "No finished sessions to show." },
-  diary: { icon: BookOpenIcon, self: "What you get done and your notes show here, day by day.", other: "Nothing to show yet." },
 };
 
 const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -123,14 +119,13 @@ function FeedRow({ item, self }: { item: ProfileItem; self: boolean }) {
   const kind = KIND[item.kind] ?? { icon: CheckIcon, verb: "Done", fallback: "Something" };
   const Icon = kind.icon;
   const PrivacyIcon = PRIVACY_ICON[item.privacy];
-  const note = item.kind === "note_created";
   return (
     <li className="flex items-start gap-3 py-3">
       <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-secondary-foreground">
         <Icon className="size-4" />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <p className="break-words">{note ? item.title : (item.title ?? kind.fallback)}</p>
+        <p className="break-words">{item.title ?? kind.fallback}</p>
         <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
           <span>{kind.verb}</span>
           {item.plannedMinutes !== null && <span>{item.plannedMinutes} min</span>}

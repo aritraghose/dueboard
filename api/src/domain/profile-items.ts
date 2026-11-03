@@ -23,23 +23,20 @@ import {
   viewerRelation,
 } from "./visibility.ts";
 
-// A profile's item tabs (Tasks, Habits, Goals, Sessions, Diary): what the
-// owner completed (and, in the diary, their notes), newest first, filtered
-// to what the viewer may see (`visibility.ts`). Each row is an activity row
+// A profile's item tabs (Tasks, Habits, Goals, Sessions): what the owner
+// completed, newest first, filtered to what the viewer may see (`visibility.ts`). Each row is an activity row
 // joined to its item, so a privacy change applies at once and deleted items
 // never show.
 
 const notFound = (username: string) =>
   new UserNotFound({ message: `There's no one called @${username.replace(/^@/, "")}.`, username });
 
-/** One page of a profile tab for `viewerId` (`null` when logged out). Someone who blocked the viewer is `UserNotFound`. */
-export const getProfileItems = Effect.fn("getProfileItems")(function* (
-  viewerId: string | null,
-  input: GetProfileItemsInput,
-) {
-  const { username: typed, feed, cursor } = yield* decodeInput(GetProfileItemsInput)(input);
-  const after = cursor === undefined ? undefined : decodeItemCursor(cursor);
-  if (after === null) return yield* new InvalidInput({ message: "That page link is no longer valid." });
+/**
+ * A profile's owner and how `viewerId` relates to them. Someone who blocked
+ * the viewer is `UserNotFound`; `hidden` means the viewer blocked them, and
+ * sees the card but no items.
+ */
+export const profileOwner = Effect.fn("profileOwner")(function* (viewerId: string | null, typed: string) {
   const username = normalizeUsername(typed);
   if (!username) return yield* notFound(typed);
   const db = yield* Database;
@@ -50,12 +47,24 @@ export const getProfileItems = Effect.fn("getProfileItems")(function* (
     .pipe(orDieOnDbError);
   if (!owner) return yield* notFound(typed);
   const relation = yield* viewerRelation(viewerId, owner.id);
-  // A block hides the profile both ways; the blocker sees the card, not the items.
-  if (relation === "blocked") {
-    const blockedViewer = viewerId !== null && (yield* blockedBy(owner.id, viewerId));
-    if (blockedViewer) return yield* notFound(typed);
-    return new ProfileItemPage({ items: [], nextCursor: null });
+  if (relation === "blocked" && viewerId !== null && (yield* blockedBy(owner.id, viewerId))) {
+    return yield* notFound(typed);
   }
+  return { id: owner.id, relation, hidden: relation === "blocked" };
+});
+
+/** One page of a profile tab for `viewerId` (`null` when logged out). Someone who blocked the viewer is `UserNotFound`. */
+export const getProfileItems = Effect.fn("getProfileItems")(function* (
+  viewerId: string | null,
+  input: GetProfileItemsInput,
+) {
+  const { username: typed, feed, cursor } = yield* decodeInput(GetProfileItemsInput)(input);
+  const after = cursor === undefined ? undefined : decodeItemCursor(cursor);
+  if (after === null) return yield* new InvalidInput({ message: "That page link is no longer valid." });
+  const owner = yield* profileOwner(viewerId, typed);
+  if (owner.hidden) return new ProfileItemPage({ items: [], nextCursor: null });
+  const { relation } = owner;
+  const db = yield* Database;
 
   const rows = yield* db
     .select({

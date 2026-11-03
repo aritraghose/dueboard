@@ -4,16 +4,17 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Cause from "effect/Cause";
 import {
-  CalendarDaysIcon,
   ListChecksIcon,
   RepeatIcon,
   TargetIcon,
   TimerIcon,
   UserRoundXIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConnectionActions } from "@/components/connection-actions";
+import { ContributionGraph } from "@/components/contribution-graph";
+import { DiaryView } from "@/components/diary-view";
 import { Page, PageEmpty } from "@/components/page";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProfileFeed } from "@/components/profile-feed";
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { profileAtom, useSocialActions } from "@/hooks/use-social";
+import { type LocalDate, isLocalDate, todayIn } from "@/lib/dates";
 import { lastCheckedUser, rememberCheckedUser, type OnboardedUser } from "@/lib/session-cache";
 import { readSidebarOpen } from "@/lib/sidebar-state";
 import { getSessionUser } from "../session.ts";
@@ -30,18 +32,19 @@ import { getSessionUser } from "../session.ts";
  * A profile, `/@username` (the literal `@` prefix before the param). Anyone
  * may read it, signed in or not, so it sits outside `_app`'s guard; signed-in
  * viewers who finished onboarding get the app's chrome around it. What the
- * viewer may see is decided by `GetProfile` on the server.
+ * viewer may see is decided by `GetProfile` on the server. Overview holds
+ * the activity graph and, below it, the diary; `day` is the graph day the
+ * diary starts from.
  */
 const TABS = [
   { value: "overview", label: "Overview" },
   { value: "tasks", label: "Tasks" },
   { value: "habits", label: "Habits" },
   { value: "goals", label: "Goals" },
-  { value: "diary", label: "Diary" },
   { value: "sessions", label: "Sessions" },
 ] as const;
 type ProfileTab = (typeof TABS)[number]["value"];
-type ProfileSearch = { tab?: Exclude<ProfileTab, "overview"> | undefined };
+type ProfileSearch = { tab?: Exclude<ProfileTab, "overview"> | undefined; day?: LocalDate | undefined };
 
 export const Route = createFileRoute("/@{$username}")({
   // Every key is always returned (see the decision log on `validateSearch`).
@@ -49,6 +52,7 @@ export const Route = createFileRoute("/@{$username}")({
     tab: TABS.some(({ value }) => value !== "overview" && value === search.tab)
       ? (search.tab as ProfileSearch["tab"])
       : undefined,
+    day: typeof search.day === "string" && isLocalDate(search.day) ? search.day : undefined,
   }),
   beforeLoad: async ({ cause }): Promise<{ user: OnboardedUser | null; sidebarOpen: boolean }> => {
     const checked = lastCheckedUser();
@@ -150,7 +154,7 @@ function ProfileTabs({ profile }: { profile: Profile }) {
       value={tab ?? "overview"}
       onValueChange={(value) =>
         void navigate({
-          search: { tab: value === "overview" ? undefined : (value as ProfileSearch["tab"]) },
+          search: { tab: value === "overview" ? undefined : (value as ProfileSearch["tab"]), day: undefined },
           replace: true,
         })
       }
@@ -181,9 +185,15 @@ function ProfileTabs({ profile }: { profile: Profile }) {
   );
 }
 
-/** The numbers that show how much they get done, then the activity graph. */
+/** The numbers that show how much they get done, the activity graph, then the diary. */
 function Overview({ profile }: { profile: Profile }) {
+  const { day } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const counts = profile.counts;
+  // The viewer's today, for the diary's day names; the graph brings the owner's.
+  const [today] = useState(() => todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"));
+  const showDay = (date: LocalDate | undefined) =>
+    void navigate({ search: (search) => ({ ...search, day: date }), replace: true, resetScroll: false });
   const stats = counts
     ? [
         { value: counts.tasksSettled, one: "task settled", many: "tasks settled", icon: ListChecksIcon },
@@ -206,11 +216,19 @@ function Overview({ profile }: { profile: Profile }) {
           </div>
         ))}
       </dl>
-      <PageEmpty
-        icon={CalendarDaysIcon}
-        title="Activity graph"
-        description="A year of settled tasks, checked habits, completed goals and focus sessions will show here."
-        className="min-h-48 flex-none rounded-xl border border-dashed"
+      <ContributionGraph
+        username={profile.person.username}
+        color={profile.color}
+        selected={day ?? null}
+        onSelectDay={(date) => showDay(date === day ? undefined : date)}
+      />
+      <h2 className="mt-2 px-1 text-lg font-semibold">Diary</h2>
+      <DiaryView
+        username={profile.person.username}
+        self={profile.status.state === "self"}
+        today={today}
+        from={day ?? null}
+        onShowLatest={() => showDay(undefined)}
       />
     </>
   );

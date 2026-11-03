@@ -14,6 +14,7 @@ import * as AccountService from "./domain/account.ts";
 import { AuthAccounts } from "./domain/account.ts";
 import { Database } from "./domain/database.ts";
 import * as DaysService from "./domain/days.ts";
+import * as DiaryService from "./domain/diary.ts";
 import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
 import * as LiveService from "./domain/live.ts";
@@ -547,6 +548,16 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         Effect.gen(function* () {
           const { user } = yield* Viewer;
           return yield* ProfileItemsService.getProfileItems(user?.id ?? null, input);
+        }),
+      GetDiary: (input) =>
+        Effect.gen(function* () {
+          const { user } = yield* Viewer;
+          return yield* DiaryService.getDiary(user?.id ?? null, input);
+        }),
+      GetContributionGraph: (input) =>
+        Effect.gen(function* () {
+          const { user } = yield* Viewer;
+          return yield* DiaryService.getContributionGraph(user?.id ?? null, input);
         }),
       GetLeaderboard: (input) =>
         Effect.gen(function* () {

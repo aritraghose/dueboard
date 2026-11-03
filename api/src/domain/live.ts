@@ -48,7 +48,7 @@ import {
 // items, so it needs no visibility filter and ignores the share flag.
 
 /** Whole minutes focused in a stopped session, from its segments. */
-const focusedMinutes = sql<number | null>`(
+export const focusedMinutes = sql<number | null>`(
   select round(sum(extract(epoch from coalesce(${FocusSessionSegments.endedAt}, now()) - ${FocusSessionSegments.startedAt})) / 60)::int
   from ${FocusSessionSegments} where ${FocusSessionSegments.sessionId} = ${FocusSessions.id})`;
 
@@ -159,7 +159,8 @@ export const getLive = Effect.fn("getLive")(function* (viewerId: string, input: 
   });
 });
 
-const eventMeta = (row: {
+/** The kind-specific numbers of an activity row (goal moves, sessions, habit taps). */
+export const eventMeta = (row: {
   kind: LiveEvent["kind"];
   meta: Record<string, unknown>;
   plannedMinutes: number | null;
