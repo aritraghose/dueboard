@@ -1,13 +1,22 @@
+import type { Settings } from "@dueboard/api/rpc";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Atom from "effect/reactivity/Atom";
 import * as Exit from "effect/Exit";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { ApiClient } from "../rpc-client.ts";
 
 // One mutation atom for the whole app: the `_app` layout runs it, and any
 // component reads its last result (settings, tags) from the same atom.
 const bootstrapAtom = ApiClient.mutation("Bootstrap");
+
+/**
+ * The settings `UpdateSettings` last returned (`use-settings.ts`). They
+ * replace Bootstrap's copy, so new items start from the new defaults
+ * without reloading.
+ */
+export const savedSettingsAtom = Atom.make<Settings | undefined>(undefined).pipe(Atom.keepAlive);
 
 /** The browser's IANA zone, or `UTC` where `Intl` can't tell. */
 export const browserTimeZone = (): string => {
@@ -35,10 +44,18 @@ export function useRunBootstrap() {
   }, [bootstrap]);
 }
 
-/** The Bootstrap result (settings and tags), or `undefined` until it arrives. */
+/**
+ * The Bootstrap result (settings and tags), or `undefined` until it
+ * arrives. Settings saved since then win over its copy.
+ */
 export function useBootstrap() {
   const result = useAtomValue(bootstrapAtom);
-  return AsyncResult.isSuccess(result) ? result.value : undefined;
+  const saved = useAtomValue(savedSettingsAtom);
+  const value = AsyncResult.isSuccess(result) ? result.value : undefined;
+  return useMemo(
+    () => (value && saved ? { tags: value.tags, settings: saved } : value),
+    [value, saved],
+  );
 }
 
 /**

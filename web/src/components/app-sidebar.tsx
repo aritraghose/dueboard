@@ -18,7 +18,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { type MenuUser, UserAvatar, UserMenuContent } from "@/components/user-menu";
-import { BOARDS, MAIN_NAV, type NavItem, SETTINGS_NAV } from "@/lib/nav";
+import { BOARDS, DISCOVER_NAV, LEADERBOARD_NAV, MAIN_NAV, type NavItem, SETTINGS_NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 // The `_app` navigation on wide screens, after Gemini's web app: a
@@ -47,6 +47,8 @@ export function AppSidebar({ user }: { user: MenuUser }) {
                 {item.to === "/boards" && <BoardLinks />}
               </NavLink>
             ))}
+            <NavLink item={DISCOVER_NAV} />
+            <NavLink item={LEADERBOARD_NAV} />
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>

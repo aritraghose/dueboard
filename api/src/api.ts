@@ -10,23 +10,37 @@ import type * as Scope from "effect/Scope";
 import { RpcSerialization, RpcServer } from "effect/rpc";
 import { Auth } from "./auth.ts";
 import { Hyperdrive } from "./database.ts";
+import * as AccountService from "./domain/account.ts";
+import { AuthAccounts } from "./domain/account.ts";
 import { Database } from "./domain/database.ts";
 import * as DaysService from "./domain/days.ts";
 import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
 import * as NotesService from "./domain/notes.ts";
+import * as PointsService from "./domain/points.ts";
+import * as ProfileItemsService from "./domain/profile-items.ts";
 import * as SessionsService from "./domain/sessions.ts";
+import { RateLimiter } from "./domain/rate-limiter.ts";
 import * as SettingsService from "./domain/settings.ts";
+import * as SocialService from "./domain/social.ts";
 import * as TagsService from "./domain/tags.ts";
 import * as TasksService from "./domain/tasks.ts";
 // import { NeonDatabase } from "./database.ts"; // Neon.Connect alternative
+import {
+  CONNECTION_REQUEST_LIMIT,
+  PEOPLE_SEARCH_LIMIT,
+  PUBLIC_READ_LIMIT,
+  RPC_LIMIT,
+} from "./limits.ts";
 import {
   ApiRpcs,
   Authentication,
   BootstrapResult,
   CurrentUser,
+  OptionalAuthentication,
   TooManyRequests,
   Unauthorized,
+  Viewer,
 } from "./rpc.ts";
 import { relations } from "./schema.ts";
 
@@ -66,13 +80,16 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
     // const conn = yield* Neon.Connect(branch);
     // const db = yield* Drizzle.Postgres(conn.connectionString, { relations });
 
-    // Per-user budget for RPCs, so one account can't flood the database.
-    // Like the web stack's `AUTH_RATE_LIMIT`, counting is approximate and per
-    // Cloudflare location. `namespaceId` must be unique within the account.
-    const rpcLimit = yield* Cloudflare.RateLimit("RPC_RATE_LIMIT", {
-      namespaceId: 1004,
-      simple: { limit: 120, period: 60 },
-    });
+    // Rate Limiting bindings, configured in `./limits.ts` (architecture.md
+    // §9). The per-user RPC budget keeps one account from flooding the
+    // database; the others guard social writes, search and public reads.
+    const rpcLimit = yield* Cloudflare.RateLimit("RPC_RATE_LIMIT", RPC_LIMIT);
+    const connectionRequestLimit = yield* Cloudflare.RateLimit(
+      "CONNECTION_REQUEST_RATE_LIMIT",
+      CONNECTION_REQUEST_LIMIT,
+    );
+    const peopleSearchLimit = yield* Cloudflare.RateLimit("PEOPLE_SEARCH_RATE_LIMIT", PEOPLE_SEARCH_LIMIT);
+    const publicReadLimit = yield* Cloudflare.RateLimit("PUBLIC_READ_RATE_LIMIT", PUBLIC_READ_LIMIT);
 
     // The focus-session sweep (architecture.md §11): every minute, complete
     // the running sessions whose time ran out, even with the app closed.
@@ -92,19 +109,38 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
     // Resolves the session for each RPC from the cookies the web
     // stack's `/rpc` proxy forwards, and runs the handler as that user.
     const auth = yield* Auth;
+    // RPCs skip Better Auth's cookie cache and read the session from the
+    // database, so a revoked session loses data access at once. Route
+    // guards still use the cache.
+    const sessionFrom = (headers: unknown) =>
+      auth.api
+        .getSession({
+          headers: new Headers(headers as Record<string, string>),
+          query: { disableCookieCache: true },
+        })
+        .pipe(Effect.orDie);
+    const tooManyRequests = new TooManyRequests({
+      message: "Too many requests. Please wait a minute and try again.",
+    });
+    // Defects (database or session lookup failures) would reach the browser
+    // with their message and cause, which can include SQL and connection
+    // details. Log them here and send a generic defect. RPC handlers don't
+    // carry Alchemy's runtime marker; the Worker owns the request scope
+    // (same as the HttpApi middleware in Alchemy's Better Auth example).
+    const guarded = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(
+        Effect.catchDefect((defect) =>
+          Effect.logError("RPC failed", defect).pipe(
+            Effect.andThen(Effect.die(new Error("Internal server error"))),
+          ),
+        ),
+        Effect.provide(RuntimeContext.phantom),
+      );
     const authentication = Layer.succeed(
       Authentication,
       (effect, { headers }) =>
         Effect.gen(function* () {
-          // RPCs skip Better Auth's cookie cache and read the session
-          // from the database, so a revoked session loses data access at
-          // once. Route guards still use the cache.
-          const session = yield* auth.api
-            .getSession({
-              headers: new Headers(headers as Record<string, string>),
-              query: { disableCookieCache: true },
-            })
-            .pipe(Effect.orDie);
+          const session = yield* sessionFrom(headers);
           if (!session) {
             return yield* new Unauthorized({ message: "Sign in to continue." });
           }
@@ -114,32 +150,63 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
           const { success } = yield* rpcLimit
             .limit({ key: session.user.id })
             .pipe(Effect.orDie);
-          if (!success) {
-            return yield* new TooManyRequests({
-              message: "Too many requests. Please wait a minute and try again.",
-            });
-          }
+          if (!success) return yield* tooManyRequests;
           return yield* Effect.provideService(effect, CurrentUser, {
             id: session.user.id,
             username: session.user.username,
           });
-        }).pipe(
-          // Defects (database or session lookup failures) would reach the
-          // browser with their message and cause, which can include SQL and
-          // connection details. Log them here and send a generic defect.
-          Effect.catchDefect((defect) =>
-            Effect.logError("RPC failed", defect).pipe(
-              Effect.andThen(Effect.die(new Error("Internal server error"))),
-            ),
-          ),
-          // RPC handlers don't carry Alchemy's runtime marker; the Worker
-          // owns the request scope (same as the HttpApi middleware in
-          // Alchemy's Better Auth example).
-          Effect.provide(RuntimeContext.phantom),
-        ),
+        }).pipe(guarded),
     );
 
-    // One handler per RPC in `ApiRpcs`, each running as `CurrentUser`.
+    // `PublicRpcs`: the session if there is one, never required. Signed-in
+    // viewers share the per-user RPC budget; logged-out visitors are
+    // limited by IP (Cloudflare sets `cf-connecting-ip`, and the website's
+    // `/rpc` proxy forwards the request's headers unchanged).
+    const optionalAuthentication = Layer.succeed(
+      OptionalAuthentication,
+      (effect, { headers }) =>
+        Effect.gen(function* () {
+          const session = yield* sessionFrom(headers);
+          const user = session?.user.username
+            ? { id: session.user.id, username: session.user.username }
+            : null;
+          const ip = (headers as Record<string, string | undefined>)["cf-connecting-ip"] ?? "unknown";
+          const { success } = yield* (user
+            ? rpcLimit.limit({ key: user.id })
+            : publicReadLimit.limit({ key: ip })
+          ).pipe(Effect.orDie);
+          if (!success) return yield* tooManyRequests;
+          return yield* Effect.provideService(effect, Viewer, { user });
+        }).pipe(guarded),
+    );
+
+    // The limits domain services check themselves, so Tibo's tools (step
+    // 18) are held to them too.
+    const rateLimiter = Layer.succeed(RateLimiter, {
+      allow: (limit, userId) =>
+        (limit === "connectionRequest" ? connectionRequestLimit : peopleSearchLimit)
+          .limit({ key: userId })
+          .pipe(
+            Effect.map(({ success }) => success),
+            Effect.orDie,
+            Effect.provide(RuntimeContext.phantom),
+          ),
+    });
+
+    // Better Auth's side of account deletion: its internal adapter removes
+    // the user with their sessions and linked accounts. Signing out after
+    // that clears the cookies (and the cached session copy).
+    const authAccounts = Layer.succeed(AuthAccounts, {
+      deleteUser: (userId) =>
+        Effect.gen(function* () {
+          const instance = yield* auth.auth;
+          const context = yield* Effect.promise(() => instance.$context);
+          yield* Effect.promise(() => context.internalAdapter.deleteUser(userId));
+        }).pipe(Effect.provide(RuntimeContext.phantom)),
+    });
+
+    // One handler per RPC in `ApiRpcs`, each running as `CurrentUser` (the
+    // `PublicRpcs` ones as `Viewer`).
     // Handlers stay thin: the rules live in the domain services
     // (`./domain/`), which take the acting user id explicitly, query through
     // `Database`, and turn database errors into defects, so each handler's
@@ -420,7 +487,72 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
           const user = yield* CurrentUser;
           return yield* SessionsService.deleteSession(user.id, id);
         }),
-    }).pipe(Layer.provide(Layer.succeed(Database, db)));
+      SendConnectionRequest: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.sendConnectionRequest(user.id, input);
+        }),
+      AcceptConnectionRequest: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.acceptConnectionRequest(user.id, input);
+        }),
+      DeclineConnectionRequest: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.declineConnectionRequest(user.id, input);
+        }),
+      CancelConnectionRequest: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.cancelConnectionRequest(user.id, input);
+        }),
+      RemoveConnection: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.removeConnection(user.id, input);
+        }),
+      BlockUser: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.blockUser(user.id, input);
+        }),
+      UnblockUser: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.unblockUser(user.id, input);
+        }),
+      GetSocialOverview: () =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.getSocialOverview(user.id);
+        }),
+      SearchPeople: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* SocialService.searchPeople(user.id, input);
+        }),
+      DeleteAccount: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* AccountService.deleteAccount(user.id, user.username, input);
+        }),
+      GetProfile: (input) =>
+        Effect.gen(function* () {
+          const { user } = yield* Viewer;
+          return yield* SocialService.getProfile(user?.id ?? null, input);
+        }),
+      GetProfileItems: (input) =>
+        Effect.gen(function* () {
+          const { user } = yield* Viewer;
+          return yield* ProfileItemsService.getProfileItems(user?.id ?? null, input);
+        }),
+      GetLeaderboard: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* PointsService.getLeaderboard(user.id, input);
+        }),
+    }).pipe(Layer.provide(Layer.mergeAll(Layer.succeed(Database, db), rateLimiter, authAccounts)));
 
     // One Worker serves two things: Better Auth's routes (proxied by the web
     // stack's `/api/auth/*` route) and the RPCs (proxied by `/rpc`).
@@ -440,7 +572,11 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
           return yield* rpc;
         });
       },
-    ).pipe(Effect.provide(Layer.mergeAll(handlers, authentication, RpcSerialization.layerJson)));
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(handlers, authentication, optionalAuthentication, RpcSerialization.layerJson),
+      ),
+    );
     return serve;
   }).pipe(
     Effect.provide(Auth.layer),

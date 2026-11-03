@@ -6,9 +6,11 @@ import {
   NotebookPenIcon,
   RadioIcon,
   RepeatIcon,
+  SearchIcon,
   SettingsIcon,
   SunriseIcon,
   TargetIcon,
+  TrophyIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,6 +28,8 @@ export type NavItem = {
     | "/notes"
     | "/live"
     | "/diary"
+    | "/discover"
+    | "/leaderboard"
     | "/settings";
   readonly label: string;
   readonly icon: LucideIcon;
@@ -84,3 +88,35 @@ export const BOARDS: readonly Board[] = [
 ];
 
 export const SETTINGS_NAV: NavItem = { to: "/settings", label: "Settings", icon: SettingsIcon };
+
+/** Finding people and answering requests. In the desktop sidebar after Boards (not the phone tab bar). */
+export const DISCOVER_NAV: NavItem = { to: "/discover", label: "Discover", icon: SearchIcon };
+
+/** Points among connections or everyone. In the desktop sidebar after Discover. */
+export const LEADERBOARD_NAV: NavItem = { to: "/leaderboard", label: "Leaderboard", icon: TrophyIcon };
+
+/**
+ * The cards `/boards` shows after the boards: places that aren't boards but
+ * are handy to reach from there. Profile is added by the page (it needs the
+ * username).
+ */
+export const BOARD_EXTRAS: readonly Board[] = [
+  {
+    to: "/leaderboard",
+    label: "Leaderboard",
+    icon: TrophyIcon,
+    description: "Who's scoring most, among your connections or everyone.",
+  },
+  {
+    to: "/discover",
+    label: "Discover",
+    icon: SearchIcon,
+    description: "Find people and answer connection requests.",
+  },
+  {
+    to: "/settings",
+    label: "Settings",
+    icon: SettingsIcon,
+    description: "Privacy defaults, Tibo, blocked people and your account.",
+  },
+];

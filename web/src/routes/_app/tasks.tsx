@@ -1,6 +1,6 @@
 import type { ListTasksInput, Task } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import {
   CalendarClockIcon,
@@ -9,6 +9,7 @@ import {
   ListChecksIcon,
   SearchIcon,
   SearchXIcon,
+  TagsIcon,
   XIcon,
 } from "lucide-react";
 import { LayoutGroup } from "motion/react";
@@ -97,7 +98,15 @@ function Tasks() {
   return (
     <Page>
       <PageHeader title="Tasks" description="Everything you need to do, dated or not.">
-        <CreateButton label="New task" disabled={!today} onClick={newTask} />
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" className="max-md:hidden">
+            <Link to="/tags">
+              <TagsIcon />
+              Manage tags
+            </Link>
+          </Button>
+          <CreateButton label="New task" disabled={!today} onClick={newTask} />
+        </div>
       </PageHeader>
 
       <div className="flex w-full flex-col gap-4 pb-8">
@@ -122,6 +131,15 @@ function Tasks() {
               { value: "tag", label: "Tag" },
               { value: "none", label: "None" },
             ]}
+            extra={
+              // On phones Manage tags sits with Sort and Group; wider screens have it in the header.
+              <Button asChild variant="ghost" size="sm" className="md:hidden">
+                <Link to="/tags">
+                  <TagsIcon />
+                  Manage tags
+                </Link>
+              </Button>
+            }
           />
         </div>
 
@@ -164,7 +182,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
   }, [text, value]);
 
   return (
-    <InputGroup className="h-8 min-w-40 flex-1 basis-48 rounded-lg">
+    <InputGroup className="h-8 min-w-40 flex-1 basis-48 rounded-lg max-sm:h-7.5 max-sm:max-w-52">
       <InputGroupAddon>
         <SearchIcon />
       </InputGroupAddon>

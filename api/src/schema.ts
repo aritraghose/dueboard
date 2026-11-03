@@ -9,6 +9,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -17,6 +18,7 @@ import {
 import {
   ACTIVITY_KIND,
   ACTIVITY_SUBJECT,
+  CONNECTION_REQUEST_STATUS,
   GOAL_COUNT_MAX,
   GOAL_DESCRIPTION_MAX_LENGTH,
   GOAL_LINK_AMOUNT_MAX,
@@ -78,6 +80,10 @@ export const goalStatus = pgEnum("goal_status", GOAL_STATUS);
 export const goalLinkItem = pgEnum("goal_link_item", GOAL_LINK_ITEM);
 export const goalProgressSource = pgEnum("goal_progress_source", GOAL_PROGRESS_SOURCE);
 export const focusSessionStatus = pgEnum("focus_session_status", SESSION_STATUS);
+export const connectionRequestStatus = pgEnum(
+  "connection_request_status",
+  CONNECTION_REQUEST_STATUS,
+);
 
 /** One row per user, created by `ensureUserSetup` on the first app load. */
 export const UserSettings = pgTable("user_settings", {
@@ -569,6 +575,72 @@ export const Activity = pgTable(
 );
 export type ActivityRow = typeof Activity.$inferSelect;
 
+/**
+ * Connection requests (`domain/social.ts`). Answered and cancelled rows are
+ * kept: the sender's 24-hour cap counts every row they sent. A partial
+ * unique index keeps at most one pending request per ordered pair.
+ */
+export const ConnectionRequests = pgTable(
+  "connection_requests",
+  {
+    id: id(),
+    fromUserId: text("from_user_id").notNull(),
+    toUserId: text("to_user_id").notNull(),
+    status: connectionRequestStatus("status").notNull().default("pending"),
+    createdAt: createdAt(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("connection_requests_pending_idx")
+      .on(t.fromUserId, t.toUserId)
+      .where(sql`${t.status} = 'pending'`),
+    // Outgoing lists and the daily cap.
+    index("connection_requests_from_idx").on(t.fromUserId, t.createdAt),
+    // Incoming lists.
+    index("connection_requests_to_idx").on(t.toUserId, t.status, t.createdAt),
+    check("connection_requests_not_self", sql`${t.fromUserId} <> ${t.toUserId}`),
+    check(
+      "connection_requests_responded_at",
+      sql`(${t.status} = 'pending') = (${t.respondedAt} is null)`,
+    ),
+  ],
+);
+export type ConnectionRequestRow = typeof ConnectionRequests.$inferSelect;
+
+/** Mutual connections, one row per pair with the smaller id first. Removing one deletes the row. */
+export const Connections = pgTable(
+  "connections",
+  {
+    userLow: text("user_low").notNull(),
+    userHigh: text("user_high").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userLow, t.userHigh] }),
+    index("connections_user_high_idx").on(t.userHigh),
+    // Byte order, so it agrees with JavaScript's `<` on ids (`orderedPair`)
+    // whatever the database's collation.
+    check("connections_order", sql`${t.userLow} < ${t.userHigh} collate "C"`),
+  ],
+);
+export type ConnectionRow = typeof Connections.$inferSelect;
+
+/** `blocker_id` blocked `blocked_id`. Hides everything between them, both ways. */
+export const Blocks = pgTable(
+  "blocks",
+  {
+    blockerId: text("blocker_id").notNull(),
+    blockedId: text("blocked_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.blockerId, t.blockedId] }),
+    index("blocks_blocked_idx").on(t.blockedId),
+    check("blocks_not_self", sql`${t.blockerId} <> ${t.blockedId}`),
+  ],
+);
+export type BlockRow = typeof Blocks.$inferSelect;
+
 export const relations = defineRelations(
   {
     UserSettings,
@@ -584,6 +656,9 @@ export const relations = defineRelations(
     FocusSessions,
     FocusSessionSegments,
     Activity,
+    ConnectionRequests,
+    Connections,
+    Blocks,
   },
   () => ({}),
 );

@@ -52,7 +52,7 @@ There are two kinds of data, and each lives where it fits:
 ### Existing conventions to keep
 
 - `api/src/rpc.ts` is the RPC contract shared by api and web, `api/src/api.ts` has the handlers, `api/src/schema.ts` the Drizzle tables, and `web/src/rpc-client.ts` the AtomRpc client.
-- Every RPC runs as `CurrentUser` through the `Authentication` middleware, which also applies the per-user `RPC_RATE_LIMIT`.
+- Every RPC runs as `CurrentUser` through the `Authentication` middleware, which also applies the per-user `RPC_RATE_LIMIT`. The one exception is the `PublicRpcs` group (merged into `ApiRpcs`, same `/rpc` endpoint): its `OptionalAuthentication` middleware provides `Viewer` (`{ user: … | null }`) and limits logged-out callers per IP.
 - Better Auth owns its tables. Reference `user.id` as a plain `text` column with no foreign key (Drizzle migrations run before Better Auth's).
 - Web reads bindings through `web/src/env.ts`.
 - Pathless route groups: `_public/`, `_auth/`, `_app/`. The `/rpc` and `/api/*` paths are reserved by the proxies.
@@ -112,9 +112,9 @@ plain `date`**, interpreted in the owner's time zone.
 | `focus_sessions` | `id`, `user_id`, `label?` (≤ 100), `planned_minutes` (1–600), `status` (`running`\|`paused`\|`completed`\|`stopped`), `local_date` (start day in the user's zone), `started_at`, `ends_at?`, `ended_at?`, `privacy`, `share_to_live` | **Partial unique index on `user_id` WHERE status IN ('running','paused')**, so the database enforces one active session. `ends_at` is set exactly while running and recomputed on resume and extend so the sweep can find expired ones; `ended_at` is set exactly once completed or stopped. |
 | `focus_session_segments` | `session_id`, `started_at`, `ended_at?` | Pause and resume history. Elapsed time is the sum of the segments. |
 | `activity` | `id`, `user_id` (actor), `kind`, `subject_type`, `subject_id`, `occurred_at`, `local_date`, `meta jsonb` | The single feed behind Live, diary and contribution graph (§5). Indexes on `(user_id, occurred_at desc)` and `(user_id, local_date)`. |
-| `connection_requests` | `id`, `from_user_id`, `to_user_id`, `status` (`pending`\|`accepted`\|`declined`\|`cancelled`), `created_at` | |
-| `connections` | `user_low`, `user_high` (ordered pair), `created_at` | Mutual. Removing a connection deletes the row. |
-| `blocks` | `blocker_id`, `blocked_id` | Hides everything both ways and blocks requests, relays and the Ask page. |
+| `connection_requests` | `id`, `from_user_id`, `to_user_id`, `status` (`pending`\|`accepted`\|`declined`\|`cancelled`), `created_at`, `responded_at?` | Partial unique index: one `pending` row per ordered pair. Answered rows are kept (the 24-hour send cap counts them). `responded_at` set iff not pending (`CHECK`). |
+| `connections` | `user_low`, `user_high` (ordered pair), `created_at` | PK on the pair, `CHECK user_low < user_high collate "C"` (byte order, matching JS `<`). Mutual. Removing a connection deletes the row. |
+| `blocks` | `blocker_id`, `blocked_id`, `created_at` | PK on the pair. Hides everything both ways and blocks requests, relays and the Ask page. |
 | `ai_usage` | `user_id`, `period` (`YYYY-MM` in the user's time zone), `units` | Quota ledger (§8). |
 | `ai_usage_events` | `user_id`, `units`, `reason`, `ref?`, `created_at` | Audit log. |
 | `relays` | `id`, `from_user_id`, `to_user_id`, `message`, `status` (`pending`\|`delivered`\|`answered`\|`declined`\|`expired`), `answer?`, `created_at`, `answered_at?` | §7.5 |
@@ -175,8 +175,9 @@ displayed, so a privacy change applies everywhere immediately.
 
 ### Visibility rules
 
-These live in one module, `api/src/domain/visibility.ts`, and every reader
-must go through it:
+These live in one module, `api/src/domain/visibility.ts` (pure rules in
+`visibility-rules.ts`), and every reader must go through it. The profile
+tabs (`GetProfileItems`, `domain/profile-items.ts`) are its first reader:
 
 ```
 canSeeItem(viewer, owner, privacy):
@@ -205,6 +206,16 @@ contribution graph:
 Strangers never see Live. They only see public diary items and the graph
 on a profile.
 
+### Points
+
+Not stored: `domain/points.ts` counts them from rows the actions already
+leave, so undos take them back. +1 per `task_settled`, per `goal_progressed`
+row (one per goal and day), per `session_completed`, and per `habit_checkins`
+row with `count > 0` (one per habit and day). Private items count, like the
+graph. Leaderboard periods use the viewer's zone against each row's
+`local_date`. If counting gets slow, a per-user, per-day table can replace it
+behind the same RPCs.
+
 ### Fan-out
 
 The feed is computed when it's read: a query over `activity` for the actor set,
@@ -222,13 +233,17 @@ If it gets slow later, add a materialized per-user inbox.
 | `/inbox` | `_app` | Focused full-page Tibo chat |
 | `/boards` | `_app` | Every board (Tasks, Habits, Goals, Notes, Live, Diary) as a card that opens it |
 | `/live` | `_app` | Live, full-page: the feed of what you and your connections get done (it was called the timeline) |
-| `/settings` | `_app` | Defaults, relay policy, Ask page, time zone (read-only display), connections |
-| `/@username` | public-readable | Profile card, contribution graph, diary filtered for the viewer. Logged-out visitors can view it. |
+| `/settings` | `_app` | Tabs: General (defaults, time zone display, theme), Connections (blocked list only), Tibo (relay policy, later the Ask page), Account (delete) |
+| `/tags` | `_app` | Create, rename and recolor tags (built-in tags only recolor). Linked from `/tasks` ("Manage tags"). |
+| `/discover` | `_app` | People search, incoming requests, sent requests. In the desktop sidebar after Boards. |
+| `/leaderboard` | `_app` | Points ranking: `?scope=public` (default Connections), `?period=all|month|today` (default This week). In the desktop sidebar after Discover. |
+| `/connections` | `_app` | The user's connections, with Remove and Block. Opened from their own profile's connections count. |
+| `/@username` | public-readable | Tabs `?tab=` Overview (default: counts and the graph), Tasks, Habits, Goals, Diary, Sessions. `routes/@{$username}.tsx` (literal `@` prefix + param), outside `_app`'s guard; signed-in viewers get the app chrome (`AppShell`). Profile card, contribution graph, diary filtered for the viewer. Logged-out visitors can view it. |
 | `/@username/ask` | public-readable | Q&A with the user's Ask agent, only if they enabled it |
 
 - The **Tibo button** sits at the top right of every `_app` page and opens a side panel with the same thread as `/inbox`.
 - Usernames **cannot be changed**, so `/@username` links never break.
-- TanStack Router supports a literal prefix before a param (`@{$username}`). Confirm the exact file-name syntax when building it.
+- TanStack Router's literal prefix before a param is the file name `@{$username}.tsx`; link with `to="/@{$username}" params={{ username }}`.
 
 ## 7. Tibo
 
@@ -369,13 +384,14 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
 | 1003 `AUTH_RATE_LIMIT` | IP | 30/min | `/api/auth/*` (exists) |
 | 1004 `RPC_RATE_LIMIT` | user | 120/min | every RPC (exists) |
 | 1005 `CHAT_RATE_LIMIT` | user | 10/min | Tibo turns (exists, reused) |
-| 1006 | user | strict (e.g. 20/day) | connection requests |
+| 1006 `CONNECTION_REQUEST_RATE_LIMIT` | user | 5/min burst, plus 20 per 24 h counted in Postgres | connection requests (`social.ts`) |
 | 1007 | user | strict (e.g. 30/day) | relays sent |
-| 1008 | IP | moderate | public profile pages (`/@username`), logged out |
+| 1008 `PUBLIC_READ_RATE_LIMIT` | IP (`cf-connecting-ip`) | 60/min | `PublicRpcs` (`GetProfile`) for logged-out visitors; signed-in viewers use 1004 |
 | 1009 | visitor (user or IP) | strict | Ask page questions, plus Turnstile |
 | 1010 | IP | moderate | `/agents/*` WebSocket upgrades |
+| 1011 `PEOPLE_SEARCH_RATE_LIMIT` | user | 30/min | people search (`SearchPeople`) |
 
-- All limits live in one place (`api/src/limits.ts` or similar), so they're easy to tune.
+- The ApiWorker's limits live in `api/src/limits.ts` (the website's 1003 in `web/alchemy.run.ts`). The binding only counts per 10 or 60 seconds, so daily caps are counted in Postgres by the service. Limits a domain service checks itself go through the `RateLimiter` service (`domain/rate-limiter.ts`), so Tibo's tools hit them too.
 - Request bodies get size limits through Schema `maxLength` everywhere.
 
 ## 10. Realtime

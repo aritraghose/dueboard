@@ -43,6 +43,7 @@ export function ViewControls({
   kinds = false,
   filter,
   groups,
+  extra,
   className,
 }: {
   view: ViewOptions;
@@ -53,6 +54,8 @@ export function ViewControls({
   filter?: ReactNode;
   /** The grouping choices this list offers, with their labels. */
   groups: readonly { readonly value: ViewOptions["group"]; readonly label: string }[];
+  /** More controls right after Sort and Group (`/tasks`' Manage tags on phones). */
+  extra?: ReactNode;
   className?: string;
 }) {
   const sorted = view.sort !== "default";
@@ -133,6 +136,7 @@ export function ViewControls({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        {extra}
       </div>
     </div>
   );

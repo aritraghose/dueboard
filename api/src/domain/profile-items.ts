@@ -1,0 +1,122 @@
+import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import * as Effect from "effect/Effect";
+import { Activity, Blocks, FocusSessions, Goals, Habits, Notes, Tasks } from "../schema.ts";
+import { AuthUsers } from "./auth-users.ts";
+import { Database, orDieOnDbError } from "./database.ts";
+import {
+  GetProfileItemsInput,
+  InvalidInput,
+  PROFILE_ITEMS_PAGE_SIZE,
+  ProfileItem,
+  ProfileItemPage,
+  UserNotFound,
+  decodeInput,
+  type Privacy,
+} from "./model.ts";
+import { FEED_KINDS, decodeItemCursor, encodeItemCursor } from "./profile-rules.ts";
+import { normalizeUsername } from "./social-rules.ts";
+import { viewerRelation, visiblePrivacies } from "./visibility.ts";
+
+// A profile's item tabs (Tasks, Habits, Goals, Sessions, Diary): what the
+// owner completed (and, in the diary, their notes), newest first, filtered
+// to what the viewer may see (`visibility.ts`). Each row is an activity row
+// joined to its item, so a privacy change applies at once and deleted items
+// never show.
+
+const notFound = (username: string) =>
+  new UserNotFound({ message: `There's no one called @${username.replace(/^@/, "")}.`, username });
+
+/** The item's privacy, from whichever table the activity row points at. */
+const itemPrivacy = sql<Privacy | null>`coalesce(${Tasks.privacy}, ${Habits.privacy}, ${Goals.privacy}, ${FocusSessions.privacy}, ${Notes.privacy})`;
+
+/** One page of a profile tab for `viewerId` (`null` when logged out). Someone who blocked the viewer is `UserNotFound`. */
+export const getProfileItems = Effect.fn("getProfileItems")(function* (
+  viewerId: string | null,
+  input: GetProfileItemsInput,
+) {
+  const { username: typed, feed, cursor } = yield* decodeInput(GetProfileItemsInput)(input);
+  const after = cursor === undefined ? undefined : decodeItemCursor(cursor);
+  if (after === null) return yield* new InvalidInput({ message: "That page link is no longer valid." });
+  const username = normalizeUsername(typed);
+  if (!username) return yield* notFound(typed);
+  const db = yield* Database;
+  const [owner] = yield* db
+    .select({ id: AuthUsers.id })
+    .from(AuthUsers)
+    .where(eq(AuthUsers.username, username))
+    .pipe(orDieOnDbError);
+  if (!owner) return yield* notFound(typed);
+  const relation = yield* viewerRelation(viewerId, owner.id);
+  // A block hides the profile both ways; the blocker sees the card, not the items.
+  if (relation === "blocked") {
+    const blockedViewer = viewerId !== null && (yield* blockedBy(owner.id, viewerId));
+    if (blockedViewer) return yield* notFound(typed);
+    return new ProfileItemPage({ items: [], nextCursor: null });
+  }
+
+  const rows = yield* db
+    .select({
+      id: Activity.id,
+      kind: Activity.kind,
+      localDate: Activity.localDate,
+      occurredAt: Activity.occurredAt,
+      title: sql<string | null>`coalesce(${Tasks.title}, ${Habits.title}, ${Goals.name}, ${FocusSessions.label}, ${Notes.body})`,
+      privacy: itemPrivacy,
+      plannedMinutes: FocusSessions.plannedMinutes,
+    })
+    .from(Activity)
+    .leftJoin(Tasks, and(eq(Activity.subjectType, "task"), eq(Tasks.id, Activity.subjectId)))
+    .leftJoin(Habits, and(eq(Activity.subjectType, "habit"), eq(Habits.id, Activity.subjectId)))
+    .leftJoin(Goals, and(eq(Activity.subjectType, "goal"), eq(Goals.id, Activity.subjectId)))
+    .leftJoin(
+      FocusSessions,
+      and(eq(Activity.subjectType, "session"), eq(FocusSessions.id, Activity.subjectId)),
+    )
+    .leftJoin(Notes, and(eq(Activity.subjectType, "note"), eq(Notes.id, Activity.subjectId)))
+    .where(
+      and(
+        eq(Activity.userId, owner.id),
+        inArray(Activity.kind, [...FEED_KINDS[feed]]),
+        inArray(itemPrivacy, [...visiblePrivacies(relation)]),
+        after
+          ? or(
+              lt(Activity.occurredAt, after.occurredAt),
+              and(eq(Activity.occurredAt, after.occurredAt), lt(Activity.id, after.id)),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(Activity.occurredAt), desc(Activity.id))
+    .limit(PROFILE_ITEMS_PAGE_SIZE + 1)
+    .pipe(orDieOnDbError);
+
+  const page = rows.slice(0, PROFILE_ITEMS_PAGE_SIZE);
+  const last = page.at(-1);
+  return new ProfileItemPage({
+    items: page.map(
+      (row) =>
+        new ProfileItem({
+          id: row.id,
+          kind: row.kind,
+          title: row.title,
+          localDate: row.localDate as ProfileItem["localDate"],
+          occurredAt: row.occurredAt,
+          privacy: row.privacy!,
+          plannedMinutes: row.plannedMinutes,
+        }),
+    ),
+    nextCursor: rows.length > PROFILE_ITEMS_PAGE_SIZE && last ? encodeItemCursor(last.occurredAt, last.id) : null,
+  });
+});
+
+/** Whether `blockerId` blocked `blockedId` (one way). */
+const blockedBy = (blockerId: string, blockedId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const [row] = yield* db
+      .select({ blockerId: Blocks.blockerId })
+      .from(Blocks)
+      .where(and(eq(Blocks.blockerId, blockerId), eq(Blocks.blockedId, blockedId)))
+      .pipe(orDieOnDbError);
+    return row !== undefined;
+  });

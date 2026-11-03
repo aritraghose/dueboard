@@ -541,3 +541,19 @@
     transform: scale(0.08);
   }
 }
+
+/*
+ * The band across the top of a profile card (`/@username`), in the owner's
+ * user color (`data-tag` on the card): the soft shade deepening toward the
+ * avatar, ruled with fine vertical lines of the solid one, like days on a
+ * calendar strip. Works in both themes since both shades come from the palette.
+ */
+.profile-band {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 9px,
+      color-mix(in oklch, var(--tag-solid) 22%, transparent) 9px 10px
+    ),
+    linear-gradient(to top, color-mix(in oklch, var(--tag-solid) 30%, var(--tag-soft)), var(--tag-soft));
+}

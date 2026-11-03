@@ -96,7 +96,8 @@ export const ACTIVITY_KIND = [
   "session_stopped",
   "note_created",
 ] as const;
-export type ActivityKind = (typeof ACTIVITY_KIND)[number];
+export const ActivityKind = Schema.Literals(ACTIVITY_KIND);
+export type ActivityKind = typeof ActivityKind.Type;
 
 /** `slider`: the user sets 0–100%. `count`: `current_count` of `target_count`; the percent is derived. */
 export const GOAL_PROGRESS_MODE = ["slider", "count"] as const;
@@ -133,6 +134,41 @@ export type SessionStatus = typeof SessionStatus.Type;
 /** What can be done to an active session. */
 export const SESSION_ACTION = ["pause", "resume", "extend", "stop"] as const;
 export type SessionAction = (typeof SESSION_ACTION)[number];
+
+/** A request stays `pending` until the other user answers or the sender takes it back. */
+export const CONNECTION_REQUEST_STATUS = ["pending", "accepted", "declined", "cancelled"] as const;
+export type ConnectionRequestStatus = (typeof CONNECTION_REQUEST_STATUS)[number];
+
+/**
+ * How a viewer stands with another user, from the viewer's side. `blocked`
+ * means the viewer blocked them (someone who blocked the viewer is never
+ * shown at all). Logged-out viewers always get `none`.
+ */
+export const CONNECTION_STATE = [
+  "self",
+  "none",
+  "pending_out",
+  "pending_in",
+  "connected",
+  "blocked",
+] as const;
+export const ConnectionState = Schema.Literals(CONNECTION_STATE);
+export type ConnectionState = typeof ConnectionState.Type;
+
+/** A profile's tabs that list items: completed ones only, and the diary (those plus notes). */
+export const PROFILE_FEED = ["tasks", "habits", "goals", "sessions", "diary"] as const;
+export const ProfileFeed = Schema.Literals(PROFILE_FEED);
+export type ProfileFeed = typeof ProfileFeed.Type;
+
+/** Whose points a leaderboard ranks: the viewer and their connections, or everyone. */
+export const LEADERBOARD_SCOPE = ["connections", "public"] as const;
+export const LeaderboardScope = Schema.Literals(LEADERBOARD_SCOPE);
+export type LeaderboardScope = typeof LeaderboardScope.Type;
+
+/** The days a leaderboard counts, in the viewer's zone (weeks start on Sunday). */
+export const LEADERBOARD_PERIOD = ["all", "month", "week", "today"] as const;
+export const LeaderboardPeriod = Schema.Literals(LEADERBOARD_PERIOD);
+export type LeaderboardPeriod = typeof LeaderboardPeriod.Type;
 
 // ─── Limits ──────────────────────────────────────────────────────────────────
 
@@ -193,6 +229,28 @@ export const SESSION_PAGE_SIZE_MAX = 100;
 export const SESSION_CURSOR_MAX_LENGTH = 160;
 /** `GetUpcoming` covers at most this many days per call. */
 export const UPCOMING_DAYS_MAX = 60;
+
+/** Better Auth's `username` plugin rules (it stores usernames lowercased). */
+export const USERNAME_MIN_LENGTH = 3;
+export const USERNAME_MAX_LENGTH = 30;
+/**
+ * Connection requests a user can send in any 24 hours, counted from the
+ * table (the Rate Limiting binding only counts per 10 or 60 seconds).
+ */
+export const CONNECTION_REQUESTS_PER_DAY = 20;
+/** People search: the shortest prefix it answers, and how many people it returns. */
+export const PEOPLE_SEARCH_MIN_LENGTH = 2;
+export const PEOPLE_SEARCH_LIMIT = 10;
+/** Profile tabs page through items this many at a time. */
+export const PROFILE_ITEMS_PAGE_SIZE = 30;
+/** `GetProfileItems` cursors are `<ISO timestamp>|<id>`; this only bounds the request body. */
+export const PROFILE_ITEMS_CURSOR_MAX_LENGTH = 128;
+/** People search matches names too, so a query can hold spaces; this bounds it. */
+export const PEOPLE_SEARCH_MAX_LENGTH = 60;
+/** How many ranks a leaderboard shows (the viewer's own rank comes along too). */
+export const LEADERBOARD_SIZE = 50;
+/** What the account deletion form makes the user type. */
+export const DELETE_ACCOUNT_CONFIRM_MAX_LENGTH = 64;
 
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
@@ -536,6 +594,40 @@ export const GetUpcomingInput = Schema.Struct({
 });
 export type GetUpcomingInput = typeof GetUpcomingInput.Type;
 
+/** A username as typed: an optional leading `@`, any case. Services normalize it. */
+export const UsernameInput = Schema.String.check(Schema.isBetweenLength(1, USERNAME_MAX_LENGTH + 1));
+
+export const UsernameRef = Schema.Struct({ username: UsernameInput });
+export type UsernameRef = typeof UsernameRef.Type;
+
+export const ConnectionRequestRef = Schema.Struct({ requestId: Id });
+export type ConnectionRequestRef = typeof ConnectionRequestRef.Type;
+
+export const SearchPeopleInput = Schema.Struct({
+  query: Schema.String.check(Schema.isMaxLength(PEOPLE_SEARCH_MAX_LENGTH)),
+});
+export type SearchPeopleInput = typeof SearchPeopleInput.Type;
+
+/** One page of a profile tab, newest first. */
+export const GetProfileItemsInput = Schema.Struct({
+  username: UsernameInput,
+  feed: ProfileFeed,
+  cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(PROFILE_ITEMS_CURSOR_MAX_LENGTH))),
+});
+export type GetProfileItemsInput = typeof GetProfileItemsInput.Type;
+
+export const GetLeaderboardInput = Schema.Struct({
+  scope: LeaderboardScope,
+  period: LeaderboardPeriod,
+});
+export type GetLeaderboardInput = typeof GetLeaderboardInput.Type;
+
+/** The user types their username to confirm. */
+export const DeleteAccountInput = Schema.Struct({
+  confirmUsername: Schema.String.check(Schema.isMaxLength(DELETE_ACCOUNT_CONFIRM_MAX_LENGTH)),
+});
+export type DeleteAccountInput = typeof DeleteAccountInput.Type;
+
 /** Decodes a service's input, failing with {@link InvalidInput}. */
 export const decodeInput =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -876,6 +968,109 @@ export class Upcoming extends Schema.Class<Upcoming>("Upcoming")({
   days: Schema.Array(UpcomingDay),
 }) {}
 
+/** Another user as lists and search show them. */
+export class Person extends Schema.Class<Person>("Person")({
+  username: Schema.String,
+  name: Schema.String,
+  /** The Google picture URL; load it with `referrerPolicy="no-referrer"`. */
+  image: Schema.NullOr(Schema.String),
+}) {}
+
+export class Connection extends Schema.Class<Connection>("Connection")({
+  person: Person,
+  since: Schema.Date,
+}) {}
+
+/** A pending request, incoming (`person` sent it) or outgoing (sent to `person`). */
+export class ConnectionRequest extends Schema.Class<ConnectionRequest>("ConnectionRequest")({
+  id: Schema.String,
+  person: Person,
+  createdAt: Schema.Date,
+}) {}
+
+export class BlockedPerson extends Schema.Class<BlockedPerson>("BlockedPerson")({
+  person: Person,
+  since: Schema.Date,
+}) {}
+
+/** Where the viewer stands with someone, and the pending request between them if any. */
+export class SocialStatus extends Schema.Class<SocialStatus>("SocialStatus")({
+  state: ConnectionState,
+  /** Set for `pending_in` (to accept or decline) and `pending_out` (to cancel). */
+  requestId: Schema.NullOr(Schema.String),
+}) {}
+
+export class PersonResult extends Schema.Class<PersonResult>("PersonResult")({
+  person: Person,
+  status: SocialStatus,
+}) {}
+
+/** All-time totals anyone may see; the contribution graph counts private items too. */
+export class ProfileCounts extends Schema.Class<ProfileCounts>("ProfileCounts")({
+  connections: Schema.Number,
+  /** All-time points (`points-rules.ts`). */
+  points: Schema.Number,
+  tasksSettled: Schema.Number,
+  habitsCompleted: Schema.Number,
+  goalsCompleted: Schema.Number,
+  sessionsCompleted: Schema.Number,
+}) {}
+
+/** `/@username`. A viewer who blocked them gets the card without counts. */
+export class Profile extends Schema.Class<Profile>("Profile")({
+  person: Person,
+  joinedAt: Schema.Date,
+  /** The owner's user color (`Settings.color`), or `null` before their first app load. */
+  color: Schema.NullOr(UserColor),
+  status: SocialStatus,
+  counts: Schema.NullOr(ProfileCounts),
+}) {}
+
+/**
+ * A completed item (or a note, in the diary) on a profile tab. Only what the
+ * viewer may see comes back; `privacy` lets the owner see who else can.
+ */
+export class ProfileItem extends Schema.Class<ProfileItem>("ProfileItem")({
+  /** The activity row's id. */
+  id: Schema.String,
+  kind: ActivityKind,
+  /** The task's or habit's title, the goal's name, the session's label (may be `null`) or the note's body. */
+  title: Schema.NullOr(Schema.String),
+  localDate: LocalDate,
+  occurredAt: Schema.Date,
+  privacy: Privacy,
+  /** Sessions only. */
+  plannedMinutes: Schema.NullOr(Schema.Number),
+}) {}
+
+export class ProfileItemPage extends Schema.Class<ProfileItemPage>("ProfileItemPage")({
+  items: Schema.Array(ProfileItem),
+  nextCursor: Schema.NullOr(Schema.String),
+}) {}
+
+export class LeaderboardEntry extends Schema.Class<LeaderboardEntry>("LeaderboardEntry")({
+  /** Ties share a rank (1, 2, 2, 4). */
+  rank: Schema.Number,
+  person: Person,
+  points: Schema.Number,
+}) {}
+
+export class Leaderboard extends Schema.Class<Leaderboard>("Leaderboard")({
+  /** The top `LEADERBOARD_SIZE` ranks, plus the viewer's own row wherever it falls. */
+  entries: Schema.Array(LeaderboardEntry),
+  /** The viewer's place, or `null` with no points in the period. */
+  me: Schema.NullOr(LeaderboardEntry),
+  /** The period's first day in the viewer's zone, `null` for all time. */
+  from: Schema.NullOr(LocalDate),
+}) {}
+
+export class SocialOverview extends Schema.Class<SocialOverview>("SocialOverview")({
+  connections: Schema.Array(Connection),
+  incoming: Schema.Array(ConnectionRequest),
+  outgoing: Schema.Array(ConnectionRequest),
+  blocked: Schema.Array(BlockedPerson),
+}) {}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Input that fails a rule its Schema can't express, or that skipped the RPC decode (Tibo). */
@@ -954,6 +1149,36 @@ export class ActiveSessionExists extends Schema.TaggedError<ActiveSessionExists>
     message: Schema.String,
     session: FocusSession,
   },
+) {}
+
+/**
+ * No onboarded user has that username, or they blocked the viewer: the two
+ * look the same, so a block is never revealed.
+ */
+export class UserNotFound extends Schema.TaggedError<UserNotFound>()("UserNotFound", {
+  message: Schema.String,
+  username: Schema.String,
+}) {}
+
+/** Not pending any more, or not addressed to (or sent by) the user. */
+export class ConnectionRequestNotFound extends Schema.TaggedError<ConnectionRequestNotFound>()(
+  "ConnectionRequestNotFound",
+  { message: Schema.String, id: Schema.String },
+) {}
+
+export const CONNECTION_REFUSAL = ["self", "already_connected", "blocked"] as const;
+export type ConnectionRefusal = (typeof CONNECTION_REFUSAL)[number];
+
+/** Connecting with (or blocking) yourself, connecting with someone you blocked, or connecting twice. */
+export class ConnectionNotAllowed extends Schema.TaggedError<ConnectionNotAllowed>()(
+  "ConnectionNotAllowed",
+  { message: Schema.String, reason: Schema.Literals(CONNECTION_REFUSAL) },
+) {}
+
+/** Too many connection requests or searches in a short time, or past the daily cap. */
+export class SocialLimitReached extends Schema.TaggedError<SocialLimitReached>()(
+  "SocialLimitReached",
+  { message: Schema.String },
 ) {}
 
 /** Pausing a paused session, resuming a running one, or changing one that has ended. Carries its status now. */

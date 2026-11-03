@@ -8,12 +8,19 @@ import {
   ActiveSessionExists,
   AdjustGoalProgressInput,
   CheckInNotAllowed,
+  ConnectionNotAllowed,
+  ConnectionRequestNotFound,
+  ConnectionRequestRef,
   CreateGoalInput,
   CreateHabitInput,
   CreateNoteInput,
   CreateTagInput,
   CreateTaskInput,
   Day,
+  DeleteAccountInput,
+  GetLeaderboardInput,
+  GetProfileItemsInput,
+  Leaderboard,
   ExtendSessionInput,
   FocusSession,
   Goal,
@@ -38,6 +45,13 @@ import {
   NoteNotFound,
   NotePage,
   NotesForDay,
+  PersonResult,
+  Profile,
+  ProfileItemPage,
+  SearchPeopleInput,
+  SocialLimitReached,
+  SocialOverview,
+  SocialStatus,
   ListGoalsInput,
   ListNotesInput,
   ListSessionsInput,
@@ -70,6 +84,8 @@ import {
   UpdateNoteInput,
   UpdateTagInput,
   UpdateTaskInput,
+  UserNotFound,
+  UsernameRef,
 } from "./domain/model.ts";
 
 // The domain's values, inputs and errors, for the browser.
@@ -127,6 +143,54 @@ export class Authentication extends RpcMiddleware.Service<
   { provides: CurrentUser }
 >()("api/Authentication", { error: Schema.Union([Unauthorized, TooManyRequests]) }) {}
 
+/**
+ * Who is reading a public RPC: the signed-in, onboarded user, or `null` for
+ * a logged-out visitor (or one who hasn't picked a username yet).
+ * Provided by {@link OptionalAuthentication}.
+ */
+export class Viewer extends Context.Service<
+  Viewer,
+  { readonly user: { readonly id: string; readonly username: string } | null }
+>()("api/Viewer") {}
+
+/**
+ * The middleware of {@link PublicRpcs}: resolves the session if there is
+ * one and never requires it. Signed-in viewers share the per-user RPC
+ * budget; logged-out ones get a per-IP budget. Implemented in `./api.ts`.
+ */
+export class OptionalAuthentication extends RpcMiddleware.Service<
+  OptionalAuthentication,
+  { provides: Viewer }
+>()("api/OptionalAuthentication", { error: TooManyRequests }) {}
+
+/**
+ * Reads anyone may make, signed in or not, such as profiles at
+ * `/@username`. They run as {@link Viewer} and must decide what the
+ * viewer may see. Served at the same `/rpc` endpoint, merged into
+ * {@link ApiRpcs}; everything else there still requires sign-in.
+ */
+export class PublicRpcs extends RpcGroup.make(
+  /**
+   * `/@username`'s card, the viewer's status with them and public counts.
+   * `UserNotFound` for an unknown username or someone who blocked the viewer.
+   */
+  Rpc.make("GetProfile", {
+    payload: UsernameRef,
+    success: Profile,
+    error: Schema.Union([InvalidInput, UserNotFound]),
+  }),
+  /**
+   * A profile tab (Tasks, Habits, Goals, Sessions, Diary): the owner's
+   * completed items (and notes, in the diary) the viewer may see, newest
+   * first, paginated by `nextCursor`.
+   */
+  Rpc.make("GetProfileItems", {
+    payload: GetProfileItemsInput,
+    success: ProfileItemPage,
+    error: Schema.Union([InvalidInput, UserNotFound]),
+  }),
+).middleware(OptionalAuthentication) {}
+
 /** What the app loads on start: the user's settings and tags. */
 export class BootstrapResult extends Schema.Class<BootstrapResult>("BootstrapResult")({
   settings: Settings,
@@ -137,7 +201,7 @@ export class BootstrapResult extends Schema.Class<BootstrapResult>("BootstrapRes
  * Every RPC the API serves. Add each new procedure here with `Rpc.make(...)`
  * and implement it in `./api.ts`, as a thin call into a domain service
  * (`./domain/`). The middleware runs every RPC as the signed-in, onboarded
- * user.
+ * user, except the {@link PublicRpcs} merged in at the end.
  */
 export class ApiRpcs extends RpcGroup.make(
   /**
@@ -493,4 +557,77 @@ export class ApiRpcs extends RpcGroup.make(
     success: Schema.String,
     error: Schema.Union([InvalidInput, SessionNotFound]),
   }),
-).middleware(Authentication) {}
+  /**
+   * Asks someone to connect; if they already asked, connects at once.
+   * Returns the new status (`pending_out` or `connected`). Limited to a
+   * burst per minute and 20 a day (`SocialLimitReached`).
+   */
+  Rpc.make("SendConnectionRequest", {
+    payload: UsernameRef,
+    success: SocialStatus,
+    error: Schema.Union([InvalidInput, UserNotFound, ConnectionNotAllowed, SocialLimitReached]),
+  }),
+  Rpc.make("AcceptConnectionRequest", {
+    payload: ConnectionRequestRef,
+    success: SocialStatus,
+    error: Schema.Union([InvalidInput, ConnectionRequestNotFound]),
+  }),
+  Rpc.make("DeclineConnectionRequest", {
+    payload: ConnectionRequestRef,
+    success: SocialStatus,
+    error: Schema.Union([InvalidInput, ConnectionRequestNotFound]),
+  }),
+  /** Takes back a request the user sent. */
+  Rpc.make("CancelConnectionRequest", {
+    payload: ConnectionRequestRef,
+    success: SocialStatus,
+    error: Schema.Union([InvalidInput, ConnectionRequestNotFound]),
+  }),
+  /** Removes a connection, if there is one. */
+  Rpc.make("RemoveConnection", {
+    payload: UsernameRef,
+    success: SocialStatus,
+    error: Schema.Union([InvalidInput, UserNotFound]),
+  }),
+  /** Blocks someone: removes the connection and pending requests, and hides each from the other. */
+  Rpc.make("BlockUser", {
+    payload: UsernameRef,
+    success: SocialStatus,
+    error: Schema.Union([InvalidInput, UserNotFound, ConnectionNotAllowed]),
+  }),
+  Rpc.make("UnblockUser", {
+    payload: UsernameRef,
+    success: SocialStatus,
+    error: Schema.Union([InvalidInput, UserNotFound]),
+  }),
+  /** Settings' Connections tab: connections, incoming and outgoing requests, blocked people. */
+  Rpc.make("GetSocialOverview", {
+    success: SocialOverview,
+  }),
+  /** People by exact username or prefix (2+ characters), at most 10. Rate limited. */
+  Rpc.make("SearchPeople", {
+    payload: SearchPeopleInput,
+    success: Schema.Array(PersonResult),
+    error: Schema.Union([InvalidInput, SocialLimitReached]),
+  }),
+  /**
+   * Deletes everything the user owns and their account, once they typed
+   * their username. The client signs out afterwards.
+   */
+  Rpc.make("DeleteAccount", {
+    payload: DeleteAccountInput,
+    error: InvalidInput,
+  }),
+  /**
+   * The top scorers among the user and their connections, or everyone,
+   * for all time, this month, this week or today (in the user's zone), with
+   * the user's own place.
+   */
+  Rpc.make("GetLeaderboard", {
+    payload: GetLeaderboardInput,
+    success: Leaderboard,
+    error: InvalidInput,
+  }),
+)
+  .middleware(Authentication)
+  .merge(PublicRpcs) {}

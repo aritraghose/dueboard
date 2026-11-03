@@ -6,6 +6,7 @@ import {
   SettingsIcon,
   SunIcon,
   UserRoundIcon,
+  UsersIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -19,6 +20,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { initials } from "@/lib/people";
 import { cn } from "@/lib/utils";
 import { authClient } from "../auth-client.ts";
 
@@ -32,7 +34,7 @@ export function UserAvatar({ user, className }: { user: MenuUser; className?: st
   return (
     <Avatar className={cn("size-8", className)}>
       {user.image && <AvatarImage src={user.image} alt="" referrerPolicy="no-referrer" />}
-      <AvatarFallback>{user.username.slice(0, 1).toUpperCase()}</AvatarFallback>
+      <AvatarFallback>{initials(user.name, user.username)}</AvatarFallback>
     </Avatar>
   );
 }
@@ -70,11 +72,16 @@ export function UserMenuContent({
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
-        {/* `/@username` is built in step 13; a plain link until the route exists. */}
-        <a href={`/@${user.username}`}>
+        <Link to="/@{$username}" params={{ username: user.username }}>
           <UserRoundIcon />
           Your profile
-        </a>
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/connections">
+          <UsersIcon />
+          My connections
+        </Link>
       </DropdownMenuItem>
       {withSettings && (
         <DropdownMenuItem asChild>
