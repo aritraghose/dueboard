@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import {
   Activity,
@@ -762,6 +762,26 @@ export const listGoalsForDay = Effect.fn("listGoalsForDay")(function* (userId: s
     });
   }).pipe(orDieOnDbError);
 });
+
+/** Upcoming's goals: active ones whose target date is in `[from, last]`, by target date. */
+export const listGoalsDueBetween = (userId: string, from: LocalDate, last: LocalDate) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const rows = yield* db
+      .select()
+      .from(Goals)
+      .where(
+        and(
+          eq(Goals.userId, userId),
+          eq(Goals.status, "active"),
+          gte(Goals.targetDate, from),
+          lte(Goals.targetDate, last),
+        ),
+      )
+      .orderBy(asc(Goals.targetDate), asc(Goals.createdAt), asc(Goals.id))
+      .pipe(orDieOnDbError);
+    return rows.map(toGoal);
+  });
 
 /** `/goals`: the user's goals, oldest first, each with its links and latest progress events. */
 export const listGoals = Effect.fn("listGoals")(function* (userId: string, input: ListGoalsInput) {

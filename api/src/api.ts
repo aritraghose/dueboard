@@ -11,6 +11,7 @@ import { RpcSerialization, RpcServer } from "effect/rpc";
 import { Auth } from "./auth.ts";
 import { Hyperdrive } from "./database.ts";
 import { Database } from "./domain/database.ts";
+import * as DaysService from "./domain/days.ts";
 import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
 import * as NotesService from "./domain/notes.ts";
@@ -403,6 +404,16 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         Effect.gen(function* () {
           const user = yield* CurrentUser;
           return yield* SessionsService.listSessionsForDay(user.id, date);
+        }),
+      GetDay: ({ date }) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* DaysService.getDay(user.id, date);
+        }),
+      GetUpcoming: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* DaysService.getUpcoming(user.id, input);
         }),
       DeleteSession: ({ id }) =>
         Effect.gen(function* () {

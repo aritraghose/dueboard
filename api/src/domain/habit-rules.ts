@@ -289,6 +289,41 @@ export const streak = (
   return count;
 };
 
+// ─── Upcoming ────────────────────────────────────────────────────────────────
+
+/** A day the Upcoming list shows a habit on, with the period it stands for. */
+export interface Occurrence extends Progress {
+  readonly date: LocalDate;
+  readonly period: Period;
+}
+
+/**
+ * The days in `[from, until)` the Upcoming list shows the habit on. Specific
+ * days: every scheduled day. Flexible: once per period, on its first
+ * scheduled day in the range (so "3 times a week" shows once a week, and a
+ * daily count every day). Periods whose target is already met are left out.
+ */
+export const occurrences = (
+  habit: HabitRule,
+  pauses: ReadonlyArray<HabitPause>,
+  checkins: ReadonlyArray<HabitCheckinCount> | CheckinIndex,
+  from: LocalDate,
+  until: LocalDate,
+): Array<Occurrence> => {
+  const index = toIndex(checkins);
+  const result: Array<Occurrence> = [];
+  let shownPeriod: LocalDate | null = null;
+  for (let day = from; day < until; day = addDays(day, 1)) {
+    if (!isScheduledOn(habit, pauses, day)) continue;
+    const period = periodFor(habit, day);
+    if (period.start === shownPeriod) continue;
+    shownPeriod = period.start;
+    const progress = progressIn(habit, index, period);
+    if (!progress.complete) result.push({ ...progress, date: day, period });
+  }
+  return result;
+};
+
 // ─── Wording ─────────────────────────────────────────────────────────────────
 
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;

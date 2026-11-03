@@ -7,6 +7,7 @@ import {
   isPausedOn,
   isScheduledOn,
   normalizeSchedule,
+  occurrences,
   ordinal,
   periodFor,
   progressFor,
@@ -538,6 +539,69 @@ describe("describeSchedule", () => {
   test("ordinal", () => {
     expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 30, 31].map(ordinal)).toEqual([
       "1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "30th", "31st",
+    ]);
+  });
+});
+
+describe("occurrences", () => {
+  const dates = (list: ReadonlyArray<{ date: LocalDate }>): Array<string> => list.map((o) => o.date);
+  // Nov 1, 2026 is a Sunday.
+
+  test("weekday habits show on each of their days", () => {
+    const habit = onWeekdays([1, 3, 5]);
+    expect(dates(occurrences(habit, [], [], d("2026-11-03"), d("2026-11-17")))).toEqual([
+      "2026-11-04", "2026-11-06", "2026-11-09", "2026-11-11", "2026-11-13", "2026-11-16",
+    ]);
+  });
+
+  test("month-day habits, with the last-day fallback", () => {
+    const habit = onMonthDays([15, 31]);
+    expect(dates(occurrences(habit, [], [], d("2026-11-10"), d("2026-12-20")))).toEqual([
+      "2026-11-15", "2026-11-30", "2026-12-15",
+    ]);
+  });
+
+  test("a weekly habit shows once a week, on the period's first day in range", () => {
+    const habit = flexible(3, 1, "week");
+    const list = occurrences(habit, [], [], d("2026-11-04"), d("2026-11-22"));
+    expect(dates(list)).toEqual(["2026-11-04", "2026-11-08", "2026-11-15"]);
+    expect(list[0]!.period).toEqual({ start: d("2026-11-01"), end: d("2026-11-07") });
+    expect(list.map((o) => o.target)).toEqual([3, 3, 3]);
+  });
+
+  test("the current period carries its taps, and a met one is left out", () => {
+    const habit = flexible(3, 1, "week");
+    const partly = occurrences(habit, [], taps({ "2026-11-02": 2 }), d("2026-11-04"), d("2026-11-08"));
+    expect(partly.map((o): [string, number] => [o.date, o.done])).toEqual([["2026-11-04", 2]]);
+    const met = occurrences(habit, [], taps({ "2026-11-02": 3 }), d("2026-11-04"), d("2026-11-09"));
+    expect(dates(met)).toEqual(["2026-11-08"]);
+  });
+
+  test("a daily count shows every day", () => {
+    expect(dates(occurrences(flexible(5, 1, "day"), [], [], d("2026-11-04"), d("2026-11-07")))).toEqual([
+      "2026-11-04", "2026-11-05", "2026-11-06",
+    ]);
+  });
+
+  test("multi-unit and monthly periods", () => {
+    expect(dates(occurrences(flexible(2, 5, "day", "2026-11-01"), [], [], d("2026-11-03"), d("2026-11-17")))).toEqual([
+      "2026-11-03", "2026-11-06", "2026-11-11", "2026-11-16",
+    ]);
+    expect(dates(occurrences(flexible(10, 1, "month"), [], [], d("2026-11-20"), d("2027-01-05")))).toEqual([
+      "2026-11-20", "2026-12-01", "2027-01-01",
+    ]);
+  });
+
+  test("never before the start date, never while paused", () => {
+    expect(dates(occurrences(onWeekdays([1, 3], 1, "2026-11-10"), [], [], d("2026-11-03"), d("2026-11-17")))).toEqual([
+      "2026-11-11", "2026-11-16",
+    ]);
+    const open: Array<HabitPause> = [{ startDate: d("2026-11-01"), endDate: null }];
+    expect(occurrences(flexible(3, 1, "week"), open, [], d("2026-11-04"), d("2026-12-01"))).toEqual([]);
+    // A pause ending mid-week: the week shows on its first unpaused day.
+    const ending: Array<HabitPause> = [{ startDate: d("2026-11-01"), endDate: d("2026-11-11") }];
+    expect(dates(occurrences(flexible(3, 1, "week"), ending, [], d("2026-11-04"), d("2026-11-16")))).toEqual([
+      "2026-11-11", "2026-11-15",
     ]);
   });
 });

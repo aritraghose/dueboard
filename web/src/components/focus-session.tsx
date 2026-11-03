@@ -4,7 +4,7 @@ import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import { CheckIcon, PauseIcon, PlayIcon, PlusIcon, SquareIcon, Trash2Icon, XIcon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LiveToggle, PrivacyPill } from "@/components/privacy-controls";
 import {
@@ -724,13 +724,31 @@ const TITLE_PREFIX = /^\d+:\d{2}(:\d{2})? · /;
  */
 export function SessionSync() {
   const { session, remainingAt, waiting } = useActiveSession();
-  const { reload, finish } = useSessionActions();
+  const { reload, reloadActive, finish } = useSessionActions();
   const running = session?.status === "running";
   const now = useTicker(running, 250);
   const left = running ? remainingAt(now) : null;
   // A reload cancels the requests in flight, so a slow answer would never land.
   const inFlight = useRef(waiting);
   inFlight.current = waiting;
+  const latest = useRef(session);
+  latest.current = session;
+
+  // Checks only the active session (cheap); when its answer shows it changed
+  // (completed while away, stopped elsewhere), every session list reloads,
+  // `/now`'s days included.
+  const checkingFrom = useRef<{ id: string | null; status: string | null } | null>(null);
+  const check = useCallback(() => {
+    if (inFlight.current) return;
+    checkingFrom.current = { id: latest.current?.id ?? null, status: latest.current?.status ?? null };
+    void reloadActive();
+  }, [reloadActive]);
+  useEffect(() => {
+    const before = checkingFrom.current;
+    if (!before || waiting) return;
+    checkingFrom.current = null;
+    if ((session?.id ?? null) !== before.id || (session?.status ?? null) !== before.status) void reload();
+  }, [session, waiting, reload]);
 
   // Back from another tab, a sleeping laptop or another window: ask again.
   useEffect(() => {
@@ -738,7 +756,7 @@ export function SessionSync() {
     const refresh = () => {
       if (document.visibilityState !== "visible" || inFlight.current || Date.now() - last < 2000) return;
       last = Date.now();
-      void reload();
+      check();
     };
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
@@ -746,14 +764,12 @@ export function SessionSync() {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, [reload]);
+  }, [check]);
 
   // Reached 0: show the moment, then let the server's completion replace the
   // session. If it's still running on the next answer (an answer in flight),
   // ask again every few seconds.
   const endedId = session && left === 0 ? session.id : null;
-  const latest = useRef(session);
-  latest.current = session;
   const finishedId = useRef<string | null>(null);
   useEffect(() => {
     const ended = latest.current;
@@ -763,11 +779,10 @@ export function SessionSync() {
       finish(ended);
       toast.success(`${formatMinutes(ended.plannedMinutes)} of focus. Session complete.`);
     }
-    const retry = () => !inFlight.current && void reload();
-    retry();
-    const timer = setInterval(retry, 5000);
+    check();
+    const timer = setInterval(check, 5000);
     return () => clearInterval(timer);
-  }, [endedId, finish, reload]);
+  }, [endedId, finish, check]);
 
   // The tab's title starts with the time left while running.
   const countdown = left !== null && left > 0 ? formatCountdown(left) : null;

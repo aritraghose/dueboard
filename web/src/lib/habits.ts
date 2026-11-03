@@ -168,6 +168,25 @@ export const progressHint = (
   return `${count} by ${formatDay(progress.periodEnd, today)}`;
 };
 
+/**
+ * What a habit asks for on an Upcoming day: "3 this week", "1 more this
+ * month", "2 by Tue, Nov 10" (flexible habits show once per period), "5
+ * times" for a count on the day, or `null` for a single tap that day.
+ */
+export const upcomingHint = (
+  habit: Habit,
+  progress: { readonly done: number; readonly target: number; readonly periodEnd: LocalDate },
+  today: LocalDate,
+): string | null => {
+  if (habit.scheduleKind === "specific_days" || (habit.periodUnit === "day" && habit.periodLength === 1)) {
+    return progress.target > 1 ? `${progress.target} times` : null;
+  }
+  const left = progress.target - progress.done;
+  const amount = progress.done > 0 ? `${left} more` : String(progress.target);
+  if (habit.periodLength === 1) return `${amount} this ${habit.periodUnit}`;
+  return `${amount} by ${formatDay(progress.periodEnd, today)}`;
+};
+
 /** Whether `date` takes check-ins: today or up to 30 days back, like the API. */
 export const checkInWindow = (date: LocalDate, today: LocalDate): "open" | "future" | "too_old" =>
   date > today ? "future" : daysBetween(date, today) > HABIT_CHECKIN_DAYS_BACK ? "too_old" : "open";

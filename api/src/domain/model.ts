@@ -191,6 +191,8 @@ export const SESSION_PAGE_SIZE_DEFAULT = 30;
 export const SESSION_PAGE_SIZE_MAX = 100;
 /** `ListSessions` cursors are `<date>|<ISO timestamp>|<uuid>`; this only bounds the request body. */
 export const SESSION_CURSOR_MAX_LENGTH = 160;
+/** `GetUpcoming` covers at most this many days per call. */
+export const UPCOMING_DAYS_MAX = 60;
 
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
@@ -527,6 +529,13 @@ export const ListSessionsInput = Schema.Struct({
 });
 export type ListSessionsInput = typeof ListSessionsInput.Type;
 
+/** Upcoming: the days `[from, from + days)`, `from` today or later. */
+export const GetUpcomingInput = Schema.Struct({
+  from: LocalDate,
+  days: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: UPCOMING_DAYS_MAX })),
+});
+export type GetUpcomingInput = typeof GetUpcomingInput.Type;
+
 /** Decodes a service's input, failing with {@link InvalidInput}. */
 export const decodeInput =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
@@ -826,6 +835,45 @@ export class SessionPage extends Schema.Class<SessionPage>("SessionPage")({
   days: Schema.Array(SessionDay),
   /** `null` on the last page. */
   nextCursor: Schema.NullOr(Schema.String),
+}) {}
+
+/** `/now`'s whole day in one answer: what the per-day lists return, together. */
+export class Day extends Schema.Class<Day>("Day")({
+  date: LocalDate,
+  tasks: TasksForDay,
+  /** Open tasks with no dates (on every day), plus those settled on `date`. */
+  unscheduled: UnscheduledTasks,
+  habits: HabitsForDay,
+  goals: GoalsForDay,
+  sessions: SessionsForDay,
+  notesCount: Schema.Number,
+}) {}
+
+/**
+ * A habit on an Upcoming day. Flexible habits show once per period, on its
+ * first scheduled day in the range, so `progress` names the period ("3 this
+ * week") and carries the taps already in it.
+ */
+export class UpcomingHabit extends Schema.Class<UpcomingHabit>("UpcomingHabit")({
+  habit: Habit,
+  schedule: Schema.String,
+  progress: HabitProgress,
+}) {}
+
+/** One day of Upcoming: open tasks assigned or due, habits scheduled, active goals with that target date. */
+export class UpcomingDay extends Schema.Class<UpcomingDay>("UpcomingDay")({
+  date: LocalDate,
+  tasks: Schema.Array(DayTask),
+  habits: Schema.Array(UpcomingHabit),
+  goals: Schema.Array(Goal),
+}) {}
+
+/** The days of `[from, until)` with something on them, oldest first; empty days are left out. */
+export class Upcoming extends Schema.Class<Upcoming>("Upcoming")({
+  from: LocalDate,
+  /** The first day after the range: the next page's `from`. */
+  until: LocalDate,
+  days: Schema.Array(UpcomingDay),
 }) {}
 
 // ─── Errors ──────────────────────────────────────────────────────────────────

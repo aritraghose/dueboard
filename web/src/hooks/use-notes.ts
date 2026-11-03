@@ -15,10 +15,6 @@ import { useRun } from "./use-tasks.ts";
 
 const NOTES = ["notes"];
 
-/** The notes written on one day, oldest first. */
-export const notesForDayAtom = (date: LocalDate) =>
-  ApiClient.query("ListNotesForDay", { date }, { reactivityKeys: NOTES });
-
 /**
  * `/notes`' list: the first `pages` pages of `ListNotes` for `query`, joined.
  * A day that runs over a page boundary is merged back into one group.

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { LocalDate } from "@/lib/dates";
 import { ApiClient } from "../rpc-client.ts";
+import { habitsForDayAtom } from "./use-day.ts";
 import { failureMessage, useRun, useTags } from "./use-tasks.ts";
 
 // Habits for the UI. Every habit query carries the `habits` reactivity key
@@ -17,10 +18,6 @@ import { failureMessage, useRun, useTags } from "./use-tasks.ts";
 const HABITS = ["habits"];
 /** A habit write can move (or unlink) a linked goal, so it refreshes goals too. */
 const HABIT_WRITES = [...HABITS, "goals"];
-
-/** `/now`'s habits for one day: due and settled. */
-export const habitsForDayAtom = (date: LocalDate) =>
-  ApiClient.query("ListHabitsForDay", { date }, { reactivityKeys: HABITS });
 
 /** `/habits`: every habit, with streak, progress and the last 12 weeks. */
 export const habitListAtom = ApiClient.query("ListHabits", undefined, { reactivityKeys: HABITS });

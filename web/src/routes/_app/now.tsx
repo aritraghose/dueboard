@@ -1,8 +1,23 @@
 import type { Goal, Habit, Task } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { CheckIcon, ChevronDownIcon, PanelRightOpenIcon, PanelTopCloseIcon, PanelTopOpenIcon, PlusIcon, TimerIcon } from "lucide-react";
+import {
+  CalendarRangeIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  CircleCheckIcon,
+  ListTodoIcon,
+  PanelRightOpenIcon,
+  PanelTopCloseIcon,
+  PanelTopOpenIcon,
+  PlusIcon,
+  RepeatIcon,
+  StickyNoteIcon,
+  TargetIcon,
+  TimerIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { DayStepper, NowClock } from "@/components/day-navigator";
@@ -16,6 +31,7 @@ import { TaskDialog } from "@/components/task-card";
 import { TagChip } from "@/components/tag-chip";
 import { TagFilter } from "@/components/tag-filter";
 import { TaskList } from "@/components/task-list";
+import { UpcomingSheet } from "@/components/upcoming-sheet";
 import { ViewControls } from "@/components/view-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,18 +41,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
+import {
+  dayAtom,
+  dayUnscheduledAtom,
+  notesCountAtom,
+  sessionsForDayAtom,
+  tasksForDayAtom,
+  usePrefetchNeighborDays,
+} from "@/hooks/use-day";
 import { useGoalDialog } from "@/hooks/use-goal-dialog";
 import { type DayGoals, useDayGoals, useGoalActions } from "@/hooks/use-goals";
 import { useHabitDialog } from "@/hooks/use-habit-dialog";
 import { type DayHabits, useDayHabits, useHabitActions } from "@/hooks/use-habits";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
-import { sessionsForDayAtom, useOpenSessionsTab, useSessionActions, useSessionsTabRequest, useTimerSession } from "@/hooks/use-sessions";
+import { useOpenSessionsTab, useSessionActions, useSessionsTabRequest, useTimerSession } from "@/hooks/use-sessions";
 import { useTaskDialog } from "@/hooks/use-task-dialog";
-import { tasksForDayAtom, unscheduledAtom, useOptimisticStatus, useTagMap, useTags, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
+import { useOptimisticStatus, useTagMap, useTags, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
 import { setTopBarHidden, useTopBarHidden } from "@/hooks/use-top-bar-hidden";
 import { type ViewOptions, useViewOptions } from "@/hooks/use-view-options";
 import { type LocalDate, formatDay, isLocalDate } from "@/lib/dates";
-import { groupByTag, sortTasks } from "@/lib/tasks";
+import { noteCount } from "@/lib/notes";
+import { formatMinutes, groupByTag, sortTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 type NowSearch = {
@@ -50,7 +75,10 @@ type NowSearch = {
  * day (tasks, habits and goals, then at its bottom the Settled / Sessions /
  * Unscheduled tab row with a fold chevron) takes two thirds, Live (with a
  * note box) one third, and the day card takes it all when Live is collapsed.
- * Live (14) is a placeholder until its build step.
+ * Live (14) is a placeholder until its build step. The whole day comes from
+ * one `GetDay` request; the days before and after are kept loaded, so ← and
+ * → show them at once. Upcoming (the button in the day card's top-right
+ * corner, or U) opens a sheet over the page.
  */
 export const Route = createFileRoute("/_app/now")({
   // `date` is always set, even to `undefined`: the router merges this over
@@ -114,6 +142,8 @@ function Now() {
     else if (date) dialog.openNew(date);
   };
   useKeyShortcut("n", newItem);
+  const [upcomingOpen, setUpcomingOpen] = useState(false);
+  useKeyShortcut("u", () => setUpcomingOpen(true));
   const topBarHidden = useTopBarHidden();
 
   const changeDate = useCallback(
@@ -170,17 +200,31 @@ function Now() {
                 {topBarHidden ? <PanelTopOpenIcon /> : <PanelTopCloseIcon />}
               </Button>
               <DayStepper date={date} today={today} onChange={changeDate} />
-              {liveCollapsed && (
+              <div className="mt-1 flex items-center gap-1 justify-self-end">
                 <Button
                   variant="ghost"
-                  size="icon-sm"
-                  className="justify-self-end max-md:hidden"
-                  aria-label="Show Live"
-                  onClick={() => setLiveCollapsed(false)}
+                  size="sm"
+                  className="text-muted-foreground max-sm:size-8 max-sm:px-0"
+                  aria-keyshortcuts="U"
+                  aria-label="Upcoming"
+                  title="Upcoming (U)"
+                  onClick={() => setUpcomingOpen(true)}
                 >
-                  <PanelRightOpenIcon />
+                  <CalendarRangeIcon />
+                  <span className="max-sm:hidden">Upcoming</span>
                 </Button>
-              )}
+                {liveCollapsed && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="max-md:hidden"
+                    aria-label="Show Live"
+                    onClick={() => setLiveCollapsed(false)}
+                  >
+                    <PanelRightOpenIcon />
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
               {date && today ? (
@@ -200,6 +244,18 @@ function Now() {
               )}
             </CardContent>
           </Card>
+          {date && <PrefetchNeighbors date={date} />}
+          {today && (
+            <UpcomingSheet
+              open={upcomingOpen}
+              onOpenChange={setUpcomingOpen}
+              today={today}
+              onOpenDay={changeDate}
+              onOpenTask={dialog.openTask}
+              onEditHabit={habitDialog.openHabit}
+              onEditGoal={goalDialog.openGoal}
+            />
+          )}
           {today && (
             <TaskDialog
               target={dialog.target}
@@ -277,11 +333,13 @@ function DayBody({
   const goals = useDayGoals(date);
   const tagList = useTags();
   const dayResult = useAtomValue(tasksForDayAtom(date));
-  const unscheduledResult = useAtomValue(unscheduledAtom(date));
+  const unscheduledResult = useAtomValue(dayUnscheduledAtom(date));
+  const notesResult = useAtomValue(notesCountAtom(date));
   const { reload } = useTaskActions();
   const tags = useTagMap();
   const sessionsResult = useAtomValue(sessionsForDayAtom(date));
   const daySessions = AsyncResult.isSuccess(sessionsResult) ? sessionsResult.value.sessions : undefined;
+  const tense = date < today ? "past" : date > today ? "future" : "today";
   const { session: activeSession } = useTimerSession();
   const { reload: reloadSessions } = useSessionActions();
   const [tabRequested, tabRequestHandled] = useSessionsTabRequest();
@@ -387,14 +445,47 @@ function DayBody({
       <SettledState className={cn(inlineBelow && "flex-none")}>All tasks {onDay} settled.</SettledState>
     ) : (
       <EmptyState className={cn(inlineBelow && "flex-none")}>
-        {filtering ? `No tasks with these tags ${onDay}.` : `No tasks ${onDay}. Add one with New task, or press N.`}
+        {filtering
+          ? `No tasks with these tags ${onDay}.`
+          : tense === "past"
+            ? `No tasks were planned ${onDay}.`
+            : tense === "future"
+              ? `Nothing planned ${onDay} yet. Add a task with New task, or press N.`
+              : `No tasks ${onDay}. Add one with New task, or press N.`}
       </EmptyState>
     );
 
   const newLabel = view.show === "habits" ? "New habit" : view.show === "goals" ? "New goal" : "New task";
 
+  // Past days sum up what happened; future days what's planned.
+  const notesCount = AsyncResult.isSuccess(notesResult) ? notesResult.value : null;
+  const focused = AsyncResult.isSuccess(sessionsResult) ? sessionsResult.value.focusedMinutes : null;
+  const summary: SummaryItem[] | null =
+    tense === "today" || settledCount === null || notesCount === null || focused === null
+      ? null
+      : tense === "past"
+        ? [
+            { icon: CircleCheckIcon, count: settledList.length, text: (n) => `${plural(n, "task")} settled` },
+            { icon: RepeatIcon, count: settledHabits, text: (n) => `${plural(n, "habit")} checked` },
+            { icon: TargetIcon, count: completedGoals, text: (n) => `${plural(n, "goal")} completed` },
+            { icon: TimerIcon, count: focused, text: (n) => `${formatMinutes(n)} focused` },
+            { icon: StickyNoteIcon, count: notesCount, text: noteCount, to: "/notes" },
+          ]
+        : [
+            { icon: ListTodoIcon, count: open.length, text: (n) => `${plural(n, "task")} planned` },
+            { icon: RepeatIcon, count: dueHabits, text: (n) => `${plural(n, "habit")} due` },
+            {
+              icon: TargetIcon,
+              count: showGoals ? goals.active.filter((goal) => goal.targetDate === date).length : 0,
+              text: (n) => `${plural(n, "goal")} due`,
+            },
+          ];
+
   return (
     <LayoutGroup>
+      {tense !== "today" && (
+        <DaySummary items={summary} empty={tense === "past" ? "Nothing was recorded this day." : "Nothing planned yet."} />
+      )}
       <ViewControls
         view={view}
         onChange={onViewChange}
@@ -413,7 +504,7 @@ function DayBody({
         <section aria-label="Tasks" className="-mx-2 flex min-h-0 flex-1 flex-col overflow-y-auto px-0.5 pb-14">
           {view.show === "habits" ? (
             showHabits ? (
-              <HabitsView habits={habits} date={date} today={today} onDay={onDay} onEdit={onEditHabit} />
+              <HabitsView habits={habits} date={date} today={today} onDay={onDay} tense={tense} onEdit={onEditHabit} />
             ) : (
               <EmptyState>Habits wear the habit tag. Pick it in the tag filter to see them here.</EmptyState>
             )
@@ -454,6 +545,9 @@ function DayBody({
       </div>
 
       <DayTabs
+        // Past days open on what got done; crossing into the past remounts it unfolded.
+        key={tense === "past" ? "past" : "current"}
+        defaultOpen={tense === "past"}
         label="settled, sessions and unscheduled"
         request={tabRequested && date === today ? "sessions" : null}
         onRequestHandled={tabRequestHandled}
@@ -462,12 +556,16 @@ function DayBody({
             value: "settled",
             label: <Counted label="Settled" count={settledCount} />,
             content:
-              settledList.length > 0 || settledHabits > 0 || completedGoals > 0 ? (
+              settledCount === null && !failed ? (
+                <TaskRowsSkeleton />
+              ) : settledList.length > 0 || settledHabits > 0 || completedGoals > 0 ? (
                 <div className="flex flex-col gap-1">
                   {settledList.length > 0 && <TaskList tasks={settledList} label="Settled" {...rowProps} />}
                   {showHabits && <SettledHabits habits={habits} date={date} today={today} emptyText="" />}
                   {showGoals && <CompletedGoals goals={goals} today={today} onEdit={onEditGoal} emptyText="" />}
                 </div>
+              ) : tense === "past" ? (
+                `Nothing was settled ${onDay}.`
               ) : (
                 `Tasks, habits and goals you finish ${onDay} move here.`
               ),
@@ -500,7 +598,9 @@ function DayBody({
             value: "unscheduled",
             label: <Counted label="Unscheduled" count={unscheduled ? unscheduledOpen.length : null} />,
             content:
-              unscheduledOpen.length > 0 ? (
+              !unscheduled && !failed ? (
+                <TaskRowsSkeleton />
+              ) : unscheduledOpen.length > 0 ? (
                 <TaskList tasks={unscheduledOpen} label="Unscheduled" {...rowProps} />
               ) : (
                 "Tasks without a date wait here. Clear a task's assigned date to put it here."
@@ -521,12 +621,14 @@ function HabitsView({
   date,
   today,
   onDay,
+  tense,
   onEdit,
 }: {
   habits: DayHabits;
   date: LocalDate;
   today: LocalDate;
   onDay: string;
+  tense: Tense;
   onEdit: (habit: Habit) => void;
 }) {
   const { reload } = useHabitActions();
@@ -542,7 +644,11 @@ function HabitsView({
   }
   if (!habits.loaded) return <TaskRowsSkeleton />;
   if (habits.due.length === 0 && habits.settled.length === 0) {
-    return <EmptyState>No habits due {onDay}. Add one with New habit, or press N.</EmptyState>;
+    return (
+      <EmptyState>
+        {tense === "past" ? `No habits were due ${onDay}.` : `No habits due ${onDay}. Add one with New habit, or press N.`}
+      </EmptyState>
+    );
   }
   // Checked-off habits are in the Settled tab below.
   return (
@@ -588,6 +694,78 @@ function GoalsView({
       <DayGoalCards goals={goals} today={today} onEdit={onEdit} />
     </div>
   );
+}
+
+type Tense = "past" | "today" | "future";
+
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+type SummaryItem = {
+  readonly icon: LucideIcon;
+  readonly count: number;
+  readonly text: (count: number) => string;
+  /** Where the item links, if anywhere. */
+  readonly to?: "/notes";
+};
+
+/**
+ * One quiet line under the day's heading on past and future days: what got
+ * done (tasks settled, habits checked, minutes focused, notes) or what's
+ * planned. Only the counts above zero show; `null` while the day loads.
+ */
+function DaySummary({ items, empty }: { items: readonly SummaryItem[] | null; empty: string }) {
+  if (!items) {
+    return (
+      <div className="-mt-2 flex justify-center pb-1" aria-hidden="true">
+        <Skeleton className="h-3.5 w-48" />
+      </div>
+    );
+  }
+  const shown = items.filter((item) => item.count > 0);
+  return (
+    <ul
+      aria-label="Day summary"
+      className="-mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pb-1 text-xs text-muted-foreground"
+    >
+      {shown.length === 0 ? (
+        <li>{empty}</li>
+      ) : (
+        shown.map(({ icon: Icon, count, text, to }) => {
+          const content = (
+            <>
+              <Icon aria-hidden="true" className="size-3.5" />
+              <span className="tabular-nums">{text(count)}</span>
+            </>
+          );
+          return (
+            <li key={text(count)}>
+              {to ? (
+                <Link
+                  to={to}
+                  className="inline-flex items-center gap-1.5 rounded-sm hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                  {content}
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1.5">{content}</span>
+              )}
+            </li>
+          );
+        })
+      )}
+    </ul>
+  );
+}
+
+/** Keeps the days before and after `date` loaded once `date` itself has, so ← and → are instant. */
+function PrefetchNeighbors({ date }: { date: LocalDate }) {
+  const loaded = !AsyncResult.isInitial(useAtomValue(dayAtom(date)));
+  return loaded ? <Neighbors date={date} /> : null;
+}
+
+function Neighbors({ date }: { date: LocalDate }) {
+  usePrefetchNeighborDays(date);
+  return null;
 }
 
 function DayBodySkeleton() {

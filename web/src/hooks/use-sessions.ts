@@ -21,13 +21,16 @@ import { useRun } from "./use-tasks.ts";
 // time keeps running while a tab sleeps, so the count stays right after it.
 
 const SESSIONS = ["sessions"];
+/**
+ * The active session alone. `SessionSync` refreshes it often (on focus, at
+ * 0), while `sessions` also reloads `/now`'s whole days (`GetDay`).
+ */
+const ACTIVE_SESSION = ["active-session"];
 
 /** The running or paused session, or `null`. */
-export const activeSessionAtom = ApiClient.query("GetActiveSession", undefined, { reactivityKeys: SESSIONS });
-
-/** The sessions started on one day, oldest first, with its focused minutes. */
-export const sessionsForDayAtom = (date: LocalDate) =>
-  ApiClient.query("ListSessionsForDay", { date }, { reactivityKeys: SESSIONS });
+export const activeSessionAtom = ApiClient.query("GetActiveSession", undefined, {
+  reactivityKeys: [...SESSIONS, ...ACTIVE_SESSION],
+});
 
 /**
  * `/sessions`' list: the first `pages` pages of `ListSessions`, joined. A
@@ -242,6 +245,8 @@ export function useSessionActions() {
       finish: (session: FocusSession) => registry.set(finishedAtom, { session }),
       /** Refetches every session query on screen, failed ones included. */
       reload: () => run(Reactivity.invalidate(SESSIONS)),
+      /** Refetches only the active session. */
+      reloadActive: () => run(Reactivity.invalidate(ACTIVE_SESSION)),
     };
   }, [run, registry]);
 }

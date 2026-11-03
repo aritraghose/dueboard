@@ -19,7 +19,6 @@ import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import * as Reactivity from "effect/reactivity/Reactivity";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { LocalDate } from "@/lib/dates";
 import { ApiClient } from "../rpc-client.ts";
 import { useBootstrap } from "./use-bootstrap.ts";
 
@@ -32,13 +31,8 @@ const TAGS = ["tags"];
 /** A task write can move (or unlink) a linked goal, so it refreshes goals too. */
 const TASK_WRITES = [...TASKS, "goals"];
 
-/** `/now`'s tasks for one day: open and settled, assigned or due that day. */
-export const tasksForDayAtom = (date: LocalDate) =>
-  ApiClient.query("ListTasksForDay", { date }, { reactivityKeys: TASKS });
-
-/** Open tasks with no dates, plus those settled on `settledOn`. */
-export const unscheduledAtom = (settledOn?: LocalDate) =>
-  ApiClient.query("ListUnscheduledTasks", settledOn ? { settledOn } : {}, { reactivityKeys: TASKS });
+/** `/tasks`' open tasks with no dates. `/now` reads its own from `GetDay` (`use-day.ts`). */
+export const unscheduledAtom = ApiClient.query("ListUnscheduledTasks", {}, { reactivityKeys: TASKS });
 
 export const taskAtom = (id: string) => ApiClient.query("GetTask", { id }, { reactivityKeys: TASKS });
 

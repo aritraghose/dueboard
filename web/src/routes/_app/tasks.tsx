@@ -209,7 +209,7 @@ function Results(props: ResultsProps) {
 
 /** Unscheduled tasks come whole from `ListUnscheduledTasks`; tag and search filter them here. */
 function UnscheduledResults({ tagIds, query, today, onClearFilters, onOpenTask, display }: ResultsProps) {
-  const result = useAtomValue(unscheduledAtom());
+  const result = useAtomValue(unscheduledAtom);
   const { reload } = useTaskActions();
   const tasks = useMemo(() => {
     if (!AsyncResult.isSuccess(result)) return undefined;

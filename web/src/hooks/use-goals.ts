@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import type { LocalDate } from "@/lib/dates";
 import { type ItemGoalDraft, withShownValue } from "@/lib/goals";
 import { ApiClient } from "../rpc-client.ts";
+import { goalsForDayAtom } from "./use-day.ts";
 import { failureMessage, useRun, useTags } from "./use-tasks.ts";
 
 // Goals for the UI. Every goal query carries the `goals` reactivity key.
@@ -29,10 +30,6 @@ import { failureMessage, useRun, useTags } from "./use-tasks.ts";
 // change that could move a goal.
 
 export const GOALS = ["goals"];
-
-/** `/now`'s goals for one day: active, and completed that day. */
-export const goalsForDayAtom = (date: LocalDate) =>
-  ApiClient.query("ListGoalsForDay", { date }, { reactivityKeys: GOALS });
 
 /** `/goals`: every goal, with its links and last 10 progress events. */
 export const goalListAtom = ApiClient.query("ListGoals", {}, { reactivityKeys: GOALS });

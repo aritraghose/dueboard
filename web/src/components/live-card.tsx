@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
-import { notesForDayAtom } from "@/hooks/use-notes";
+import { notesCountAtom } from "@/hooks/use-day";
 import type { LocalDate } from "@/lib/dates";
 import { noteCount } from "@/lib/notes";
 
@@ -65,8 +65,8 @@ export function LiveCard({
 
 /** Today's notes count under the note box, once there is one; it opens `/notes`. */
 function TodayNotes({ today }: { today: LocalDate }) {
-  const result = useAtomValue(notesForDayAtom(today));
-  const count = AsyncResult.isSuccess(result) ? result.value.notes.length : 0;
+  const result = useAtomValue(notesCountAtom(today));
+  const count = AsyncResult.isSuccess(result) ? result.value : 0;
   if (count === 0) return null;
   return (
     <Link

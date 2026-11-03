@@ -20,6 +20,7 @@ import {
   indexCheckins,
   isScheduledOn,
   normalizeSchedule,
+  occurrences,
   progressFor,
   streak,
   type CheckinIndex,
@@ -40,6 +41,7 @@ import {
   HabitSummary,
   HabitsForDay,
   Id,
+  UpcomingHabit,
   InvalidInput,
   UpdateHabitInput,
   decodeInput,
@@ -508,6 +510,46 @@ export const listHabitsForDay = Effect.fn("listHabitsForDay")(function* (
     });
   }).pipe(orDieOnDbError);
 });
+
+/**
+ * Upcoming's habits on the days of `[from, until)`, per day, oldest habit
+ * first: every scheduled day for specific-days habits, and once per period
+ * for flexible ones (`occurrences`). Archived and paused habits never show.
+ */
+export const listUpcomingHabits = (userId: string, from: LocalDate, until: LocalDate) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const habits = yield* db
+      .select()
+      .from(Habits)
+      .where(and(eq(Habits.userId, userId), ne(Habits.status, "archived")))
+      .orderBy(asc(Habits.createdAt), asc(Habits.id));
+    const ids = habits.map((h) => h.id);
+    const pauses = yield* loadPauses(db, ids);
+    const checkins = yield* loadCheckins(db, userId, ids);
+    const byDay = new Map<LocalDate, Array<UpcomingHabit>>();
+    for (const habit of habits) {
+      const index = indexCheckins(checkins.get(habit.id) ?? []);
+      for (const { date, period, done, target, complete } of occurrences(
+        habit,
+        pauses.get(habit.id) ?? [],
+        index,
+        from,
+        until,
+      )) {
+        const list = byDay.get(date) ?? [];
+        list.push(
+          new UpcomingHabit({
+            habit: toHabit(habit),
+            schedule: describeSchedule(habit),
+            progress: new HabitProgress({ periodStart: period.start, periodEnd: period.end, done, target, complete }),
+          }),
+        );
+        byDay.set(date, list);
+      }
+    }
+    return byDay;
+  }).pipe(orDieOnDbError);
 
 /** `/habits`: every habit (archived ones too), oldest first, with its streak, progress and last 12 weeks. */
 export const listHabits = Effect.fn("listHabits")(function* (userId: string) {

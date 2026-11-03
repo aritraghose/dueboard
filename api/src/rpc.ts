@@ -13,6 +13,7 @@ import {
   CreateNoteInput,
   CreateTagInput,
   CreateTaskInput,
+  Day,
   ExtendSessionInput,
   FocusSession,
   Goal,
@@ -21,6 +22,7 @@ import {
   GoalNotFound,
   GoalSummary,
   GoalsForDay,
+  GetUpcomingInput,
   Habit,
   HabitCheckInInput,
   HabitNotFound,
@@ -62,6 +64,7 @@ import {
   TasksForDay,
   UnlinkGoalItemInput,
   UnscheduledTasks,
+  Upcoming,
   UpdateGoalInput,
   UpdateHabitInput,
   UpdateNoteInput,
@@ -463,6 +466,25 @@ export class ApiRpcs extends RpcGroup.make(
   Rpc.make("ListSessionsForDay", {
     payload: { date: LocalDate },
     success: SessionsForDay,
+    error: InvalidInput,
+  }),
+  /**
+   * Everything `/now` shows for a day in one call: its tasks, unscheduled
+   * tasks, habits, goals, sessions and the notes count.
+   */
+  Rpc.make("GetDay", {
+    payload: { date: LocalDate },
+    success: Day,
+    error: InvalidInput,
+  }),
+  /**
+   * Upcoming: open tasks, scheduled habits (flexible ones once per period)
+   * and dated goals for `[from, from + days)`, grouped by day, at most 60
+   * days. Empty days are left out; `InvalidInput` when `from` is in the past.
+   */
+  Rpc.make("GetUpcoming", {
+    payload: GetUpcomingInput,
+    success: Upcoming,
     error: InvalidInput,
   }),
   /** Deletes a session and its activity, and returns its id. */

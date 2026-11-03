@@ -151,6 +151,8 @@ plain `date`**, interpreted in the owner's time zone.
   - When every due habit is done, `/now` shows "All habits checked".
   - Streak = consecutive periods (or scheduled days) where the target was met.
 - **Goals**: every `active` goal shows every day until completed. Paused goals are hidden from `/now`.
+- `/now` reads a day in one call, `GetDay` (`domain/days.ts`), built from the per-type services above.
+- **Upcoming** (`GetUpcoming`, from tomorrow, at most 60 days per call, empty days left out): open tasks on their assigned and deadline dates, specific-days habits on each scheduled day, flexible habits once per period on its first scheduled day in range (periods already met are left out), and active goals on their `target_date`.
 
 ## 5. Activity, privacy and visibility
 

@@ -253,6 +253,41 @@ export const listTasksForDay = Effect.fn("listTasksForDay")(function* (
   return new TasksForDay({ date: day, open, settled });
 });
 
+/**
+ * Upcoming's tasks: open ones assigned or due on a day of `[from, last]`,
+ * per day, oldest first. A task with both dates in range shows on both.
+ */
+export const listOpenTasksBetween = (userId: string, from: LocalDate, last: LocalDate) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const rows = yield* db
+      .select()
+      .from(Tasks)
+      .where(
+        and(
+          eq(Tasks.userId, userId),
+          ne(Tasks.status, "settled"),
+          or(
+            and(gte(Tasks.assignedDate, from), lte(Tasks.assignedDate, last)),
+            and(gte(Tasks.deadlineDate, from), lte(Tasks.deadlineDate, last)),
+          ),
+        ),
+      )
+      .orderBy(asc(Tasks.createdAt), asc(Tasks.id))
+      .pipe(orDieOnDbError);
+    const byDay = new Map<LocalDate, Array<DayTask>>();
+    for (const row of rows) {
+      const task = toTask(row);
+      for (const day of new Set([row.assignedDate, row.deadlineDate])) {
+        if (!day || day < from || day > last) continue;
+        const list = byDay.get(day) ?? [];
+        list.push(new DayTask({ task, role: dateRoleOn(row, day)! }));
+        byDay.set(day, list);
+      }
+    }
+    return byDay;
+  });
+
 const unscheduled = and(isNull(Tasks.assignedDate), isNull(Tasks.deadlineDate));
 
 /**

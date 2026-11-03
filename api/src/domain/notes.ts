@@ -169,6 +169,18 @@ export const listNotesForDay = Effect.fn("listNotesForDay")(function* (
   return new NotesForDay({ date: day, notes: rows.map(toNote) });
 });
 
+/** How many notes were written on `date`, for `/now`. */
+export const countNotesForDay = (userId: string, day: LocalDate) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const [row] = yield* db
+      .select({ value: count() })
+      .from(Notes)
+      .where(and(eq(Notes.userId, userId), eq(Notes.localDate, day)))
+      .pipe(orDieOnDbError);
+    return row?.value ?? 0;
+  });
+
 /** `/notes`: newest day first, newest note first, grouped by day and paginated by cursor. */
 export const listNotes = Effect.fn("listNotes")(function* (userId: string, input: ListNotesInput) {
   const filters = yield* decodeInput(ListNotesInput)(input);
