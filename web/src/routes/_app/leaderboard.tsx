@@ -54,9 +54,9 @@ function LeaderboardPage() {
     <Page>
       <PageHeader
         title="Leaderboard"
-        description="+1 for each settled task and finished focus session, and for each habit you check or goal you move on a day."
+        description="A point per settled task, finished session, checked habit or moved goal."
       />
-      <div className="flex w-full max-w-2xl flex-col gap-4 pb-8">
+      <div className="flex w-full flex-col gap-4 pb-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Tabs
             value={scope}

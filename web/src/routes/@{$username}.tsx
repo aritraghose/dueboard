@@ -248,7 +248,7 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
       aria-label={`${person.name}'s profile`}
       className="overflow-hidden rounded-xl border bg-card shadow-(--card-shadow)"
     >
-      {/* The band wears the owner's user color, the color Live shows their name in. */}
+      {/* Only the band wears the owner's user color (also used by Live and the graph). */}
       <div aria-hidden="true" className="profile-band h-24 sm:h-28" />
       <div className="flex flex-col gap-4 px-5 pb-5">
         <div className="-mt-11 flex flex-wrap items-end justify-between gap-3">
@@ -257,17 +257,17 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
         </div>
         <div className="flex flex-col gap-1">
           <h1 className="text-title font-semibold break-words">{person.name}</h1>
-          <p className="font-medium text-tag-ink">@{person.username}</p>
+          <p className="text-muted-foreground">@{person.username}</p>
           <p className="text-sm text-muted-foreground">Joined {joinedFormat.format(profile.joinedAt)}</p>
         </div>
         {status.state === "pending_in" && (
-          <p className="rounded-lg bg-tag-soft px-3 py-2 text-sm text-tag-ink">
+          <p className="rounded-lg bg-muted px-3 py-2 text-sm">
             {person.name.split(/\s+/)[0]} asked to connect with you.
           </p>
         )}
         {status.state === "blocked" && (
           <p className="text-sm text-muted-foreground">
-            You blocked @{person.username}. Neither of you sees the other's activity until you unblock them.
+            You blocked @{person.username}.
           </p>
         )}
         {connectionsText && (
@@ -284,7 +284,7 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
             )}
             {counts && (
               <span className="flex items-baseline gap-1.5" title="+1 for each settled task and finished focus session, and for each habit checked or goal moved on a day">
-                <span className="text-lg font-semibold text-tag-ink tabular-nums">{counts.points.toLocaleString()}</span>
+                <span className="text-lg font-semibold tabular-nums">{counts.points.toLocaleString()}</span>
                 <span className="text-sm text-muted-foreground">{counts.points === 1 ? "point" : "points"}</span>
               </span>
             )}

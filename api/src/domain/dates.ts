@@ -110,3 +110,55 @@ export const monthsBetween = (from: LocalDate, to: LocalDate): number => {
   const [ty, tm] = to.split("-").map(Number) as [number, number];
   return (ty - fy) * 12 + (tm - fm);
 };
+
+// Wall-clock parts, for the zone's UTC offset at an instant.
+const clockFormatters = new Map<string, Intl.DateTimeFormat>();
+const clockFormatterFor = (timeZone: string) => {
+  let formatter = clockFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    clockFormatters.set(timeZone, formatter);
+  }
+  return formatter;
+};
+
+/** How far `timeZone`'s wall clock is ahead of UTC at `instant`, in ms. */
+const offsetAt = (instant: number, timeZone: string): number => {
+  const parts = clockFormatterFor(timeZone).formatToParts(new Date(instant));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wall = Date.UTC(
+    part("year"),
+    part("month") - 1,
+    part("day"),
+    part("hour"),
+    part("minute"),
+    part("second"),
+  );
+  return wall - Math.floor(instant / 1000) * 1000;
+};
+
+/**
+ * The instant `date` begins in `timeZone`. When a DST change skips
+ * midnight, the first instant of the day after the gap. Throws on an
+ * invalid zone.
+ */
+export const startOfDayInstant = (date: LocalDate, timeZone: string): Date => {
+  const midnight = toUtc(date).getTime();
+  // Guess with the offset at UTC midnight, then correct once with the
+  // offset at the guess, which covers a change between the two.
+  let instant = midnight - offsetAt(midnight, timeZone);
+  instant = midnight - offsetAt(instant, timeZone);
+  // Inside a skipped hour the result lands on the day before: move on.
+  if (localDateOf(new Date(instant), timeZone) !== date) instant += 3_600_000;
+  return new Date(instant);
+};

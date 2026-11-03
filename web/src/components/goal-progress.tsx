@@ -273,7 +273,7 @@ function GoalMenu({ goal, onEdit }: { goal: Goal; onEdit: (goal: Goal) => void }
       return;
     }
     toast(`Paused "${goal.name}"`, {
-      description: "It's off your days until you resume it. Linked habits and tasks still move it.",
+      description: "It's off your days until you resume it.",
       action: {
         label: "Undo",
         onClick: async () => {

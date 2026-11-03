@@ -3,8 +3,18 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import { routeAgentRequest } from "agents";
-import { convertToModelMessages, pruneMessages, streamText } from "ai";
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  pruneMessages,
+  streamText,
+  type UIMessage,
+} from "ai";
 import type { AgentEnv } from "./AgentWorker.ts";
+import { AI_LIMIT_REACHED, AI_UNITS_PER_MESSAGE } from "./domain/usage-constants.ts";
+import { usageClient } from "./internal-client.ts";
+import { MAX_CHAT_MESSAGE_LENGTH } from "./limits.ts";
 
 /** Meta's Muse Spark, from the AI Gateway model catalog. */
 const MODEL = "meta/muse-spark-1.3";
@@ -38,7 +48,8 @@ function museSpark(env: AgentEnv, userId: string) {
   const meta = createOpenAI({
     // Never sent: the binding authenticates, and the gateway adds Meta's key.
     apiKey: "byok",
-    fetch: async (_url, init) =>
+    // Bun's `fetch` type adds `preconnect`, which a custom fetch never needs.
+    fetch: (async (_url: unknown, init?: RequestInit) =>
       run(MODEL, JSON.parse(String(init?.body)), {
         gateway: { id: env.AI_GATEWAY_ID, metadata: { userId } },
         // BYOK only: without a stored Meta key, fail instead of billing the
@@ -47,7 +58,7 @@ function museSpark(env: AgentEnv, userId: string) {
         openaiEndpoint: "/v1/responses",
         returnRawResponse: true,
         signal: init?.signal,
-      }),
+      })) as typeof fetch,
   });
   return meta.responses(MODEL);
 }
@@ -55,6 +66,21 @@ function museSpark(env: AgentEnv, userId: string) {
 const SYSTEM_PROMPT = `You are the assistant inside Dueboard, an app that keeps everything that's due on one board.
 Help the user plan, prioritise and break down their work. Be concise and concrete.
 Format replies in Markdown, and use fenced code blocks with a language for any code.`;
+
+/**
+ * A reply that ends the turn with an error and no model call. The client's
+ * `useAgentChat` shows it as `error.message`; the empty assistant message
+ * isn't stored.
+ */
+const refuse = (errorText: string) =>
+  createUIMessageStreamResponse({
+    stream: createUIMessageStream({
+      execute: ({ writer }) => writer.write({ type: "error", errorText }),
+    }),
+  });
+
+const textOf = (message: UIMessage | undefined) =>
+  message?.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("") ?? "";
 
 /**
  * One persistent chat per user. The Agents SDK stores the transcript in the
@@ -67,9 +93,33 @@ export class ChatAgent extends AIChatAgent<AgentEnv> {
 
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const { success } = await this.env.CHAT_RATE_LIMIT.limit({ key: this.name });
-    if (!success) {
-      throw new Error("Too many messages. Please wait a minute and try again.");
+    if (!success) return refuse("Too many messages. Please wait a minute and try again.");
+
+    const latest = this.messages.findLast((message) => message.role === "user");
+    if (textOf(latest).length > MAX_CHAT_MESSAGE_LENGTH) {
+      return refuse(`Messages can be up to ${MAX_CHAT_MESSAGE_LENGTH} characters.`);
     }
+
+    // The AI quota (architecture.md §8): a reply turn is one message.
+    // Checked before the model call; out of quota, the model isn't called
+    // and the client shows its own limit notice for `AI_LIMIT_REACHED`.
+    // Step 17's `TiboAgent` keeps this contract.
+    const usage = usageClient(this.env.API);
+    const { allowed } = await usage.check(this.name, AI_UNITS_PER_MESSAGE);
+    if (!allowed) return refuse(AI_LIMIT_REACHED);
+
+    // Recorded once the model has answered: when the reply finishes, or when
+    // the user stops it after it started (the tokens were spent). A failed
+    // call isn't charged.
+    let started = false;
+    let charged = false;
+    const charge = async () => {
+      if (charged) return;
+      charged = true;
+      await usage
+        .record(this.name, AI_UNITS_PER_MESSAGE, "tibo_reply", options?.requestId ?? null)
+        .catch((error: unknown) => console.error("Recording AI usage failed", error));
+    };
 
     const result = streamText({
       model: museSpark(this.env, this.name),
@@ -80,6 +130,11 @@ export class ChatAgent extends AIChatAgent<AgentEnv> {
         reasoning: "before-last-message",
       }),
       abortSignal: options?.abortSignal,
+      onChunk: () => {
+        started = true;
+      },
+      onFinish: charge,
+      onAbort: () => (started ? charge() : undefined),
     });
 
     return result.toUIMessageStreamResponse();

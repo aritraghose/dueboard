@@ -22,7 +22,7 @@ function Discover() {
 
   return (
     <Page>
-      <PageHeader title="Discover" description="Find people to connect with, and answer their requests.">
+      <PageHeader title="Discover">
         <Button asChild variant="outline">
           <Link to="/connections">
             <UsersIcon />
@@ -33,10 +33,9 @@ function Discover() {
           </Link>
         </Button>
       </PageHeader>
-      <div className="flex w-full max-w-2xl flex-col gap-6 pb-8">
+      <div className="flex w-full flex-col gap-6 pb-8">
         <PeopleSection
           title="Find people"
-          description="Search by name or username. Open someone to see their profile."
         >
           <div className="py-3">
             <PeopleSearch />
@@ -44,7 +43,7 @@ function Discover() {
         </PeopleSection>
 
         {(failed || !data || data.incoming.length > 0) && (
-          <PeopleSection title="Requests" description="People who asked to connect with you." count={data?.incoming.length}>
+          <PeopleSection title="Requests" count={data?.incoming.length}>
             {failed ? (
               <PeopleLoadFailed what="your requests" onRetry={() => void reload()} />
             ) : (
@@ -61,7 +60,7 @@ function Discover() {
         )}
 
         {data && data.outgoing.length > 0 && (
-          <PeopleSection title="Sent" description="Requests waiting for an answer." count={data.outgoing.length}>
+          <PeopleSection title="Sent" count={data.outgoing.length}>
             <PeopleList
               people={data.outgoing.map((request) => ({
                 key: request.id,

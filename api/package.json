@@ -16,6 +16,12 @@
       "types": "./lib/rpc.d.ts",
       "import": "./lib/rpc.js",
       "default": "./lib/rpc.js"
+    },
+    "./limits": {
+      "bun": "./src/limits.ts",
+      "types": "./lib/limits.d.ts",
+      "import": "./lib/limits.js",
+      "default": "./lib/limits.js"
     }
   },
   "scripts": {

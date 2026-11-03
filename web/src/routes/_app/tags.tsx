@@ -30,10 +30,10 @@ function Tags() {
 
   return (
     <Page>
-      <PageHeader title="Tags" description="Group your tasks by tag. Changing one changes it everywhere.">
+      <PageHeader title="Tags">
         <CreateButton label="New tag" onClick={() => edit(null)} />
       </PageHeader>
-      <div className="flex w-full max-w-2xl flex-col gap-6 pb-8">
+      <div className="flex w-full flex-col gap-6 pb-8">
         <TagSection title="Your tags" description="Deleting one moves its tasks to default.">
           {!tags ? (
             <Skeleton className="h-24 w-full" />
@@ -41,13 +41,13 @@ function Tags() {
             <TagList tags={own} onEdit={edit} />
           ) : (
             <p className="py-3 text-sm text-muted-foreground">
-              No tags of your own yet. Add one to sort tasks into work, home, or anything else.
+              No tags of your own yet.
             </p>
           )}
         </TagSection>
         <TagSection
           title="Built-in tags"
-          description="Every task starts as default; habits and goals wear theirs. They keep their names, but you can recolor them."
+          description="You can recolor these, not rename them."
         >
           {tags ? <TagList tags={system} onEdit={edit} /> : <Skeleton className="h-20 w-full" />}
         </TagSection>

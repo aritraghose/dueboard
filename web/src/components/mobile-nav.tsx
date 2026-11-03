@@ -71,7 +71,7 @@ export function MobileNav({ user, className }: { user: MenuUser; className?: str
                 <UserAvatar user={user} className="size-5" />
                 Profile
               </DropdownMenuTrigger>
-              <UserMenuContent user={user} withSettings side="top" align="end" sideOffset={14} />
+              <UserMenuContent user={user} side="top" align="end" sideOffset={14} />
             </DropdownMenu>
           </li>
         </ul>

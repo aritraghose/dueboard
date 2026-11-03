@@ -80,7 +80,7 @@ function Notes() {
 
   return (
     <Page>
-      <PageHeader title="Notes" description="Short notes on your days, 60 characters at a time." />
+      <PageHeader title="Notes" />
       <div className="flex w-full flex-col gap-6 pb-8">
         <NoteComposer
           user={user}
@@ -216,7 +216,7 @@ function Results({
       <PageEmpty
         icon={NotebookPenIcon}
         title="No notes yet"
-        description="Write one above. Notes show up here, newest first, grouped by day."
+        description="Write one above."
         className="min-h-60"
       />
     );

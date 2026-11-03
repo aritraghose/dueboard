@@ -34,7 +34,7 @@ function Boards() {
 
   return (
     <Page>
-      <PageHeader title="Boards" description="Everything you keep track of, one board each." />
+      <PageHeader title="Boards" />
       {/*
         Square cards, close together, sized to the window: ten of them, in
         rows of two on narrow screens and five from `md`, so no card is left alone

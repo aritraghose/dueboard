@@ -45,15 +45,11 @@ const THEMES = [
   { value: "dark", label: "Dark", icon: MoonIcon },
 ] satisfies { value: Theme; label: string; icon: LucideIcon }[];
 
-/**
- * The avatar menu: profile, theme and sign out. On phones it also holds
- * Settings, which has no place of its own in the phone nav.
- */
+/** The avatar menu: profile, connections, settings, theme and sign out. */
 export function UserMenuContent({
   user,
-  withSettings = false,
   ...props
-}: { user: MenuUser; withSettings?: boolean } & React.ComponentProps<typeof DropdownMenuContent>) {
+}: { user: MenuUser } & React.ComponentProps<typeof DropdownMenuContent>) {
   const { theme, setTheme } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -83,14 +79,12 @@ export function UserMenuContent({
           My connections
         </Link>
       </DropdownMenuItem>
-      {withSettings && (
-        <DropdownMenuItem asChild>
-          <Link to="/settings">
-            <SettingsIcon />
-            Settings
-          </Link>
-        </DropdownMenuItem>
-      )}
+      <DropdownMenuItem asChild>
+        <Link to="/settings">
+          <SettingsIcon />
+          Settings
+        </Link>
+      </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Theme</DropdownMenuLabel>
       <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>

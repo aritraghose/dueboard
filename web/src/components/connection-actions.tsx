@@ -210,8 +210,8 @@ export function ConnectionActions({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === "block"
-                ? "You won't see each other's profiles or activity, and they can't send you requests. Any connection or pending request between you ends. They aren't told."
-                : "You'll stop seeing each other's connections-only items. They aren't told, and either of you can ask to connect again."}
+                ? "You'll stop seeing each other, and any connection between you ends. They aren't told."
+                : "They aren't told, and either of you can ask again later."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

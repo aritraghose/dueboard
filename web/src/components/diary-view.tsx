@@ -150,8 +150,8 @@ export function DiaryView({
         title={from ? "Nothing on or before this day" : self ? "Your diary is empty" : "Nothing to show yet"}
         description={
           self
-            ? "Settled tasks, met habit goals, goal progress, finished sessions and notes collect here, one day at a time."
-            : "When they get things done that you're allowed to see, their days show here."
+            ? "What you get done collects here, one day at a time."
+            : "Their days show here."
         }
         className="min-h-48 flex-none rounded-xl border border-dashed"
       />

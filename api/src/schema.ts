@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   ACTIVITY_KIND,
+  AI_USAGE_REASON,
   ACTIVITY_SUBJECT,
   CONNECTION_REQUEST_STATUS,
   GOAL_COUNT_MAX,
@@ -80,6 +81,7 @@ export const goalStatus = pgEnum("goal_status", GOAL_STATUS);
 export const goalLinkItem = pgEnum("goal_link_item", GOAL_LINK_ITEM);
 export const goalProgressSource = pgEnum("goal_progress_source", GOAL_PROGRESS_SOURCE);
 export const focusSessionStatus = pgEnum("focus_session_status", SESSION_STATUS);
+export const aiUsageReason = pgEnum("ai_usage_reason", AI_USAGE_REASON);
 export const connectionRequestStatus = pgEnum(
   "connection_request_status",
   CONNECTION_REQUEST_STATUS,
@@ -641,6 +643,48 @@ export const Blocks = pgTable(
 );
 export type BlockRow = typeof Blocks.$inferSelect;
 
+/**
+ * AI usage per user and month (`domain/usage.ts`, architecture.md §8), in
+ * units (one message = 2). `period` is `YYYY-MM` in the user's time zone
+ * when the charge was made, so a new month starts a new row.
+ */
+export const AiUsageTotals = pgTable(
+  "ai_usage",
+  {
+    userId: text("user_id").notNull(),
+    period: text("period").notNull(),
+    units: integer("units").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.period] }),
+    check("ai_usage_units", sql`${t.units} >= 0`),
+  ],
+);
+export type AiUsageTotalRow = typeof AiUsageTotals.$inferSelect;
+
+/** One row per charge, for audits and (later) per-feature reports. */
+export const AiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: id(),
+    userId: userId(),
+    units: integer("units").notNull(),
+    reason: aiUsageReason("reason").notNull(),
+    /** What was charged for, such as a turn or relay id. */
+    ref: text("ref"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("ai_usage_events_user_created_idx").on(t.userId, t.createdAt),
+    check("ai_usage_events_units", sql`${t.units} > 0`),
+  ],
+);
+export type AiUsageEventRow = typeof AiUsageEvents.$inferSelect;
+
 export const relations = defineRelations(
   {
     UserSettings,
@@ -659,6 +703,8 @@ export const relations = defineRelations(
     ConnectionRequests,
     Connections,
     Blocks,
+    AiUsageTotals,
+    AiUsageEvents,
   },
   () => ({}),
 );

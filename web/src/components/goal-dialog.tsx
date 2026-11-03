@@ -476,8 +476,8 @@ export function DeleteGoalDialog({
       <AlertDialogHeader>
         <AlertDialogTitle>Delete this goal?</AlertDialogTitle>
         <AlertDialogDescription>
-          “{goal.name}” will be removed with its progress history and links, including its place in your diary and
-          Live. The habits and tasks linked to it stay. This can't be undone.
+          “{goal.name}” and its progress history will be removed. Linked habits and tasks stay. This
+          can't be undone.
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>

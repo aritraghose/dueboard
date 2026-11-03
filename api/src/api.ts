@@ -2,6 +2,7 @@ import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Drizzle from "@alchemy.run/drizzle/Postgres";
 // import * as Neon from "@alchemy.run/neon"; // Neon.Connect alternative
 import { RuntimeContext } from "alchemy";
+import * as Config from "effect/Config";
 import type { HttpEffect } from "alchemy/Http";
 import * as Effect from "effect/Effect";
 import { HttpServerRequest } from "effect/http/HttpServerRequest";
@@ -27,14 +28,14 @@ import * as SettingsService from "./domain/settings.ts";
 import * as SocialService from "./domain/social.ts";
 import * as TagsService from "./domain/tags.ts";
 import * as TasksService from "./domain/tasks.ts";
+import * as UsageService from "./domain/usage.ts";
+import { AiQuota } from "./domain/usage.ts";
+import { serveInternal } from "./internal.ts";
+import { INTERNAL_PATH_PREFIX } from "./internal-client.ts";
 // import { NeonDatabase } from "./database.ts"; // Neon.Connect alternative
+import { LIMITS, bindingProps } from "./limits.ts";
 import {
-  CONNECTION_REQUEST_LIMIT,
-  PEOPLE_SEARCH_LIMIT,
-  PUBLIC_READ_LIMIT,
-  RPC_LIMIT,
-} from "./limits.ts";
-import {
+  AI_MONTHLY_MESSAGE_QUOTA_DEFAULT,
   ApiRpcs,
   Authentication,
   BootstrapResult,
@@ -85,13 +86,21 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
     // Rate Limiting bindings, configured in `./limits.ts` (architecture.md
     // §9). The per-user RPC budget keeps one account from flooding the
     // database; the others guard social writes, search and public reads.
-    const rpcLimit = yield* Cloudflare.RateLimit("RPC_RATE_LIMIT", RPC_LIMIT);
-    const connectionRequestLimit = yield* Cloudflare.RateLimit(
-      "CONNECTION_REQUEST_RATE_LIMIT",
-      CONNECTION_REQUEST_LIMIT,
+    const rateLimit = (spec: (typeof LIMITS)[keyof typeof LIMITS]) =>
+      Cloudflare.RateLimit(spec.name, bindingProps(spec));
+    const rpcLimit = yield* rateLimit(LIMITS.rpc);
+    const connectionRequestLimit = yield* rateLimit(LIMITS.connectionRequest);
+    const peopleSearchLimit = yield* rateLimit(LIMITS.peopleSearch);
+    const publicReadLimit = yield* rateLimit(LIMITS.publicRead);
+
+    // The monthly AI quota in messages (architecture.md §8). Set
+    // `AI_MONTHLY_MESSAGE_QUOTA` where you deploy to change it; without it
+    // nothing is bound and the default applies. `user_settings.ai_quota_override`
+    // replaces it for one user.
+    const monthlyMessages = yield* Config.Int("AI_MONTHLY_MESSAGE_QUOTA").pipe(
+      Config.withDefault(AI_MONTHLY_MESSAGE_QUOTA_DEFAULT),
     );
-    const peopleSearchLimit = yield* Cloudflare.RateLimit("PEOPLE_SEARCH_RATE_LIMIT", PEOPLE_SEARCH_LIMIT);
-    const publicReadLimit = yield* Cloudflare.RateLimit("PUBLIC_READ_RATE_LIMIT", PUBLIC_READ_LIMIT);
+    const aiQuota = Layer.succeed(AiQuota, { monthlyMessages });
 
     // The focus-session sweep (architecture.md §11): every minute, complete
     // the running sessions whose time ran out, even with the app closed.
@@ -574,10 +583,18 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
           const user = yield* CurrentUser;
           return yield* LiveService.getPath(user.id);
         }),
-    }).pipe(Layer.provide(Layer.mergeAll(Layer.succeed(Database, db), rateLimiter, authAccounts)));
+      GetAiUsage: () =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* UsageService.getUsage(user.id);
+        }),
+    }).pipe(
+      Layer.provide(Layer.mergeAll(Layer.succeed(Database, db), rateLimiter, authAccounts, aiQuota)),
+    );
 
-    // One Worker serves two things: Better Auth's routes (proxied by the web
-    // stack's `/api/auth/*` route) and the RPCs (proxied by `/rpc`).
+    // One Worker serves three things: Better Auth's routes (proxied by the
+    // web stack's `/api/auth/*` route), the RPCs (proxied by `/rpc`) and the
+    // internal path the AgentWorker calls (`/internal/*`).
     // The RPC server forks into its own scope, while Better Auth needs the
     // runtime context of the request; the annotation names both so the
     // RpcWorker accepts the result.
@@ -590,6 +607,13 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
           const path = new URL(request.url, "http://localhost").pathname;
           if (path === "/api/auth" || path.startsWith("/api/auth/")) {
             return yield* auth.fetch;
+          }
+          // The AgentWorker's calls (`./internal.ts`); never forwarded by the website.
+          if (path.startsWith(INTERNAL_PATH_PREFIX)) {
+            return yield* serveInternal(path).pipe(
+              Effect.provide(Layer.merge(Layer.succeed(Database, db), aiQuota)),
+              guarded,
+            );
           }
           return yield* rpc;
         });

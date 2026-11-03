@@ -1,4 +1,7 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
+import { MAX_CHAT_MESSAGE_LENGTH } from "@dueboard/api/limits";
+import { AI_LIMIT_REACHED, type AiUsage } from "@dueboard/api/rpc";
+import { Link } from "@tanstack/react-router";
 import type { UIMessage } from "ai";
 import { useAgent } from "agents/react";
 import {
@@ -39,6 +42,8 @@ import {
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAiUsage, usageLine } from "@/hooks/use-ai-usage";
+import { useTibo } from "@/hooks/use-tibo";
 import { cn } from "@/lib/utils";
 import {
   Trace,
@@ -105,8 +110,19 @@ function ChatThread({ userId, headerEnd }: { userId: string; headerEnd?: React.R
   });
   const [draft, setDraft] = React.useState("");
   const formRef = React.useRef<HTMLFormElement>(null);
+  const { usage, refresh: refreshUsage } = useAiUsage();
 
   const busy = status === "submitted" || status === "streaming" || isRecovering;
+  // Out of AI messages this month: the agent refused the turn, or the count
+  // says so. The composer gives way to a notice that lives only here.
+  const limitReached = error?.message === AI_LIMIT_REACHED || usage?.remaining === 0;
+
+  // Each turn may have spent a message: count again once it ends.
+  const wasBusy = React.useRef(busy);
+  React.useEffect(() => {
+    if (wasBusy.current && !busy) refreshUsage();
+    wasBusy.current = busy;
+  }, [busy, refreshUsage]);
   const canSend = draft.trim().length > 0 && !busy;
   const last = messages.at(-1);
   // The reply hasn't produced a part yet: show that the agent is working.
@@ -171,7 +187,7 @@ function ChatThread({ userId, headerEnd }: { userId: string; headerEnd?: React.R
                 Tell Tibo what's due, and it will help you decide what to do first.
               </EmptyDescription>
             </EmptyHeader>
-            <EmptyContent className="items-stretch">
+            <EmptyContent className={cn("items-stretch", limitReached && "hidden")}>
               {SUGGESTIONS.map((suggestion) => (
                 <Button
                   key={suggestion}
@@ -215,59 +231,134 @@ function ChatThread({ userId, headerEnd }: { userId: string; headerEnd?: React.R
       </div>
 
       <div className="flex flex-col gap-3 p-4 pt-2">
-        {error && !busy && (
-          <Alert variant="destructive">
-            <AlertTitle>Tibo couldn't reply</AlertTitle>
-            <AlertDescription>{error.message || "Send your message again."}</AlertDescription>
-          </Alert>
+        {limitReached && !busy ? (
+          <LimitNotice />
+        ) : (
+          <Composer
+            formRef={formRef}
+            draft={draft}
+            setDraft={setDraft}
+            onSubmit={onSubmit}
+            busy={busy}
+            canSend={canSend}
+            stop={stop}
+            error={error}
+            usage={usage}
+          />
         )}
-        <form ref={formRef} onSubmit={onSubmit}>
-          <InputGroup className="border-composer-border!">
-            <InputGroupTextarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Message Tibo…"
-              aria-label="Message"
-              className="max-h-40 min-h-14"
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  formRef.current?.requestSubmit();
-                }
-              }}
-            />
-            <InputGroupAddon align="block-end" className="pt-1">
-              <span className="text-xs text-muted-foreground max-sm:hidden">
-                Enter to send, Shift+Enter for a new line
-              </span>
-              {busy ? (
-                <InputGroupButton
-                  type="button"
-                  variant="default"
-                  size="icon-sm"
-                  className="ml-auto"
-                  aria-label="Stop reply"
-                  onClick={() => void stop()}
-                >
-                  <SquareIcon className="fill-current" />
-                </InputGroupButton>
-              ) : (
-                <InputGroupButton
-                  type="submit"
-                  variant="default"
-                  size="icon-sm"
-                  className="ml-auto"
-                  aria-label="Send"
-                  disabled={!canSend}
-                >
-                  <ArrowUpIcon />
-                </InputGroupButton>
-              )}
-            </InputGroupAddon>
-          </InputGroup>
-        </form>
       </div>
     </MessageScrollerProvider>
+  );
+}
+
+function Composer({
+  formRef,
+  draft,
+  setDraft,
+  onSubmit,
+  busy,
+  canSend,
+  stop,
+  error,
+  usage,
+}: {
+  formRef: React.RefObject<HTMLFormElement | null>;
+  draft: string;
+  setDraft: (draft: string) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  busy: boolean;
+  canSend: boolean;
+  stop: () => unknown;
+  error: Error | undefined;
+  usage: AiUsage | undefined;
+}) {
+  return (
+    <>
+      {error && !busy && (
+        <Alert variant="destructive">
+          <AlertTitle>Tibo couldn't reply</AlertTitle>
+          <AlertDescription>{error.message || "Send your message again."}</AlertDescription>
+        </Alert>
+      )}
+      <form ref={formRef} onSubmit={onSubmit}>
+        <InputGroup className="border-composer-border!">
+          <InputGroupTextarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Message Tibo…"
+            aria-label="Message"
+            className="max-h-40 min-h-14"
+            maxLength={MAX_CHAT_MESSAGE_LENGTH}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                formRef.current?.requestSubmit();
+              }
+            }}
+          />
+          <InputGroupAddon align="block-end" className="pt-1">
+            <span className="text-xs text-muted-foreground max-sm:hidden">
+              Enter to send, Shift+Enter for a new line
+            </span>
+            {busy ? (
+              <InputGroupButton
+                type="button"
+                variant="default"
+                size="icon-sm"
+                className="ml-auto"
+                aria-label="Stop reply"
+                onClick={() => void stop()}
+              >
+                <SquareIcon className="fill-current" />
+              </InputGroupButton>
+            ) : (
+              <InputGroupButton
+                type="submit"
+                variant="default"
+                size="icon-sm"
+                className="ml-auto"
+                aria-label="Send"
+                disabled={!canSend}
+              >
+                <ArrowUpIcon />
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
+      </form>
+      {usage && (
+        <p className="-mt-1.5 px-1 text-right text-xs text-muted-foreground">{usageLine(usage)}</p>
+      )}
+    </>
+  );
+}
+
+/**
+ * Shown instead of the composer when the month's AI messages are used up.
+ * Laid out like Tibo's replies, but built here only: never sent to the
+ * model or kept in the thread.
+ */
+function LimitNotice() {
+  const { setOpen } = useTibo();
+  return (
+    <Message role="status" aria-live="polite">
+      <MessageContent className="gap-1.5">
+        <p className="text-sm leading-relaxed">
+          You've used all your messages with me this month. More usage is coming soon!
+        </p>
+        <p className="text-xs text-muted-foreground">
+          System message.{" "}
+          <Link
+            to="/settings"
+            search={{ tab: "tibo" }}
+            onClick={() => setOpen(false)}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            See your usage
+          </Link>
+        </p>
+      </MessageContent>
+    </Message>
   );
 }
 

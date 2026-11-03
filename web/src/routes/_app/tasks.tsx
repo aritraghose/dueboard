@@ -97,7 +97,7 @@ function Tasks() {
 
   return (
     <Page>
-      <PageHeader title="Tasks" description="Everything you need to do, dated or not.">
+      <PageHeader title="Tasks">
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" className="max-md:hidden">
             <Link to="/tags">
@@ -454,7 +454,7 @@ function EmptyResults({
         <PageEmpty
           icon={CalendarClockIcon}
           title="Nothing coming up"
-          description="Open tasks dated today or later show here, by day. Add one with New task."
+          description="Tasks dated today or later show here."
         />
       );
     case "unscheduled":
@@ -462,7 +462,7 @@ function EmptyResults({
         <PageEmpty
           icon={CalendarOffIcon}
           title="No unscheduled tasks"
-          description="Tasks without a date wait here. New task on this tab starts without a date."
+          description="Tasks without a date wait here."
         />
       );
     case "settled":
@@ -470,7 +470,7 @@ function EmptyResults({
         <PageEmpty
           icon={CheckCheckIcon}
           title="Nothing settled yet"
-          description="Tick the circle beside a task to settle it. Settled tasks show here by the day you settled them."
+          description="Tick a task's circle to settle it."
         />
       );
     default:
@@ -478,7 +478,7 @@ function EmptyResults({
         <PageEmpty
           icon={ListChecksIcon}
           title="No tasks yet"
-          description="Add one with New task, or press N. It goes on today unless you clear its date."
+          description="Add one with New task, or press N."
         />
       );
   }

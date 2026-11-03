@@ -1,5 +1,7 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Effect from "effect/Effect";
+import ApiWorker from "./api.ts";
+import { LIMITS, bindingProps } from "./limits.ts";
 
 /**
  * The AI Gateway every model call goes through. The chat model is a
@@ -35,15 +37,18 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     ChatAgent: Cloudflare.DurableObject("ChatAgent"),
     // Per-user budget for chat turns, checked in `ChatAgent.onChatMessage`.
     // Each turn is a paid model call, and chat messages arrive over the
-    // WebSocket, past the web stack's HTTP rate limits. `namespaceId` must be
-    // unique within the Cloudflare account.
-    CHAT_RATE_LIMIT: Cloudflare.RateLimit("CHAT_RATE_LIMIT", {
-      namespaceId: 1005,
-      simple: { limit: 10, period: 60 },
-    }),
+    // WebSocket, past the web stack's HTTP rate limits (`./limits.ts`).
+    CHAT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.chat.name, bindingProps(LIMITS.chat)),
+    // The ApiWorker, for the AI quota ledger through its internal path
+    // (`./internal-client.ts`) until step 18's internal binding.
+    API: ApiWorker,
   },
 });
 
 export default AgentWorker;
 
-export type AgentEnv = Cloudflare.InferEnv<typeof AgentWorker>;
+// `InferEnv` types an RpcWorker binding by its RPC shape; the agent only
+// uses its `fetch`.
+export type AgentEnv = Omit<Cloudflare.InferEnv<typeof AgentWorker>, "API"> & {
+  API: Fetcher;
+};

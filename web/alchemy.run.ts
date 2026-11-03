@@ -1,5 +1,5 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
-import { AgentWorker, ApiWorker } from "@dueboard/api";
+import { AgentWorker, ApiWorker, LIMITS, bindingProps } from "@dueboard/api";
 import * as Alchemy from "alchemy";
 import * as Effect from "effect/Effect";
 
@@ -20,14 +20,12 @@ export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
     // The Api stack's chat agent, reached through `src/server.ts`'s
     // `/agents/*` proxy.
     AGENT: AgentWorker,
-    // Per-client-IP budget for Better Auth's routes (`/api/auth/*`), checked
-    // in `src/routes/api/auth/$.ts`. Counting is approximate and per
-    // Cloudflare location: abuse protection, not an exact quota.
-    // `namespaceId` must be unique within the Cloudflare account.
-    AUTH_RATE_LIMIT: Cloudflare.RateLimit("AUTH_RATE_LIMIT", {
-      namespaceId: 1003,
-      simple: { limit: 30, period: 60 },
-    }),
+    // Per-client-IP budgets, from the registry in `api/src/limits.ts`
+    // (architecture.md §9): Better Auth's routes (`src/routes/api/auth/$.ts`),
+    // the `/agents/*` proxy and everything else (both in `src/server.ts`).
+    AUTH_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.auth.name, bindingProps(LIMITS.auth)),
+    AGENT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.agent.name, bindingProps(LIMITS.agent)),
+    WEB_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.web.name, bindingProps(LIMITS.web)),
   },
 }) {}
 

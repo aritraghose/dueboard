@@ -186,6 +186,14 @@ export const LEADERBOARD_PERIOD = ["all", "month", "week", "today"] as const;
 export const LeaderboardPeriod = Schema.Literals(LEADERBOARD_PERIOD);
 export type LeaderboardPeriod = typeof LeaderboardPeriod.Type;
 
+/**
+ * What an AI usage charge was for (architecture.md §8): a Tibo reply turn, a
+ * proactive message, a relay turn (half to each side) or an Ask answer.
+ */
+export const AI_USAGE_REASON = ["tibo_reply", "tibo_proactive", "relay", "ask_answer"] as const;
+export const AiUsageReason = Schema.Literals(AI_USAGE_REASON);
+export type AiUsageReason = typeof AiUsageReason.Type;
+
 // ─── Limits ──────────────────────────────────────────────────────────────────
 
 export const TAG_NAME_MAX_LENGTH = 30;
@@ -271,6 +279,9 @@ export const LIVE_PAGE_SIZE = 30;
 export const LIVE_MAX_DAYS = 7;
 /** What the account deletion form makes the user type. */
 export const DELETE_ACCOUNT_CONFIRM_MAX_LENGTH = 64;
+// The AI quota's numbers, in a module of their own so the AgentWorker can
+// import them without Effect.
+export * from "./usage-constants.ts";
 
 /** A tag name: trimmed, 1–30 characters. */
 export const TagName = Schema.String.check(
@@ -1248,6 +1259,20 @@ export class SocialOverview extends Schema.Class<SocialOverview>("SocialOverview
   incoming: Schema.Array(ConnectionRequest),
   outgoing: Schema.Array(ConnectionRequest),
   blocked: Schema.Array(BlockedPerson),
+}) {}
+
+/**
+ * A user's AI usage this month, in messages (architecture.md §8). `period`
+ * is the month (`YYYY-MM`) in their time zone, and `resetsAt` the instant
+ * the next one starts. `remaining` counts whole messages: half a message
+ * left (a relay's share) shows as 0.
+ */
+export class AiUsage extends Schema.Class<AiUsage>("AiUsage")({
+  used: Schema.Number,
+  limit: Schema.Number,
+  remaining: Schema.Number,
+  period: Schema.String,
+  resetsAt: Schema.Date,
 }) {}
 
 // ─── Errors ──────────────────────────────────────────────────────────────────

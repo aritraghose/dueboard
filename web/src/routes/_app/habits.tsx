@@ -88,7 +88,7 @@ function Habits() {
 
   return (
     <Page>
-      <PageHeader title="Habits" description="The things you do again and again, and your streaks.">
+      <PageHeader title="Habits">
         <CreateButton label="New habit" onClick={dialog.openNew} />
       </PageHeader>
 
@@ -153,15 +153,15 @@ function Habits() {
 const EMPTY: Record<HabitStatus, { title: string; description: string }> = {
   active: {
     title: "No habits yet",
-    description: "Add one with New habit. It shows up on your days with its schedule, and its streak grows here.",
+    description: "Add one with New habit.",
   },
   paused: {
     title: "Nothing paused",
-    description: "Pause a habit to take it off your days for a while without breaking its streak.",
+    description: "Paused habits keep their streak.",
   },
   archived: {
     title: "Nothing archived",
-    description: "Archive a habit you're done with. It keeps its history and can be restored.",
+    description: "Archived habits keep their history.",
   },
 };
 

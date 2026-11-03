@@ -6,6 +6,7 @@ import * as Schema from "effect/Schema";
 import { LocalDate } from "./domain/dates.ts";
 import {
   ActiveSessionExists,
+  AiUsage,
   AdjustGoalProgressInput,
   CheckInNotAllowed,
   ConnectionNotAllowed,
@@ -669,6 +670,13 @@ export class ApiRpcs extends RpcGroup.make(
    */
   Rpc.make("GetPath", {
     success: Path,
+  }),
+  /**
+   * The user's AI messages this month (architecture.md §8): used, limit,
+   * remaining, and when the month resets in their time zone.
+   */
+  Rpc.make("GetAiUsage", {
+    success: AiUsage,
   }),
 )
   .middleware(Authentication)

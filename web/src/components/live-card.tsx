@@ -184,7 +184,7 @@ function LiveFeed({
     if (scope !== "mine" && !feed.hasConnections) {
       return (
         <FeedMessage>
-          <p>What you and your connections get done shows up here. Connect with people to see theirs too.</p>
+          <p>What you and your connections get done shows up here.</p>
           <Button variant="outline" size="sm" asChild>
             <Link to="/discover">Find people</Link>
           </Button>
@@ -323,7 +323,7 @@ function PathThread({ timeZone }: { timeZone: string }) {
   if (events.length === 0) {
     return (
       <FeedMessage>
-        <p>Tasks you settle, habits you check, goals you move and sessions you finish today line up here.</p>
+        <p>What you get done today lines up here.</p>
       </FeedMessage>
     );
   }

@@ -9,7 +9,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Exit from "effect/Exit";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Page, PageHeader } from "@/components/page";
 import { PeopleList, PeopleLoadFailed, statusOf } from "@/components/people-lists";
@@ -28,12 +28,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { resetLine, useAiUsage, usageLine } from "@/hooks/use-ai-usage";
 import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
 import { useUpdateSettings } from "@/hooks/use-settings";
 import { socialOverviewAtom, useSocialActions } from "@/hooks/use-social";
 import { failureMessage, useRun } from "@/hooks/use-tasks";
 import { PRIVACY_ICON } from "@/lib/notes";
-import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
+import { PRIVACY_LABEL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 import { authClient } from "../../auth-client.ts";
 import { ApiClient } from "../../rpc-client.ts";
@@ -65,7 +66,7 @@ function Settings() {
 
   return (
     <Page>
-      <PageHeader title="Settings" description="How Dueboard works for you." />
+      <PageHeader title="Settings" />
       <Tabs
         value={tab ?? "general"}
         onValueChange={(value) =>
@@ -74,11 +75,12 @@ function Settings() {
             replace: true,
           })
         }
-        className="w-full max-w-3xl gap-5 pb-8"
+        className="w-full gap-5 pb-8 md:flex-row! md:items-start md:gap-8"
       >
-        <TabsList>
+        {/* A row of tabs on phones; a column beside the panel from `md` up. */}
+        <TabsList className="max-md:w-full md:sticky md:top-4 md:h-auto! md:w-44 md:shrink-0 md:flex-col md:items-stretch md:gap-0.5">
           {TABS.map(({ value, label }) => (
-            <TabsTrigger key={value} value={value}>
+            <TabsTrigger key={value} value={value} className="md:h-8 md:flex-none md:justify-start md:px-2.5">
               {label}
             </TabsTrigger>
           ))}
@@ -111,33 +113,51 @@ function Panel({ children, className }: { children: ReactNode; className?: strin
   );
 }
 
-/** A setting: its name and what it does on the left, the control on the right (below it on phones, still on the right). */
+/**
+ * A setting: its name and what it does, then its control. `inline` keeps a
+ * small control (a switch, a value, a button) beside the name at every
+ * size. Otherwise the control fills the width below the name on phones and
+ * takes a fixed column on the right from `md` up.
+ */
 function Row({
   title,
   description,
   children,
   id,
+  inline = false,
 }: {
   title: string;
   description?: ReactNode;
   children: ReactNode;
   id?: string;
+  inline?: boolean;
 }) {
-  return (
-    <div className="grid gap-x-8 gap-y-3 py-5 sm:grid-cols-[minmax(0,13rem)_1fr]">
-      <div className="flex flex-col gap-1">
-        <h2 id={id} className="font-medium">
-          {title}
-        </h2>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+  const label = (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <h2 id={id} className="font-medium">
+        {title}
+      </h2>
+      {description && <p className="text-sm text-muted-foreground">{description}</p>}
+    </div>
+  );
+  if (inline) {
+    return (
+      <div className="flex items-center justify-between gap-4 py-4">
+        {label}
+        <div className="shrink-0">{children}</div>
       </div>
-      <div className="min-w-0 justify-self-end">{children}</div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3 py-4 md:grid md:grid-cols-[minmax(0,1fr)_20rem] md:gap-x-10">
+      {label}
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
 
 /**
- * A choice shown as stacked options, each with its hint: a radio group, so
+ * A choice shown as stacked options (with an optional hint): a radio group, so
  * the arrow keys move between them. Picking one saves at once.
  */
 function Choice<T extends string>({
@@ -148,7 +168,7 @@ function Choice<T extends string>({
   disabled,
 }: {
   labelledBy: string;
-  options: readonly { value: T; label: string; hint: string; icon?: React.ComponentType<{ className?: string }> }[];
+  options: readonly { value: T; label: string; hint?: string; icon?: React.ComponentType<{ className?: string }> }[];
   value: T | undefined;
   onChange: (value: T) => void;
   disabled?: boolean;
@@ -159,7 +179,7 @@ function Choice<T extends string>({
     document.getElementById(`${labelledBy}-${next.value}`)?.focus();
   };
   return (
-    <div role="radiogroup" aria-labelledby={labelledBy} className="flex w-full flex-col gap-1.5 sm:w-80">
+    <div role="radiogroup" aria-labelledby={labelledBy} className="flex w-full flex-col gap-1.5">
       {options.map((option, index) => {
         const checked = option.value === value;
         const Icon = option.icon;
@@ -201,7 +221,7 @@ function Choice<T extends string>({
                 {Icon && <Icon className="size-3.5 text-muted-foreground" />}
                 {option.label}
               </span>
-              <span className="text-xs text-muted-foreground">{option.hint}</span>
+              {option.hint && <span className="text-xs text-muted-foreground">{option.hint}</span>}
             </span>
           </button>
         );
@@ -229,7 +249,6 @@ function useSaveSetting() {
 const PRIVACY_OPTIONS = PRIVACY.map((value) => ({
   value,
   label: PRIVACY_LABEL[value],
-  hint: PRIVACY_HINT[value],
   icon: PRIVACY_ICON[value],
 }));
 
@@ -248,7 +267,7 @@ function General() {
       <Row
         id="default-privacy"
         title="Who sees new items"
-        description="Where new tasks, habits, goals, notes and sessions start. You can still change each one."
+        description="You can change each item later."
       >
         <Choice
           labelledBy="default-privacy"
@@ -262,11 +281,12 @@ function General() {
         />
       </Row>
       <Row
+        inline
         title="Share new items to Live"
-        description="Whether what you do shows up on Live for you and your connections. Private items show without their details."
+        description="Private items show without details."
       >
         <div className="flex items-center gap-2.5">
-          <Label htmlFor="default-share" className="text-sm text-muted-foreground">
+          <Label htmlFor="default-share" className="text-sm text-muted-foreground max-sm:sr-only">
             {(shownShare ?? true) ? "On Live" : "Off Live"}
           </Label>
           <Switch
@@ -280,10 +300,10 @@ function General() {
           />
         </div>
       </Row>
-      <Row title="Time zone" description="Follows your device, so your days start where you are.">
+      <Row inline title="Time zone" description="Follows your device.">
         <p className="font-medium">{timeZone.replaceAll("_", " ")}</p>
       </Row>
-      <Row title="Theme" description="System follows your device's light or dark mode.">
+      <Row inline title="Theme">
         <ThemeSwitcher />
       </Row>
     </Panel>
@@ -301,10 +321,10 @@ function Connections() {
   return (
     <Panel>
       <Row
-        title="Blocked"
-        description="They can't see your profile or activity, or send you requests. They aren't told."
+        title="Blocked accounts"
+        description="Accounts you block appear here."
       >
-        <div className="w-full sm:w-96">
+        <div className="w-full">
           {AsyncResult.isFailure(result) && !data ? (
             <PeopleLoadFailed what="the people you blocked" onRetry={() => void reload()} />
           ) : (
@@ -325,18 +345,10 @@ function Connections() {
 
 // ─── Tibo ────────────────────────────────────────────────────────────────────
 
-const RELAY_OPTIONS: readonly { value: RelayPolicy; label: string; hint: string }[] = RELAY_POLICY.map(
-  (value) =>
-    ({
-      connections: {
-        value,
-        label: "My connections",
-        hint: "Only people you're connected with can pass messages to you through Tibo.",
-      },
-      anyone: { value, label: "Anyone", hint: "Anyone on Dueboard who hasn't been blocked." },
-      none: { value, label: "No one", hint: "Tibo won't take messages from other people's Tibo." },
-    })[value],
-);
+const RELAY_OPTIONS: readonly { value: RelayPolicy; label: string }[] = RELAY_POLICY.map((value) => ({
+  value,
+  label: { connections: "My connections", anyone: "Anyone", none: "No one" }[value],
+}));
 
 function Tibo() {
   const settings = useBootstrap()?.settings;
@@ -345,10 +357,11 @@ function Tibo() {
 
   return (
     <Panel>
+      <AiUsageRow />
       <Row
         id="relay-policy"
         title="Messages through Tibo"
-        description="Other people can ask their Tibo to pass you a message, and your Tibo asks you before answering. Choose who may."
+        description="Who can pass you a message through their Tibo."
       >
         <Choice
           labelledBy="relay-policy"
@@ -365,6 +378,39 @@ function Tibo() {
   );
 }
 
+/** This month's AI messages: replies, check-ins, relays and Ask answers all count. */
+function AiUsageRow() {
+  const { usage, failed } = useAiUsage();
+  // The server render can't reach `/rpc`; only a failure in the browser is real.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return (
+    <Row title="Messages this month">
+      {usage ? (
+        <div className="flex w-full flex-col gap-2 text-sm">
+          <div
+            role="meter"
+            aria-label="AI messages used"
+            aria-valuemin={0}
+            aria-valuemax={usage.limit}
+            aria-valuenow={usage.used}
+            className="h-2 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className="h-full rounded-full bg-tibo"
+              style={{ width: `${usage.limit > 0 ? (usage.used / usage.limit) * 100 : 100}%` }}
+            />
+          </div>
+          <p>{usageLine(usage)}</p>
+          <p className="text-xs text-muted-foreground">{resetLine(usage)}</p>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">{failed && mounted ? "Couldn't load your usage." : "Loading…"}</p>
+      )}
+    </Row>
+  );
+}
+
 // ─── Account ─────────────────────────────────────────────────────────────────
 
 function Account() {
@@ -374,8 +420,9 @@ function Account() {
   return (
     <Panel>
       <Row
+        inline
         title="Delete your account"
-        description="Deletes your tasks, habits, goals, notes, sessions, tags, connections and settings, then your account. This can't be undone."
+        description="Deletes everything. This can't be undone."
       >
         <Button variant="destructive" onClick={() => setOpen(true)}>
           Delete account
@@ -442,8 +489,7 @@ function DeleteAccountDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete your account?</AlertDialogTitle>
             <AlertDialogDescription>
-              Everything you've added to Dueboard is deleted for good, your connections lose you, and
-              @{username} is signed out. You can sign up again later, but nothing comes back.
+              Everything you've added is deleted for good. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-1.5">

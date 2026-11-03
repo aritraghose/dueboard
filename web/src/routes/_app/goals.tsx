@@ -88,7 +88,7 @@ function Goals() {
 
   return (
     <Page>
-      <PageHeader title="Goals" description="Where you're headed, and how far you've come.">
+      <PageHeader title="Goals">
         <CreateButton label="New goal" onClick={dialog.openNew} />
       </PageHeader>
 
@@ -163,15 +163,15 @@ const EMPTY: Record<GoalStatus, { title: string; description: string }> = {
   active: {
     title: "No goals yet",
     description:
-      "Add one with New goal. Count goals can move on their own: link a habit or task, and each check-in or settle adds to it.",
+      "Add one with New goal.",
   },
   paused: {
     title: "Nothing paused",
-    description: "Pause a goal to take it off your days for a while. Linked habits and tasks still move it.",
+    description: "Paused goals are off your days.",
   },
   completed: {
     title: "Nothing completed yet",
-    description: "Goals land here when they reach their target. You can reopen one to keep going.",
+    description: "Goals land here when they reach their target.",
   },
 };
 

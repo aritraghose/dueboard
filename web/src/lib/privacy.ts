@@ -9,7 +9,7 @@ export const PRIVACY_LABEL: Record<Privacy, string> = {
 };
 
 export const PRIVACY_HINT: Record<Privacy, string> = {
-  public: "Anyone can see it in your diary.",
-  connections: "Your connections can see it in your diary.",
-  private: "Only you can see it. Live shows that you did something, not what.",
+  public: "Anyone can see it.",
+  connections: "Your connections can see it.",
+  private: "Only you see the details.",
 };

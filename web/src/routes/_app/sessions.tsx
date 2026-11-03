@@ -58,7 +58,7 @@ function Sessions() {
 
   return (
     <Page>
-      <PageHeader title="Sessions" description="Your focus sessions by day, with how long each one ran." />
+      <PageHeader title="Sessions" />
       <Tabs
         value={status ?? "all"}
         onValueChange={(value) =>
@@ -127,7 +127,7 @@ function History({ status, today }: { status: SessionsSearch["status"]; today: L
           <PageEmpty
             icon={TimerIcon}
             title="No sessions yet"
-            description="Start a focus session from Now. Each one shows up here with how long it ran."
+            description="Start a focus session from Now."
             className="min-h-60"
           >
             <Button asChild size="sm" className="rounded-full">

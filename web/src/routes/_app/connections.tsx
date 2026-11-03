@@ -21,10 +21,7 @@ function Connections() {
 
   return (
     <Page>
-      <PageHeader
-        title="Connections"
-        description="People you're connected with. They see your connections-only items and you see theirs."
-      >
+      <PageHeader title="Connections">
         <Button asChild variant="outline">
           <Link to="/discover">
             <SearchIcon />
@@ -32,8 +29,8 @@ function Connections() {
           </Link>
         </Button>
       </PageHeader>
-      <div className="flex w-full max-w-2xl flex-col gap-6 pb-8">
-        <PeopleSection title="Your connections" description="Newest first." count={data?.connections.length}>
+      <div className="flex w-full flex-col gap-6 pb-8">
+        <PeopleSection title="Your connections" count={data?.connections.length}>
           {failed ? (
             <PeopleLoadFailed what="your connections" onRetry={() => void reload()} />
           ) : (
@@ -43,7 +40,7 @@ function Connections() {
                 person: connection.person,
                 status: statusOf("connected"),
               }))}
-              empty="No connections yet. Find someone in Discover, or share your profile link."
+              empty="No connections yet."
             />
           )}
         </PeopleSection>

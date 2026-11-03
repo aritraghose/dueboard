@@ -127,7 +127,7 @@ export function GoalLinksPanel({
         </ul>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Link a habit or task, and each check-in or settle moves this goal on its own.
+          Linked habits and tasks move this goal on their own.
         </p>
       )}
       <ItemPicker

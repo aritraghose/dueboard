@@ -38,7 +38,7 @@ function Diary() {
   return (
     <Page>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 pb-8">
-        <PageHeader title="Diary" description="Your days as they happened, private things included.">
+        <PageHeader title="Diary">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline">

@@ -506,7 +506,7 @@ function DayBody({
             showHabits ? (
               <HabitsView habits={habits} date={date} today={today} onDay={onDay} tense={tense} onEdit={onEditHabit} />
             ) : (
-              <EmptyState>Habits wear the habit tag. Pick it in the tag filter to see them here.</EmptyState>
+              <EmptyState>Pick the habit tag in the filter to see habits.</EmptyState>
             )
           ) : view.show === "goals" ? (
             showGoals ? (
@@ -603,7 +603,7 @@ function DayBody({
               ) : unscheduledOpen.length > 0 ? (
                 <TaskList tasks={unscheduledOpen} label="Unscheduled" {...rowProps} />
               ) : (
-                "Tasks without a date wait here. Clear a task's assigned date to put it here."
+                "Tasks without a date wait here."
               ),
           },
         ]}

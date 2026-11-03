@@ -385,25 +385,32 @@ user** (§8).
   - a notice styled like a Tibo bubble says the limit is reached and more usage is coming soon;
   - the notice is built **in the UI only**: never stored in the thread, memory or database.
 - Pricing will come after product-market fit. Keep the ledger shaped so plans and per-plan quotas can be added later.
+- **Built (step 16)**:
+  - **Tables**: `ai_usage` (`user_id`, `period` `YYYY-MM` in the user's zone, `units`; PK both) and `ai_usage_events` (`id`, `user_id`, `units`, `reason` `tibo_reply`|`tibo_proactive`|`relay`|`ask_answer`, `ref?`, `created_at`).
+  - **Domain** (`domain/usage.ts`, pure rules in `usage-rules.ts`): `getUsage(userId)` → `AiUsage { used, limit, remaining, period, resetsAt }` in whole messages; `canSpend(userId, units)`; `recordUsage(userId, units, reason, ref?)` (atomic upsert plus an event, returns the new usage); `chargeSplit(userA, userB, unitsEach, reason, ref?)` (one transaction). The quota comes from the `AiQuota` service, which the ApiWorker reads from `AI_MONTHLY_MESSAGE_QUOTA` (Effect `Config`, default 300).
+  - **Callers outside the ApiWorker** use its internal path `/internal/usage/{get,check,record,charge-split}` (JSON POST, `api/src/internal.ts`) through `usageClient(env.API)` (`api/src/internal-client.ts`). Only the AgentWorker binds it for this; the website forwards only `/rpc` and `/api/auth/*`. Step 18's internal binding replaces the path behind the same calls.
+  - **Chat contract**: before the model call, `check(user, 2)`; out of quota, the turn ends with a stream `error` chunk whose text is `AI_LIMIT_REACHED` and no model call. After the reply finishes (or is stopped after it started), `record(user, 2, "tibo_reply", requestId)`. The UI hides the composer when `GetAiUsage.remaining` is 0 or that error arrives, and shows its own Tibo-bubble notice.
 
 ## 9. Rate limiting and abuse protection
 
-These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique in the account.
+These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique in the account. **The registry is `api/src/limits.ts` (`LIMITS`)**: every binding's name, namespace, limit, period, key and place. Both stacks build their bindings from it (`bindingProps`), and the website imports it through `@dueboard/api`. Keep this table in sync with it.
 
 | Namespace | Key | Limit | Where |
 |---|---|---|---|
-| 1003 `AUTH_RATE_LIMIT` | IP | 30/min | `/api/auth/*` (exists) |
-| 1004 `RPC_RATE_LIMIT` | user | 120/min | every RPC (exists) |
-| 1005 `CHAT_RATE_LIMIT` | user | 10/min | Tibo turns (exists, reused) |
-| 1006 `CONNECTION_REQUEST_RATE_LIMIT` | user | 5/min burst, plus 20 per 24 h counted in Postgres | connection requests (`social.ts`) |
-| 1007 | user | strict (e.g. 30/day) | relays sent |
-| 1008 `PUBLIC_READ_RATE_LIMIT` | IP (`cf-connecting-ip`) | 60/min | `PublicRpcs` (`GetProfile`) for logged-out visitors; signed-in viewers use 1004 |
-| 1009 | visitor (user or IP) | strict | Ask page questions, plus Turnstile |
-| 1010 | IP | moderate | `/agents/*` WebSocket upgrades |
-| 1011 `PEOPLE_SEARCH_RATE_LIMIT` | user | 30/min | people search (`SearchPeople`) |
+| 1003 `AUTH_RATE_LIMIT` | IP | 30/min | Website: `/api/auth/*` (`routes/api/auth/$.ts`) |
+| 1004 `RPC_RATE_LIMIT` | user | 120/min | ApiWorker: every authenticated RPC (`Authentication`), and `PublicRpcs` for signed-in viewers |
+| 1005 `CHAT_RATE_LIMIT` | user | 10/min | AgentWorker: chat turns (`ChatAgent.onChatMessage`) |
+| 1006 `CONNECTION_REQUEST_RATE_LIMIT` | user | 5/min burst, plus 20 per 24 h counted in Postgres | ApiWorker: connection requests (`social.ts`, via `RateLimiter`) |
+| 1007 | user | strict (e.g. 30/day) | reserved: relays sent (step 21) |
+| 1008 `PUBLIC_READ_RATE_LIMIT` | IP (`cf-connecting-ip`) | 60/min | ApiWorker: `PublicRpcs` for logged-out visitors |
+| 1009 | visitor (user or IP) | strict | reserved: Ask page questions, plus Turnstile (step 22) |
+| 1010 `AGENT_RATE_LIMIT` | IP | 60/min | Website: `/agents/*` WebSocket upgrades and HTTP, before the session lookup (`src/server.ts`) |
+| 1011 `PEOPLE_SEARCH_RATE_LIMIT` | user | 30/min | ApiWorker: people search (`SearchPeople`, via `RateLimiter`) |
+| 1012 `WEB_RATE_LIMIT` | IP | 300/min | Website: everything else its Worker serves (`/rpc` signed in or out, page loads, server functions such as `getSessionUser`), before any session lookup (`src/server.ts`) |
 
-- The ApiWorker's limits live in `api/src/limits.ts` (the website's 1003 in `web/alchemy.run.ts`). The binding only counts per 10 or 60 seconds, so daily caps are counted in Postgres by the service. Limits a domain service checks itself go through the `RateLimiter` service (`domain/rate-limiter.ts`), so Tibo's tools hit them too.
-- Request bodies get size limits through Schema `maxLength` everywhere.
+- The binding only counts per 10 or 60 seconds, so daily caps are counted in Postgres by the service. Limits a domain service checks itself go through the `RateLimiter` service (`domain/rate-limiter.ts`), so Tibo's tools hit them too.
+- **Paths audited (step 16)**: `/api/auth/*` (1003), `/rpc` (1012 per IP first, then 1004 or 1008), `/agents/*` (1010, then 1005 per chat turn), the public profile `/@username` (its SSR page load and server function under 1012, its reads under 1008/1004). Static assets are served before the Worker runs.
+- **Input sizes**: every RPC input `Schema` string and array has a `maxLength` (`domain/model.ts`). The website reads each request body up to `MAX_REQUEST_BODY_BYTES` (64 KiB) and answers 413 beyond it. Chat messages are capped at `MAX_CHAT_MESSAGE_LENGTH` (4000 characters) by the composer and the agent.
 
 ## 10. Realtime
 

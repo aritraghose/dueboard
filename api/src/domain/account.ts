@@ -3,6 +3,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import {
   Activity,
+  AiUsageEvents,
+  AiUsageTotals,
   Blocks,
   ConnectionRequests,
   Connections,
@@ -61,6 +63,8 @@ export const USER_OWNED_TABLES = [
     owner: (id: string) => or(eq(Connections.userLow, id), eq(Connections.userHigh, id)),
   },
   { table: Blocks, owner: (id: string) => or(eq(Blocks.blockerId, id), eq(Blocks.blockedId, id)) },
+  { table: AiUsageEvents, owner: (id: string) => eq(AiUsageEvents.userId, id) },
+  { table: AiUsageTotals, owner: (id: string) => eq(AiUsageTotals.userId, id) },
   { table: UserSettings, owner: (id: string) => eq(UserSettings.userId, id) },
 ] as const;
 
