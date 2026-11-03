@@ -415,6 +415,7 @@ const tap = (userId: string, input: HabitCheckInInput, delta: 1 | -1) =>
             .where(and(eq(HabitCheckins.habitId, id), eq(HabitCheckins.localDate, date)));
         }
         const after = new Map(before).set(date, onDay + delta);
+        yield* recordDayCheck(tx, userId, id, date, onDay + delta, delta);
 
         const was = progressFor(habit, before, date);
         const now = progressFor(habit, after, date);
@@ -442,6 +443,41 @@ const tap = (userId: string, input: HabitCheckInInput, delta: 1 | -1) =>
         return habitOnDay(habit, pauses, after, date, today);
       }),
     );
+  });
+
+/**
+ * The day's `habit_checked` row (Live): one per habit and day, moved to the
+ * latest tap with its count, and deleted when the day is back to 0. An undo
+ * keeps its time, so taking a tap back doesn't bump it to the top.
+ */
+const recordDayCheck = (tx: Executor, userId: string, habitId: string, date: LocalDate, count: number, delta: 1 | -1) =>
+  Effect.gen(function* () {
+    const onDay = and(
+      eq(Activity.subjectType, "habit"),
+      eq(Activity.subjectId, habitId),
+      eq(Activity.kind, "habit_checked"),
+      eq(Activity.localDate, date),
+    );
+    if (count <= 0) {
+      yield* tx.delete(Activity).where(onDay);
+      return;
+    }
+    const [existing] = yield* tx.select({ id: Activity.id }).from(Activity).where(onDay);
+    if (!existing) {
+      yield* recordActivity(tx, {
+        userId,
+        kind: "habit_checked",
+        subjectType: "habit",
+        subjectId: habitId,
+        localDate: date,
+        meta: { count },
+      });
+    } else {
+      yield* tx
+        .update(Activity)
+        .set({ meta: { count }, ...(delta === 1 ? { occurredAt: new Date() } : {}) })
+        .where(eq(Activity.id, existing.id));
+    }
   });
 
 /** One tap on `date`. Returns the habit as it stands that day. */

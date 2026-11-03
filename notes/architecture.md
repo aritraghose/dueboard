@@ -164,6 +164,7 @@ These are written by the domain services in the same transaction as the change:
 |---|---|---|
 | `task_settled` | status → settled | un-settled or deleted → row deleted |
 | `habit_completed` | a check-in makes the period (or day) target reached. `meta` holds `periodStart`/`periodEnd`; `local_date` is the check-in's day. | an undo drops it below target → row deleted |
+| `habit_checked` | a check-in on a day; one row per habit and day, moved to the latest tap, `meta.count`. Live hides it on a day `habit_completed` covers. | that day's count back to 0 → row deleted |
 | `goal_progressed` | progress changes (manual or linked). At most one row per goal and local day, updated in place; `meta` holds `valueBefore`, `valueAfter`, `percent`. | the day's changes cancel out → row deleted |
 | `goal_completed` | reaches 100% or the target count | reopened → row deleted |
 | `session_started` / `session_completed` / `session_stopped` | lifecycle | session deleted → rows deleted |
@@ -176,8 +177,10 @@ displayed, so a privacy change applies everywhere immediately.
 ### Visibility rules
 
 These live in one module, `api/src/domain/visibility.ts` (pure rules in
-`visibility-rules.ts`), and every reader must go through it. The profile
-tabs (`GetProfileItems`, `domain/profile-items.ts`) are its first reader:
+`visibility-rules.ts`), and every reader must go through it. It also builds
+the rules as SQL conditions (`canSeeItemSql`, `liveActorSql`, the
+activity-subject joins), so readers filter in the database. The profile
+tabs (`GetProfileItems`) and Live (`GetLive`, `domain/live.ts`) use it:
 
 ```
 canSeeItem(viewer, owner, privacy):
@@ -192,7 +195,10 @@ live (viewer = signed-in user):
   rows     = activity of actors where item.share_to_live = true
   display  = owner == viewer or privacy ∈ {public, connections} → full ("ar1tra settled a task: add rate limiter")
              privacy == private                                → redacted ("ar1tra settled a task")
-  option   "only mine" → actors = {viewer}
+  tabs     All → as above; Connections → connections(viewer); Me → {viewer}
+  path     the viewer's own today, oldest first, whatever privacy or share flag
+           (settled tasks, habits checked, goals moved, sessions completed)
+  window   the last `days` days in the viewer's zone (2 on /now, 7 on /live)
 
 diary (/diary for yourself, /@username for others):
   rows where canSeeItem(viewer, owner, privacy), whatever share_to_live is

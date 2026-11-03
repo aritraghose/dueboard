@@ -16,6 +16,7 @@ import { Database } from "./domain/database.ts";
 import * as DaysService from "./domain/days.ts";
 import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
+import * as LiveService from "./domain/live.ts";
 import * as NotesService from "./domain/notes.ts";
 import * as PointsService from "./domain/points.ts";
 import * as ProfileItemsService from "./domain/profile-items.ts";
@@ -551,6 +552,16 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
         Effect.gen(function* () {
           const user = yield* CurrentUser;
           return yield* PointsService.getLeaderboard(user.id, input);
+        }),
+      GetLive: (input) =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* LiveService.getLive(user.id, input);
+        }),
+      GetPath: () =>
+        Effect.gen(function* () {
+          const user = yield* CurrentUser;
+          return yield* LiveService.getPath(user.id);
         }),
     }).pipe(Layer.provide(Layer.mergeAll(Layer.succeed(Database, db), rateLimiter, authAccounts)));
 

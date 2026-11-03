@@ -89,6 +89,7 @@ export type HabitDayStatus = typeof HabitDayStatus.Type;
 export const ACTIVITY_KIND = [
   "task_settled",
   "habit_completed",
+  "habit_checked",
   "goal_progressed",
   "goal_completed",
   "session_started",
@@ -121,6 +122,21 @@ export type GoalProgressSource = typeof GoalProgressSource.Type;
 
 export const ACTIVITY_SUBJECT = ["task", "habit", "goal", "session", "note"] as const;
 export type ActivitySubject = (typeof ACTIVITY_SUBJECT)[number];
+
+/** How Live shows an event: with its title, or without it (another person's private item). */
+export const LIVE_DISPLAY = ["full", "redacted"] as const;
+export const LiveDisplay = Schema.Literals(LIVE_DISPLAY);
+export type LiveDisplay = typeof LiveDisplay.Type;
+
+/** Whose events a Live feed shows: the viewer's and their connections', only connections', or only the viewer's. */
+export const LIVE_SCOPE = ["all", "connections", "mine"] as const;
+export const LiveScope = Schema.Literals(LIVE_SCOPE);
+export type LiveScope = typeof LiveScope.Type;
+
+/** What the Path (the viewer's own day as one thread) lists. `habit_checked` is a habit tapped today. */
+export const PATH_KIND = ["task_settled", "habit_checked", "goal_progressed", "session_completed"] as const;
+export const PathKind = Schema.Literals(PATH_KIND);
+export type PathKind = typeof PathKind.Type;
 
 /**
  * A focus session is `running` or `paused` while active (at most one per
@@ -249,6 +265,10 @@ export const PROFILE_ITEMS_CURSOR_MAX_LENGTH = 128;
 export const PEOPLE_SEARCH_MAX_LENGTH = 60;
 /** How many ranks a leaderboard shows (the viewer's own rank comes along too). */
 export const LEADERBOARD_SIZE = 50;
+/** Live pages through events this many at a time. */
+export const LIVE_PAGE_SIZE = 30;
+/** The most days one Live feed reaches back (`/live`; the card on `/now` asks for 2). */
+export const LIVE_MAX_DAYS = 7;
 /** What the account deletion form makes the user type. */
 export const DELETE_ACCOUNT_CONFIRM_MAX_LENGTH = 64;
 
@@ -615,6 +635,17 @@ export const GetProfileItemsInput = Schema.Struct({
   cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(PROFILE_ITEMS_CURSOR_MAX_LENGTH))),
 });
 export type GetProfileItemsInput = typeof GetProfileItemsInput.Type;
+
+/**
+ * One page of Live, newest first: the last `days` days in the viewer's zone
+ * (today counts as one), for the `scope`'s people.
+ */
+export const GetLiveInput = Schema.Struct({
+  days: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: LIVE_MAX_DAYS })),
+  scope: LiveScope,
+  cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(PROFILE_ITEMS_CURSOR_MAX_LENGTH))),
+});
+export type GetLiveInput = typeof GetLiveInput.Type;
 
 export const GetLeaderboardInput = Schema.Struct({
   scope: LeaderboardScope,
@@ -1062,6 +1093,87 @@ export class Leaderboard extends Schema.Class<Leaderboard>("Leaderboard")({
   me: Schema.NullOr(LeaderboardEntry),
   /** The period's first day in the viewer's zone, `null` for all time. */
   from: Schema.NullOr(LocalDate),
+}) {}
+
+/** Who did something on Live. */
+export class LiveActor extends Schema.Class<LiveActor>("LiveActor")({
+  username: Schema.String,
+  name: Schema.String,
+  /** The Google picture URL; load it with `referrerPolicy="no-referrer"`. */
+  image: Schema.NullOr(Schema.String),
+  /** Their user color, or `null` before their first app load. */
+  color: Schema.NullOr(UserColor),
+}) {}
+
+/** Kind-specific numbers for a Live event; unset ones are `null`. */
+export class LiveEventMeta extends Schema.Class<LiveEventMeta>("LiveEventMeta")({
+  /** `goal_progressed`: the goal's percent after the day's changes. */
+  percent: Schema.NullOr(Schema.Number),
+  /** `goal_progressed`: whether the day left the goal higher than it started. */
+  rose: Schema.NullOr(Schema.Boolean),
+  /** Sessions: the planned length when started or completed, the time focused when stopped. */
+  minutes: Schema.NullOr(Schema.Number),
+  /** `habit_checked`: taps that day. */
+  count: Schema.NullOr(Schema.Number),
+}) {}
+
+/**
+ * One event on Live. `title` is `null` when `display` is `redacted` (and for
+ * sessions without a label); the item's current privacy and share flag
+ * decide both, so a change applies at once.
+ */
+export class LiveEvent extends Schema.Class<LiveEvent>("LiveEvent")({
+  /** The activity row's id. */
+  id: Schema.String,
+  actor: LiveActor,
+  /** The viewer's own event. */
+  mine: Schema.Boolean,
+  kind: ActivityKind,
+  occurredAt: Schema.Date,
+  display: LiveDisplay,
+  title: Schema.NullOr(Schema.String),
+  meta: LiveEventMeta,
+}) {}
+
+export class LivePage extends Schema.Class<LivePage>("LivePage")({
+  events: Schema.Array(LiveEvent),
+  /** Older events, or `null` at the start of the window. */
+  nextCursor: Schema.NullOr(Schema.String),
+  /** Whether the viewer has any connections (the empty state points to people search when not). */
+  hasConnections: Schema.Boolean,
+}) {}
+
+/** Kind-specific numbers for a Path step; unset ones are `null`. */
+export class PathEventMeta extends Schema.Class<PathEventMeta>("PathEventMeta")({
+  /** `goal_progressed`: the goal's percent after today's changes. */
+  percent: Schema.NullOr(Schema.Number),
+  /** `goal_progressed`: whether today left the goal higher than it started. */
+  rose: Schema.NullOr(Schema.Boolean),
+  /** `session_completed`: its planned length. */
+  minutes: Schema.NullOr(Schema.Number),
+  /** `habit_checked`: taps today. */
+  count: Schema.NullOr(Schema.Number),
+}) {}
+
+/**
+ * One step of the viewer's Path: something they got done today, whatever
+ * its privacy or share flag (it's only ever shown to them). A habit appears
+ * once, at its last tap; a goal once, at its last change.
+ */
+export class PathEvent extends Schema.Class<PathEvent>("PathEvent")({
+  /** The activity row's or check-in's id. */
+  id: Schema.String,
+  kind: PathKind,
+  occurredAt: Schema.Date,
+  /** The task's or habit's title, the goal's name or the session's label (may be `null`). */
+  title: Schema.NullOr(Schema.String),
+  meta: PathEventMeta,
+}) {}
+
+/** The viewer's Path for today, oldest first. */
+export class Path extends Schema.Class<Path>("Path")({
+  date: LocalDate,
+  events: Schema.Array(PathEvent),
 }) {}
 
 export class SocialOverview extends Schema.Class<SocialOverview>("SocialOverview")({

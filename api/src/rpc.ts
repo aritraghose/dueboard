@@ -19,8 +19,11 @@ import {
   Day,
   DeleteAccountInput,
   GetLeaderboardInput,
+  GetLiveInput,
   GetProfileItemsInput,
   Leaderboard,
+  LivePage,
+  Path,
   ExtendSessionInput,
   FocusSession,
   Goal,
@@ -627,6 +630,25 @@ export class ApiRpcs extends RpcGroup.make(
     payload: GetLeaderboardInput,
     success: Leaderboard,
     error: InvalidInput,
+  }),
+  /**
+   * Live: what the user and their connections did over the last `days`
+   * days (in the user's zone), items shared to Live only, newest first,
+   * paginated by `nextCursor`. Other people's private items come back
+   * redacted (no title).
+   */
+  Rpc.make("GetLive", {
+    payload: GetLiveInput,
+    success: LivePage,
+    error: InvalidInput,
+  }),
+  /**
+   * The user's Path: what they got done today (in their zone), oldest
+   * first: tasks settled, habits checked, goals moved, sessions completed.
+   * Private and unshared items included; it's only ever theirs.
+   */
+  Rpc.make("GetPath", {
+    success: Path,
   }),
 )
   .middleware(Authentication)

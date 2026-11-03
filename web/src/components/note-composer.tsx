@@ -24,8 +24,8 @@ import { PRIVACY_HINT } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
 // Writing notes: 60 characters, for today. The compact box sits at the
-// bottom of the Live card; the full composer heads `/notes` with privacy and
-// Live controls.
+// bottom of the Live card; the full composer heads `/notes`. Both have
+// privacy and Live controls, starting from the user's defaults.
 
 /** Characters left, turning to the warning color for the last 10. */
 export function NoteCountdown({ length, className }: { length: number; className?: string }) {
@@ -106,12 +106,21 @@ function usePostNote(today: LocalDate | null) {
   };
 }
 
-/** The Live card's note box: 60 characters with a countdown, using the default privacy. */
+/**
+ * The Live card's note box: 60 characters with a countdown, and the privacy
+ * and Live pills under it (the user's defaults until changed). `footer`
+ * sits at the right of that row.
+ */
 export function CompactNoteComposer({ today, footer }: { today: LocalDate | null; footer?: ReactNode }) {
+  const settings = useBootstrap()?.settings;
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
+  const [privacy, setPrivacy] = useState<Privacy | null>(null);
+  const [shareToLive, setShareToLive] = useState<boolean | null>(null);
   const post = usePostNote(today);
   const body = cleanNoteBody(text);
+  const shownPrivacy = privacy ?? settings?.defaultPrivacy ?? "connections";
+  const shownShare = shareToLive ?? settings?.defaultShareToLive ?? true;
 
   return (
     <form
@@ -121,7 +130,7 @@ export function CompactNoteComposer({ today, footer }: { today: LocalDate | null
         if (!body || posting) return;
         setPosting(true);
         setText("");
-        const note = await post(body);
+        const note = await post(body, { privacy: shownPrivacy, shareToLive: shownShare });
         setPosting(false);
         if (note) toast("Note posted.");
         else setText((current) => current || body);
@@ -152,7 +161,12 @@ export function CompactNoteComposer({ today, footer }: { today: LocalDate | null
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
-      {footer}
+      {/* One row; on phones it stops short of Tibo's button, which floats at the bottom right. */}
+      <div className="flex items-center gap-0.5 px-1 max-md:pr-12">
+        <PrivacyPill value={shownPrivacy} onChange={setPrivacy} />
+        <LiveToggle value={shownShare} onChange={setShareToLive} />
+        <div className="ml-auto min-w-0 shrink-0">{footer}</div>
+      </div>
     </form>
   );
 }

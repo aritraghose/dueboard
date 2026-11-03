@@ -16,6 +16,12 @@ export type TopBarSlots = {
   readonly center?: ComponentType;
   /** `false` hides the Tibo button (`/inbox` is Tibo already). */
   readonly tibo?: boolean;
+  /**
+   * The page shows Tibo (and the session timer) in its own header on wide
+   * screens (`/live`), so a row with nothing else isn't drawn there. Phones
+   * keep the floating button.
+   */
+  readonly tiboInPage?: boolean;
   /** The page has a toggle that hides the whole row (`/now`; see `useTopBarHidden`). */
   readonly hideable?: boolean;
   /** `false` when the page shows the active session itself (`/now`'s start slot). */
@@ -48,7 +54,7 @@ export function TopBar({ className }: { className?: string }) {
   const slots = useTopBarSlots();
   const Start = slots?.start;
   const Center = slots?.center;
-  const tibo = slots?.tibo ?? true;
+  const tibo = (slots?.tibo ?? true) && !slots?.tiboInPage;
   const hidden = useTopBarHidden();
   const active = useTimerSession().session;
   const session = (slots?.session ?? true) && Boolean(active);

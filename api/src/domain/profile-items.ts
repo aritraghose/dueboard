@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import { Activity, Blocks, FocusSessions, Goals, Habits, Notes, Tasks } from "../schema.ts";
 import { AuthUsers } from "./auth-users.ts";
@@ -11,11 +11,17 @@ import {
   ProfileItemPage,
   UserNotFound,
   decodeInput,
-  type Privacy,
 } from "./model.ts";
 import { FEED_KINDS, decodeItemCursor, encodeItemCursor } from "./profile-rules.ts";
 import { normalizeUsername } from "./social-rules.ts";
-import { viewerRelation, visiblePrivacies } from "./visibility.ts";
+import {
+  activitySubjectExists,
+  activitySubjectJoin,
+  activitySubjectPrivacy,
+  activitySubjectTitle,
+  privacyVisibleSql,
+  viewerRelation,
+} from "./visibility.ts";
 
 // A profile's item tabs (Tasks, Habits, Goals, Sessions, Diary): what the
 // owner completed (and, in the diary, their notes), newest first, filtered
@@ -25,9 +31,6 @@ import { viewerRelation, visiblePrivacies } from "./visibility.ts";
 
 const notFound = (username: string) =>
   new UserNotFound({ message: `There's no one called @${username.replace(/^@/, "")}.`, username });
-
-/** The item's privacy, from whichever table the activity row points at. */
-const itemPrivacy = sql<Privacy | null>`coalesce(${Tasks.privacy}, ${Habits.privacy}, ${Goals.privacy}, ${FocusSessions.privacy}, ${Notes.privacy})`;
 
 /** One page of a profile tab for `viewerId` (`null` when logged out). Someone who blocked the viewer is `UserNotFound`. */
 export const getProfileItems = Effect.fn("getProfileItems")(function* (
@@ -60,24 +63,22 @@ export const getProfileItems = Effect.fn("getProfileItems")(function* (
       kind: Activity.kind,
       localDate: Activity.localDate,
       occurredAt: Activity.occurredAt,
-      title: sql<string | null>`coalesce(${Tasks.title}, ${Habits.title}, ${Goals.name}, ${FocusSessions.label}, ${Notes.body})`,
-      privacy: itemPrivacy,
+      title: activitySubjectTitle,
+      privacy: activitySubjectPrivacy,
       plannedMinutes: FocusSessions.plannedMinutes,
     })
     .from(Activity)
-    .leftJoin(Tasks, and(eq(Activity.subjectType, "task"), eq(Tasks.id, Activity.subjectId)))
-    .leftJoin(Habits, and(eq(Activity.subjectType, "habit"), eq(Habits.id, Activity.subjectId)))
-    .leftJoin(Goals, and(eq(Activity.subjectType, "goal"), eq(Goals.id, Activity.subjectId)))
-    .leftJoin(
-      FocusSessions,
-      and(eq(Activity.subjectType, "session"), eq(FocusSessions.id, Activity.subjectId)),
-    )
-    .leftJoin(Notes, and(eq(Activity.subjectType, "note"), eq(Notes.id, Activity.subjectId)))
+    .leftJoin(Tasks, activitySubjectJoin.task)
+    .leftJoin(Habits, activitySubjectJoin.habit)
+    .leftJoin(Goals, activitySubjectJoin.goal)
+    .leftJoin(FocusSessions, activitySubjectJoin.session)
+    .leftJoin(Notes, activitySubjectJoin.note)
     .where(
       and(
         eq(Activity.userId, owner.id),
         inArray(Activity.kind, [...FEED_KINDS[feed]]),
-        inArray(itemPrivacy, [...visiblePrivacies(relation)]),
+        activitySubjectExists,
+        privacyVisibleSql(relation, activitySubjectPrivacy),
         after
           ? or(
               lt(Activity.occurredAt, after.occurredAt),
