@@ -685,6 +685,18 @@ export const AiUsageEvents = pgTable(
 );
 export type AiUsageEventRow = typeof AiUsageEvents.$inferSelect;
 
+/**
+ * Tibo threads still to wipe: account deletion queues the user here in its
+ * transaction, and the AgentWorker's cron deletes their `TiboAgent`'s
+ * storage, then the row (`domain/tibo.ts`). The ApiWorker can't call the
+ * agent itself: the AgentWorker binds it, so binding back would be a cycle.
+ * Kept after the account is gone, on purpose.
+ */
+export const TiboWipes = pgTable("tibo_wipes", {
+  userId: text("user_id").primaryKey(),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const relations = defineRelations(
   {
     UserSettings,

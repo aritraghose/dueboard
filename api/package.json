@@ -17,6 +17,12 @@
       "import": "./lib/rpc.js",
       "default": "./lib/rpc.js"
     },
+    "./tibo": {
+      "bun": "./src/tibo/protocol.ts",
+      "types": "./lib/tibo/protocol.d.ts",
+      "import": "./lib/tibo/protocol.js",
+      "default": "./lib/tibo/protocol.js"
+    },
     "./limits": {
       "bun": "./src/limits.ts",
       "types": "./lib/limits.d.ts",

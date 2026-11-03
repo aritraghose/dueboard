@@ -4,6 +4,12 @@
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
+/*
+ * A Tibo message row (`data-tibo-entry`) being hovered, on any screen.
+ * Tailwind's `group-hover` only applies on `(hover: hover)` screens, so the
+ * hover Reply button never showed on phones.
+ */
+@custom-variant entry-hover (&:is([data-tibo-entry]:hover *));
 
 /* Streamdown renders the agent's markdown replies with Tailwind classes. */
 @source "../node_modules/streamdown/dist/*.js";
@@ -95,11 +101,24 @@
   --cream: oklch(0.95 0.05 86);
   --cream-foreground: oklch(0.36 0.06 70);
 
-  /* Your chat bubble, in deep teal (Tibo's replies are plain text). */
+  /* Your chat bubble, in deep teal. */
   --bubble-me: oklch(0.43 0.085 192);
   --bubble-me-foreground: oklch(0.985 0.012 95);
+  /*
+   * Tibo's bubbles: a light cream with a hairline teal edge, so they sit on
+   * the panel's cream-to-teal wash without competing with yours.
+   */
+  --bubble-tibo: oklch(0.985 0.02 90 / 94%);
+  --bubble-tibo-foreground: var(--foreground);
+  --bubble-tibo-border: oklch(0.88 0.035 185);
+  /* Your message's double tick once Tibo has read it: bright on your teal bubble. */
+  --tick-seen: oklch(0.86 0.11 190);
+  /* The dot on the Tibo button when it said something you haven't seen. */
+  --tibo-unread: var(--tag-orange);
   /* The message box's edge: a cream leaning toward the teal around it. */
   --composer-border: oklch(0.77 0.09 95);
+  /* The message box's fill: a light teal, a shade under the nav's. */
+  --composer: oklch(0.955 0.03 183);
 
   /* The glow under `/now`'s two cards: teal into marigold, soft. */
   --card-glow: linear-gradient(120deg, oklch(0.7 0.13 190 / 85%), oklch(0.8 0.15 75 / 80%));
@@ -237,6 +256,23 @@
       transform: rotate(-360deg);
     }
   }
+  /*
+   * Tibo's typing dots: each rises and brightens in turn (staggered with
+   * `animation-delay`). Under reduced motion they hold still, half lit.
+   */
+  --animate-tibo-typing: tibo-typing 1.2s ease-in-out infinite;
+  @keyframes tibo-typing {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.45;
+    }
+    30% {
+      transform: translateY(-3px);
+      opacity: 1;
+    }
+  }
   /* A picked importance star pops once. */
   --animate-star-pop: star-pop 320ms cubic-bezier(0.3, 1.6, 0.5, 1);
   @keyframes star-pop {
@@ -333,6 +369,12 @@
   --color-cream: var(--cream);
   --color-bubble-me: var(--bubble-me);
   --color-bubble-me-foreground: var(--bubble-me-foreground);
+  --color-bubble-tibo: var(--bubble-tibo);
+  --color-bubble-tibo-foreground: var(--bubble-tibo-foreground);
+  --color-bubble-tibo-border: var(--bubble-tibo-border);
+  --color-tibo-unread: var(--tibo-unread);
+  --color-tick-seen: var(--tick-seen);
+  --color-composer: var(--composer);
   --color-composer-border: var(--composer-border);
   --color-cream-foreground: var(--cream-foreground);
   --color-tag: var(--tag-solid);
@@ -416,7 +458,13 @@
   --cream-foreground: #f5f5f5;
   --bubble-me: #2a2a2a;
   --bubble-me-foreground: #f5f5f5;
+  --bubble-tibo: #171717;
+  --bubble-tibo-foreground: #f5f5f5;
+  --bubble-tibo-border: #262626;
+  --tick-seen: oklch(0.78 0.12 230);
   --composer-border: var(--input);
+  /* Dark keeps the input's usual faint fill. */
+  --composer: color-mix(in oklab, var(--input) 30%, transparent);
   --card-glow: linear-gradient(120deg, oklch(0.55 0.11 190 / 55%), oklch(0.65 0.13 75 / 45%));
   --success: oklch(0.8 0.15 155);
   --success-ink: var(--success);

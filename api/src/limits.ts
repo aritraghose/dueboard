@@ -38,13 +38,13 @@ export const LIMITS = {
     key: "user",
     where: "ApiWorker: `Authentication` middleware, and `PublicRpcs` for signed-in viewers",
   }),
-  /** Chat turns, per user. Each is a paid model call, sent over the WebSocket. */
+  /** Tibo turns, per user. Each is a paid model call, sent over the WebSocket. */
   chat: limit({
     name: "CHAT_RATE_LIMIT",
     namespaceId: 1005,
     simple: { limit: 10, period: 60 },
     key: "user",
-    where: "AgentWorker: `ChatAgent.onChatMessage`",
+    where: "AgentWorker: `TiboAgent.turn` (`tibo/TiboAgent.ts`)",
   }),
   /**
    * Sending connection requests, per user: a burst limit. The 20-a-day cap

@@ -271,10 +271,25 @@ If it gets slow later, add a materialized per-user inbox.
 - The side panel and `/inbox` are two views of the same WebSocket thread, so
   every tab and device stays in sync.
 - Model: **Meta Muse Spark 1.3 only** (`meta/muse-spark-1.3`) through AI
-  Gateway with BYOK. Use the Responses-format setup already in `api/src/agent.ts`
+  Gateway with BYOK, through the Responses-format setup in `api/src/tibo/model.ts`
   (`@ai-sdk/openai` `.responses()` + `env.AI.run` with
   `openaiEndpoint: "/v1/responses"` + the `cf-aig-no-wholesale` header). The
   Agents SDK's `createAI` cannot read this model's replies.
+- **Built (step 17)**: `api/src/tibo/` (`TiboAgent.ts`, `thread.ts`, `context.ts`,
+  `bubbles.ts`, `persona.ts`, `protocol.ts`, `model.ts`). Planning's decision log
+  has the details. **Turn pipeline extension points** for steps 18 and 19:
+  - `buildTurnContext({ persona, profile, now, recent, sections })` in
+    `context.ts`: step 18 adds the today snapshot as a `section`; step 19 adds
+    summaries and memories as more `sections` and may shrink `recent`.
+  - `TiboAgent.reply` is where `streamText` is called: tools (and a step
+    limit) go there in step 18, and the persona's `NO_TOOLS_YET` line is
+    replaced by the tool rules. Tool steps should keep streaming text through
+    the same `BubbleSplitter`.
+  - `TiboAgent.turn` ends after the charge: step 19 schedules its summary and
+    memory jobs there (DO alarms, never blocking the reply).
+  - `Thread.search(query, limit)` (FTS5) is `search_conversation`'s backend.
+  - `system_event` rows are already a role: steps 20 and 21 add them with
+    `thread.add`, and they reach the model marked as app events.
 
 ### 7.2 Thread storage (DO SQLite)
 
@@ -389,7 +404,7 @@ user** (§8).
   - **Tables**: `ai_usage` (`user_id`, `period` `YYYY-MM` in the user's zone, `units`; PK both) and `ai_usage_events` (`id`, `user_id`, `units`, `reason` `tibo_reply`|`tibo_proactive`|`relay`|`ask_answer`, `ref?`, `created_at`).
   - **Domain** (`domain/usage.ts`, pure rules in `usage-rules.ts`): `getUsage(userId)` → `AiUsage { used, limit, remaining, period, resetsAt }` in whole messages; `canSpend(userId, units)`; `recordUsage(userId, units, reason, ref?)` (atomic upsert plus an event, returns the new usage); `chargeSplit(userA, userB, unitsEach, reason, ref?)` (one transaction). The quota comes from the `AiQuota` service, which the ApiWorker reads from `AI_MONTHLY_MESSAGE_QUOTA` (Effect `Config`, default 300).
   - **Callers outside the ApiWorker** use its internal path `/internal/usage/{get,check,record,charge-split}` (JSON POST, `api/src/internal.ts`) through `usageClient(env.API)` (`api/src/internal-client.ts`). Only the AgentWorker binds it for this; the website forwards only `/rpc` and `/api/auth/*`. Step 18's internal binding replaces the path behind the same calls.
-  - **Chat contract**: before the model call, `check(user, 2)`; out of quota, the turn ends with a stream `error` chunk whose text is `AI_LIMIT_REACHED` and no model call. After the reply finishes (or is stopped after it started), `record(user, 2, "tibo_reply", requestId)`. The UI hides the composer when `GetAiUsage.remaining` is 0 or that error arrives, and shows its own Tibo-bubble notice.
+  - **Chat contract** (kept by step 17's `TiboAgent`): before the model call, `check(user, 2)`; out of quota, the agent sends `limitReached` and makes no model call. Once a bubble or reaction was shown, `record(user, 2, "tibo_reply", turnId)`. The UI hides the composer when the usage is 0 or `limitReached` arrives, and shows its own notice.
 
 ## 9. Rate limiting and abuse protection
 
@@ -399,7 +414,7 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
 |---|---|---|---|
 | 1003 `AUTH_RATE_LIMIT` | IP | 30/min | Website: `/api/auth/*` (`routes/api/auth/$.ts`) |
 | 1004 `RPC_RATE_LIMIT` | user | 120/min | ApiWorker: every authenticated RPC (`Authentication`), and `PublicRpcs` for signed-in viewers |
-| 1005 `CHAT_RATE_LIMIT` | user | 10/min | AgentWorker: chat turns (`ChatAgent.onChatMessage`) |
+| 1005 `CHAT_RATE_LIMIT` | user | 10/min | AgentWorker: Tibo turns (`TiboAgent.turn`) |
 | 1006 `CONNECTION_REQUEST_RATE_LIMIT` | user | 5/min burst, plus 20 per 24 h counted in Postgres | ApiWorker: connection requests (`social.ts`, via `RateLimiter`) |
 | 1007 | user | strict (e.g. 30/day) | reserved: relays sent (step 21) |
 | 1008 `PUBLIC_READ_RATE_LIMIT` | IP (`cf-connecting-ip`) | 60/min | ApiWorker: `PublicRpcs` for logged-out visitors |

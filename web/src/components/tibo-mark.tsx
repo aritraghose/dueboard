@@ -14,12 +14,24 @@ const RINGS = [
  * past them, and the logo's bright dot on the inner ring. Drawn inline so it
  * takes the `--tibo*` tokens.
  *
- * Every few seconds the outer ring turns clockwise and the inner one
+ * Every few seconds (unless `idle` is off) the outer ring turns clockwise and the inner one
  * counter-clockwise (the gradients turn with them, and the dot rides the
  * inner one, so the turn shows). Bumping `spin` (a click count, say)
  * restarts the cycle, so they turn at once.
  */
-export function TiboMark({ className, spin = 0 }: { className?: string; spin?: number }) {
+export function TiboMark({
+  className,
+  spin = 0,
+  idle = true,
+}: {
+  className?: string;
+  spin?: number;
+  /**
+   * `false` keeps the rings still between bumps of `spin`, each of which
+   * turns them once (the thread's avatars, so a long thread isn't busy).
+   */
+  idle?: boolean;
+}) {
   const id = useId();
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className={cn("size-5 shrink-0", className)}>
@@ -37,7 +49,14 @@ export function TiboMark({ className, spin = 0 }: { className?: string; spin?: n
       {RINGS.map(({ r, width, spin: animation }, i) => (
         // A new key per `spin` restarts the animation. Each ring turns about
         // the avatar's center (`transform-view` makes that the view box's).
-        <g key={`${r}-${spin}`} className={cn("origin-center transform-view", animation)}>
+        <g
+          key={`${r}-${spin}`}
+          className={cn(
+            "origin-center transform-view",
+            (idle || spin > 0) && animation,
+            !idle && "[animation-iteration-count:1]",
+          )}
+        >
           <circle cx="24" cy="24" r={r} fill="none" strokeWidth={width} stroke={`url(#${id}-${i})`} />
           {i === RINGS.length - 1 && (
             <>

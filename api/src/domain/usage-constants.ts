@@ -14,8 +14,3 @@ export const AI_MONTHLY_MESSAGE_QUOTA_DEFAULT = 300;
 export const AI_UNITS_PER_MESSAGE = 2;
 /** The most units one charge may record (a sanity bound for internal callers). */
 export const AI_UNITS_PER_CHARGE_MAX = 20;
-/**
- * What the chat stream's `error` chunk says when the user is out of AI
- * messages. The UI shows its own limit notice for it; nothing is stored.
- */
-export const AI_LIMIT_REACHED = "AI_LIMIT_REACHED";

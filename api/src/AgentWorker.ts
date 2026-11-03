@@ -19,8 +19,8 @@ export const Gateway = Cloudflare.AI.Gateway("Gateway", {
 });
 
 /**
- * The chat agent: a plain async Worker (`./agent.ts`) that hosts the
- * `ChatAgent` Durable Object, one instance per user. Like the ApiWorker it
+ * Tibo's Worker: a plain async Worker (`./agent.ts`) that hosts the
+ * `TiboAgent` Durable Object (`./tibo/TiboAgent.ts`), one instance per user. Like the ApiWorker it
  * has no public URL; the web stack reaches it over a service binding through
  * its `/agents/*` proxy (`web/src/server.ts`), which signs the user in and
  * pins the instance to their user id.
@@ -34,15 +34,21 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
   env: {
     AI: Cloudflare.Workers.AI(),
     AI_GATEWAY_ID: Effect.map(Gateway, (gateway) => gateway.gatewayId),
-    ChatAgent: Cloudflare.DurableObject("ChatAgent"),
-    // Per-user budget for chat turns, checked in `ChatAgent.onChatMessage`.
+    // Replaces the demo `ChatAgent`: dropping its binding makes Alchemy
+    // send a `deleted_classes` migration for it (its demo chats go with it)
+    // and a `new_sqlite_classes` one for this class.
+    TiboAgent: Cloudflare.DurableObject("TiboAgent"),
+    // Per-user budget for Tibo turns, checked in `TiboAgent.turn`.
     // Each turn is a paid model call, and chat messages arrive over the
     // WebSocket, past the web stack's HTTP rate limits (`./limits.ts`).
     CHAT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.chat.name, bindingProps(LIMITS.chat)),
-    // The ApiWorker, for the AI quota ledger through its internal path
-    // (`./internal-client.ts`) until step 18's internal binding.
+    // The ApiWorker, for the AI quota ledger, Tibo's profile facts and the
+    // wipe queue through its internal path (`./internal-client.ts`) until
+    // step 18's internal binding.
     API: ApiWorker,
   },
+  // Wipes deleted accounts' Tibo threads (`./agent.ts`).
+  crons: ["*/5 * * * *"],
 });
 
 export default AgentWorker;

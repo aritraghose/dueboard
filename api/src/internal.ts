@@ -4,6 +4,7 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Schema from "effect/Schema";
 import type { Database } from "./domain/database.ts";
 import { AI_UNITS_PER_CHARGE_MAX, AiUsageReason, Id } from "./domain/model.ts";
+import * as TiboService from "./domain/tibo.ts";
 import * as UsageService from "./domain/usage.ts";
 import { INTERNAL_PATH_PREFIX } from "./internal-client.ts";
 
@@ -26,6 +27,10 @@ const SplitBody = Schema.Struct({
   reason: AiUsageReason,
   ref: Ref,
 });
+
+/** Most queued Tibo wipes handed out per call. */
+const TIBO_WIPE_BATCH = 50;
+const WipesDone = Schema.Struct({ userIds: Schema.Array(Id).check(Schema.isMaxLength(TIBO_WIPE_BATCH)) });
 
 type Route = (
   body: unknown,
@@ -56,6 +61,17 @@ const routes: Record<string, Route> = {
       Effect.flatMap(({ userA, userB, unitsEach, reason, ref }) =>
         UsageService.chargeSplit(userA, userB, unitsEach, reason, ref),
       ),
+      Effect.as({ ok: true }),
+    ),
+  "tibo/profile": (body: unknown) =>
+    Schema.decodeUnknownEffect(UsageQuery)(body).pipe(
+      Effect.flatMap(({ userId }) => TiboService.getTiboProfile(userId)),
+    ),
+  "tibo/pending-wipes": () =>
+    TiboService.pendingTiboWipes(TIBO_WIPE_BATCH).pipe(Effect.map((userIds) => ({ userIds }))),
+  "tibo/wipes-done": (body: unknown) =>
+    Schema.decodeUnknownEffect(WipesDone)(body).pipe(
+      Effect.flatMap(({ userIds }) => TiboService.clearTiboWipes(userIds)),
       Effect.as({ ok: true }),
     ),
 };

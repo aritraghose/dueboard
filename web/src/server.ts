@@ -1,11 +1,12 @@
 import { MAX_REQUEST_BODY_BYTES } from "@dueboard/api/limits";
+import { TIBO_AGENT } from "@dueboard/api/tibo";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import { env } from "./env.ts";
 
 /**
  * The Worker's entry: TanStack Start's default handler, plus a same-origin
- * proxy for the chat agent (`api/src/agent.ts`). `useAgentChat` talks to
- * `/agents/chat-agent/<name>` over a WebSocket and plain HTTP; this forwards
+ * proxy for Tibo (`api/src/tibo/TiboAgent.ts`). `TiboThread` talks to
+ * `/agents/tibo-agent/<name>` over a WebSocket; this forwards
  * both to the private `AGENT` service binding. It runs before Start, so the
  * WebSocket upgrade response reaches the browser untouched.
  *
@@ -89,10 +90,10 @@ async function proxyAgent(request: Request): Promise<Response> {
   const userId = await getOnboardedUserId(request);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
-  // `/agents/chat-agent/<name>/…`: only the chat agent, and only the signed-in
-  // user's own instance, whatever name the browser asked for.
+  // `/agents/tibo-agent/<name>/…`: only Tibo, and only the signed-in user's
+  // own instance, whatever name the browser asked for.
   const [, , agent, , ...rest] = url.pathname.split("/");
-  if (agent !== "chat-agent") return new Response("Not found", { status: 404 });
+  if (agent !== TIBO_AGENT) return new Response("Not found", { status: 404 });
   url.pathname = ["", "agents", agent, encodeURIComponent(userId), ...rest].join("/");
 
   return await env.AGENT.fetch(new Request(url, request));

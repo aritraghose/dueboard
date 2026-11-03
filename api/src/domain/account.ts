@@ -21,6 +21,7 @@ import {
 } from "../schema.ts";
 import { Database, transaction, type Executor } from "./database.ts";
 import { DeleteAccountInput, InvalidInput, decodeInput } from "./model.ts";
+import { queueTiboWipe } from "./tibo.ts";
 
 // Account deletion: every row the user owns, then their Better Auth user.
 // The app's rows go in one transaction; Better Auth's (user, sessions,
@@ -75,10 +76,12 @@ export const deleteUserData = (tx: Executor, userId: string) =>
   });
 
 /**
- * Runs once the user's rows are gone, before Better Auth's. A no-op for
- * now: step 17 wipes the user's `TiboAgent` Durable Object here.
+ * Runs in the deletion's transaction, after the user's rows are gone:
+ * queues their `TiboAgent` thread for wiping. The AgentWorker's cron wipes
+ * it within a few minutes (`domain/tibo.ts`), so the thread can't outlive
+ * the data even if this request dies right after.
  */
-export const onAccountDeleted = (_userId: string): Effect.Effect<void> => Effect.void;
+export const onAccountDeleted = (tx: Executor, userId: string) => queueTiboWipe(tx, userId);
 
 /**
  * Deletes the account after the user typed their username (`@` and case
@@ -94,8 +97,9 @@ export const deleteAccount = Effect.fn("deleteAccount")(function* (
     return yield* new InvalidInput({ message: `Type ${username} to confirm.` });
   }
   const db = yield* Database;
-  yield* transaction(db, (tx) => deleteUserData(tx, userId));
-  yield* onAccountDeleted(userId);
+  yield* transaction(db, (tx) =>
+    deleteUserData(tx, userId).pipe(Effect.andThen(onAccountDeleted(tx, userId))),
+  );
   const auth = yield* AuthAccounts;
   yield* auth.deleteUser(userId);
 });

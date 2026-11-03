@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { TiboMark } from "@/components/tibo-mark";
+import { UnreadDot } from "@/components/tibo-panel";
 import { useTopBarSlots } from "@/components/top-bar";
-import { useTibo } from "@/hooks/use-tibo";
+import { useTibo, useTiboThread } from "@/hooks/use-tibo";
 import { cn } from "@/lib/utils";
 
 const POSITION_KEY = "dueboard-tibo-fab";
@@ -30,6 +31,7 @@ function readPosition(): Position | null {
  */
 export function TiboFab({ className }: { className?: string }) {
   const { setOpen } = useTibo();
+  const { unread } = useTiboThread();
   const slots = useTopBarSlots();
   const [position, setPosition] = useState<Position | null>(null);
   // Each tap turns Tibo's rings at once.
@@ -94,7 +96,7 @@ export function TiboFab({ className }: { className?: string }) {
     <button
       ref={button}
       type="button"
-      aria-label="Open Tibo"
+      aria-label={unread ? "Open Tibo, new message" : "Open Tibo"}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -117,6 +119,7 @@ export function TiboFab({ className }: { className?: string }) {
       )}
     >
       <TiboMark spin={spins} className="size-12" />
+      {unread && <UnreadDot className="absolute top-0.5 right-0.5" />}
     </button>
   );
 }

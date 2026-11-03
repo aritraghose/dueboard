@@ -16,13 +16,10 @@ export interface AiUsageJson {
   readonly resetsAt: string;
 }
 
-/**
- * The usage ledger's calls (`domain/usage.ts`), for code outside the
- * ApiWorker. Check with `check` before a model call, then `record` (or
- * `chargeSplit` for a relay turn) after it succeeds.
- */
-export const usageClient = (api: { fetch: (request: Request) => Promise<Response> }) => {
-  const call = async <A>(path: string, body: unknown): Promise<A> => {
+/** POSTs `body` as JSON to `/internal/<path>` and reads the JSON answer. */
+const internalCall =
+  (api: { fetch: (request: Request) => Promise<Response> }) =>
+  async <A>(path: string, body: unknown): Promise<A> => {
     const response = await api.fetch(
       new Request(`https://api.internal${INTERNAL_PATH_PREFIX}${path}`, {
         method: "POST",
@@ -35,6 +32,14 @@ export const usageClient = (api: { fetch: (request: Request) => Promise<Response
     }
     return (await response.json()) as A;
   };
+
+/**
+ * The usage ledger's calls (`domain/usage.ts`), for code outside the
+ * ApiWorker. Check with `check` before a model call, then `record` (or
+ * `chargeSplit` for a relay turn) after it succeeds.
+ */
+export const usageClient = (api: { fetch: (request: Request) => Promise<Response> }) => {
+  const call = internalCall(api);
   return {
     get: (userId: string) => call<AiUsageJson>("usage/get", { userId }),
     check: (userId: string, units: number) =>
@@ -48,5 +53,16 @@ export const usageClient = (api: { fetch: (request: Request) => Promise<Response
       reason: AiUsageReason,
       ref: string | null = null,
     ) => call<{ ok: true }>("usage/charge-split", { userA, userB, unitsEach, reason, ref }),
+  };
+};
+
+/** What `TiboAgent` reads from Postgres (`domain/tibo.ts`). */
+export const tiboClient = (api: { fetch: (request: Request) => Promise<Response> }) => {
+  const call = internalCall(api);
+  return {
+    profile: (userId: string) =>
+      call<{ firstName: string; timeZone: string }>("tibo/profile", { userId }),
+    pendingWipes: () => call<{ userIds: string[] }>("tibo/pending-wipes", {}),
+    wipesDone: (userIds: readonly string[]) => call<{ ok: true }>("tibo/wipes-done", { userIds }),
   };
 };

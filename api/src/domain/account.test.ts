@@ -6,6 +6,9 @@ import { USER_OWNED_TABLES } from "./account.ts";
 // Tables that hold no user's rows directly: they cascade from a parent the
 // deletion covers.
 const CASCADED = new Set(["habit_pauses", "focus_session_segments"]);
+// Tables deletion fills rather than empties: the queue of Tibo threads to
+// wipe once the account is gone (`onAccountDeleted`).
+const KEPT = new Set(["tibo_wipes"]);
 
 describe("account deletion", () => {
   test("covers every table in the schema", () => {
@@ -13,7 +16,7 @@ describe("account deletion", () => {
     const tables = Object.values(schema)
       .filter((value) => isTable(value))
       .map((table) => getTableName(table));
-    const missing = tables.filter((name) => !covered.has(name) && !CASCADED.has(name));
+    const missing = tables.filter((name) => !covered.has(name) && !CASCADED.has(name) && !KEPT.has(name));
     expect(missing).toEqual([]);
   });
 
