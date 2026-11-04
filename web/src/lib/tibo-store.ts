@@ -1,4 +1,5 @@
-import type { TiboMessage, TiboQuote, TiboServerFrame } from "@dueboard/api/tibo";
+import type { TiboActivity, TiboAttachment, TiboMessage, TiboQuote, TiboServerFrame } from "@dueboard/api/tibo";
+import { fileNames } from "./tibo-files.ts";
 
 // The browser's copy of Tibo's thread (`api/src/tibo/protocol.ts`). One
 // store per app, owned by `TiboProvider`, fed by one WebSocket
@@ -13,6 +14,8 @@ export interface PendingMessage {
   readonly body: string;
   readonly createdAt: number;
   readonly replyTo?: TiboQuote;
+  /** Files already uploaded, sent with it. */
+  readonly attachments?: readonly TiboAttachment[];
 }
 
 /** A Tibo-voiced line about a failure: shown once, never stored. */
@@ -43,7 +46,15 @@ export interface TiboThreadState {
    * closed). Cleared everywhere once any device shows the thread.
    */
   readonly unread: boolean;
+  /**
+   * Tibo's activities seen live since the app opened (threads and steps,
+   * by id): what it's doing now, and the newest of the Activity tab.
+   */
+  readonly activities: Readonly<Record<string, TiboActivity>>;
 }
+
+/** Live activities kept in memory; older finished ones are dropped (the Activity tab loads them). */
+const LIVE_ACTIVITY_LIMIT = 400;
 
 const initial: TiboThreadState = {
   connected: false,
@@ -58,6 +69,7 @@ const initial: TiboThreadState = {
   notice: null,
   usage: null,
   unread: false,
+  activities: {},
 };
 
 export type TiboStore = ReturnType<typeof createTiboStore>;
@@ -94,6 +106,11 @@ export function createTiboStore() {
             (pending) => !frame.messages.some((message) => message.clientId === pending.clientId),
           ),
           unread: viewers === 0 && (frame.unread || state.unread),
+          // What's running now replaces what was running before the socket dropped.
+          activities: {
+            ...Object.fromEntries(Object.entries(state.activities).filter(([, activity]) => activity.status !== "running")),
+            ...Object.fromEntries((frame.activity ?? []).map((activity) => [activity.id, activity])),
+          },
         });
         if (viewers > 0 && frame.unread) markRead();
         return;
@@ -133,6 +150,19 @@ export function createTiboStore() {
       case "changed":
         onChanged?.(frame.keys);
         return;
+      case "activity": {
+        let activities: Record<string, TiboActivity> = { ...state.activities, [frame.activity.id]: frame.activity };
+        const ids = Object.keys(activities);
+        if (ids.length > LIVE_ACTIVITY_LIMIT) {
+          const finished = Object.values(activities)
+            .filter((activity) => activity.status !== "running")
+            .sort((a, b) => a.startedAt - b.startedAt);
+          const drop = new Set(finished.slice(0, ids.length - LIVE_ACTIVITY_LIMIT).map((activity) => activity.id));
+          activities = Object.fromEntries(Object.entries(activities).filter(([id]) => !drop.has(id)));
+        }
+        set({ activities });
+        return;
+      }
       case "reaction":
         set({
           messages: state.messages.map((message) => {
@@ -198,17 +228,37 @@ export function createTiboStore() {
     },
 
     /**
-     * Sends a message, maybe as a reply to `replyTo`; it shows at once, then
-     * swaps for the stored copy (whose quote the agent builds).
+     * Sends a message, maybe as a reply to `replyTo`, with any uploaded
+     * files; it shows at once, then swaps for the stored copy (whose quote
+     * the agent builds). Text may be empty when files go with it.
      */
-    send(text: string, replyTo?: TiboMessage): boolean {
+    send(text: string, replyTo?: TiboMessage, attachments: readonly TiboAttachment[] = []): boolean {
       const body = text.trim();
-      if (!body || !socket) return false;
+      if ((!body && attachments.length === 0) || !socket) return false;
       const clientId = crypto.randomUUID();
-      socket.send(JSON.stringify({ type: "send", text: body, clientId, ...(replyTo ? { replyTo: replyTo.id } : {}) }));
-      const quote = replyTo ? { id: replyTo.id, role: replyTo.role, body: replyTo.body } : undefined;
+      socket.send(
+        JSON.stringify({
+          type: "send",
+          text: body,
+          clientId,
+          ...(replyTo ? { replyTo: replyTo.id } : {}),
+          ...(attachments.length > 0 ? { attachments: attachments.map((attachment) => attachment.id) } : {}),
+        }),
+      );
+      const quote = replyTo
+        ? { id: replyTo.id, role: replyTo.role, body: replyTo.body || fileNames(replyTo.attachments) }
+        : undefined;
       set({
-        pending: [...state.pending, { clientId, body, createdAt: Date.now(), ...(quote ? { replyTo: quote } : {}) }],
+        pending: [
+          ...state.pending,
+          {
+            clientId,
+            body,
+            createdAt: Date.now(),
+            ...(quote ? { replyTo: quote } : {}),
+            ...(attachments.length > 0 ? { attachments } : {}),
+          },
+        ],
         notice: null,
         errorBubble: null,
       });

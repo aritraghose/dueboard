@@ -32,6 +32,8 @@ export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
     // the file into text (`toMarkdown`), per user under its own limit.
     AI: Cloudflare.Workers.AI(),
     ASK_DOCUMENT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.askDocument.name, bindingProps(LIMITS.askDocument)),
+    // Files sent to Tibo, per user, in the `/agents/*` proxy (`src/server.ts`).
+    TIBO_FILE_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.tiboFile.name, bindingProps(LIMITS.tiboFile)),
   },
 }) {}
 

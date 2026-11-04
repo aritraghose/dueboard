@@ -9,7 +9,8 @@
 // the recent window drops its oldest messages (never below
 // `MIN_RECENT_MESSAGES`) to fit what's left. Tools come on top.
 
-import type { ModelMessage } from "ai";
+import type { FilePart, ModelMessage, TextPart } from "ai";
+import { fileLine } from "./attachment-rules.ts";
 import { joinBubbles, reactionLine } from "./bubbles.ts";
 import { CONTEXT_BUDGET_TOKENS, MIN_RECENT_MESSAGES, estimateTokens } from "./memory-rules.ts";
 import { heldItem, type TiboConfirm, type TiboMessage, type TiboQuote, type TiboReceipt } from "./protocol.ts";
@@ -37,6 +38,11 @@ export interface TurnInputs {
   readonly sections?: readonly ContextSection[];
   /** Tokens for the system prompt and the messages together (`CONTEXT_BUDGET_TOKENS`). */
   readonly budget?: number;
+  /**
+   * What the memory jobs noted about a sent file, by id, so an older
+   * message's files still say what was in them. `null`: no note (yet).
+   */
+  readonly fileNote?: (attachmentId: string) => string | null;
 }
 
 /** Estimated tokens per part of the context, logged in development to tune the budget. */
@@ -78,6 +84,7 @@ export const buildTurnContext = ({
   recent,
   sections = [],
   budget = CONTEXT_BUDGET_TOKENS,
+  fileNote = () => null,
 }: TurnInputs): TurnContext => {
   const facts: ContextSection = {
     title: "Right now",
@@ -92,10 +99,10 @@ export const buildTurnContext = ({
   // The recent window gets what's left, newest messages first.
   const room = budget - estimateTokens(system);
   let window = recent;
-  let messages = toModelMessages(window);
+  let messages = toModelMessages(window, fileNote);
   while (window.length > MIN_RECENT_MESSAGES && messageTokens(messages) > room) {
     window = window.slice(Math.min(Math.ceil(window.length * 0.1), window.length - MIN_RECENT_MESSAGES));
-    messages = toModelMessages(window);
+    messages = toModelMessages(window, fileNote);
   }
   const recentTokens = messageTokens(messages);
   return {
@@ -148,7 +155,10 @@ export const actionNote = (receipts: readonly TiboReceipt[] = [], confirm?: Tibo
  * receipts and held actions follow it as such a note, so Tibo knows what it
  * did without being tempted to write receipts itself.
  */
-export const toModelMessages = (recent: readonly TiboMessage[]): ModelMessage[] => {
+export const toModelMessages = (
+  recent: readonly TiboMessage[],
+  fileNote: (attachmentId: string) => string | null = () => null,
+): ModelMessage[] => {
   const out: { role: "user" | "assistant"; parts: string[]; turnId: string; reaction?: string }[] = [];
   let reaction: string | undefined;
   const rows = recent.flatMap((message): TiboMessage[] => {
@@ -165,9 +175,13 @@ export const toModelMessages = (recent: readonly TiboMessage[]): ModelMessage[] 
     const body =
       message.role === "system_event"
         ? `[App event, not written by the user] ${message.body}`
-        : message.replyTo
-          ? `${quoteLine(message.replyTo)}\n${message.body}`
-          : message.body;
+        : [
+            ...(message.replyTo ? [quoteLine(message.replyTo)] : []),
+            ...(message.body ? [message.body] : []),
+            // Files read as lines naming them (and what was in them, once noted);
+            // the newest ones' contents are added by `withFiles`.
+            ...(message.attachments ?? []).map((attachment) => fileLine({ ...attachment, note: fileNote(attachment.id) })),
+          ].join("\n");
     const last = out.at(-1);
     if (last && last.role === role && (role === "user" || last.turnId === message.turnId)) {
       last.parts.push(body);
@@ -183,4 +197,17 @@ export const toModelMessages = (recent: readonly TiboMessage[]): ModelMessage[] 
       ? { role, content: [...(emoji ? [reactionLine(emoji)] : []), joinBubbles(parts)].join("\n") }
       : { role, content: parts.join("\n\n") },
   );
+};
+
+/**
+ * The context with files added to its last message, the user's latest
+ * (the files they just sent): the images and PDFs themselves, or a text
+ * file's text. Added after the budget was worked out: files have their own
+ * caps (`TURN_FILE_MAX_BYTES`, `TURN_FILE_TEXT_MAX_LENGTH`).
+ */
+export const withFiles = (messages: readonly ModelMessage[], parts: readonly (TextPart | FilePart)[]): ModelMessage[] => {
+  const last = messages.at(-1);
+  if (parts.length === 0 || !last || last.role !== "user") return [...messages];
+  const text = typeof last.content === "string" ? [{ type: "text" as const, text: last.content }] : last.content;
+  return [...messages.slice(0, -1), { role: "user", content: [...text, ...parts] }];
 };

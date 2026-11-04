@@ -21,16 +21,20 @@ function Connections() {
 
   return (
     <Page>
-      <PageHeader compact title="Connections">
-        <Button asChild variant="outline">
-          <Link to="/discover">
-            <SearchIcon />
-            Find people
-          </Link>
-        </Button>
-      </PageHeader>
+      <PageHeader compact title="Connections" />
       <div className="flex w-full flex-col gap-6 pb-8">
-        <PeopleSection title="Your connections" count={data?.connections.length}>
+        <PeopleSection
+          title="Your connections"
+          count={data?.connections.length}
+          action={
+            <Button asChild variant="outline" size="sm" className="rounded-full bg-card shadow-(--card-shadow)">
+              <Link to="/discover">
+                <SearchIcon />
+                Find people
+              </Link>
+            </Button>
+          }
+        >
           {failed ? (
             <PeopleLoadFailed what="your connections" onRetry={() => void reload()} />
           ) : (

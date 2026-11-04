@@ -6,6 +6,7 @@ import {
   ChevronDownIcon,
   ClockIcon,
   EllipsisIcon,
+  EllipsisVerticalIcon,
   SettingsIcon,
   UserCheckIcon,
   UserMinusIcon,
@@ -98,7 +99,7 @@ export function ConnectionActions({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size={compact ? "icon-sm" : "icon"} variant="ghost" aria-label={`More for @${username}`} disabled={busy}>
-          <EllipsisIcon />
+          {compact ? <EllipsisVerticalIcon /> : <EllipsisIcon />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">{blockItem}</DropdownMenuContent>

@@ -32,6 +32,29 @@
   --scrollbar-track: transparent;
 }
 
+/*
+ * "Writing a reply…": three dots that fill in one at a time after what Tibo
+ * is doing (the inbox's Tibo section). With reduced motion they just sit there.
+ */
+@utility tibo-ellipsis {
+  &::after {
+    content: "...";
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: bottom;
+    width: 1.1em;
+    animation: tibo-ellipsis 1.4s steps(4, end) infinite;
+  }
+}
+@keyframes tibo-ellipsis {
+  from {
+    width: 0;
+  }
+  to {
+    width: 1.47em;
+  }
+}
+
 :root {
   /*
    * Dueboard's light palette: cream washing into teal (the page and cards
@@ -126,6 +149,15 @@
   --composer-border: oklch(0.77 0.09 95);
   /* The message box's fill: a light teal, a shade under the nav's. */
   --composer: oklch(0.955 0.03 183);
+  /*
+   * The inbox's Tibo section, beside the thread, is a raised surface (`bg-card`,
+   * the cream-to-teal card gradient), past a divider in the bubbles' hairline
+   * teal. Its "now" card is cream a shade deeper, so it reads as the focus.
+   */
+  --tibo-side-border: var(--bubble-tibo-border);
+  --tibo-now: oklch(0.965 0.035 92);
+  /* A step that's running: Tibo's teal, bright enough to catch the eye. */
+  --tibo-live: oklch(0.58 0.11 190);
 
   /* The glow under `/now`'s two cards: teal into marigold, soft. */
   --card-glow: linear-gradient(120deg, oklch(0.7 0.13 190 / 85%), oklch(0.8 0.15 75 / 80%));
@@ -397,6 +429,9 @@
   --color-goal-move-foreground: var(--goal-move-foreground);
   --color-tick-seen: var(--tick-seen);
   --color-composer: var(--composer);
+  --color-tibo-side-border: var(--tibo-side-border);
+  --color-tibo-now: var(--tibo-now);
+  --color-tibo-live: var(--tibo-live);
   --color-composer-border: var(--composer-border);
   --color-cream-foreground: var(--cream-foreground);
   --color-tag: var(--tag-solid);
@@ -487,6 +522,8 @@
   --composer-border: var(--input);
   /* Dark keeps the input's usual faint fill. */
   --composer: color-mix(in oklab, var(--input) 30%, transparent);
+  --tibo-now: #1f1f1f;
+  --tibo-live: oklch(0.78 0.11 190);
   --card-glow: linear-gradient(120deg, oklch(0.55 0.11 190 / 55%), oklch(0.65 0.13 75 / 45%));
   --success: oklch(0.8 0.15 155);
   --success-ink: var(--success);

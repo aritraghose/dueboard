@@ -10,6 +10,7 @@
 
 import {
   TIBO_QUOTE_LENGTH,
+  type TiboAttachment,
   type TiboConfirm,
   type TiboMessage,
   type TiboQuote,
@@ -53,6 +54,7 @@ export type MessageMeta = {
   readonly receipts?: readonly TiboReceipt[];
   readonly confirm?: TiboConfirm;
   readonly relay?: TiboRelayCard;
+  readonly attachments?: readonly TiboAttachment[];
 } & Record<string, unknown>;
 
 type Row = {
@@ -80,6 +82,7 @@ const toMessage = (row: Row): TiboMessage => {
     ...(Array.isArray(meta.receipts) && meta.receipts.length > 0 ? { receipts: meta.receipts } : {}),
     ...(meta.confirm ? { confirm: meta.confirm } : {}),
     ...(meta.relay ? { relay: meta.relay } : {}),
+    ...(Array.isArray(meta.attachments) && meta.attachments.length > 0 ? { attachments: meta.attachments } : {}),
   };
 };
 
@@ -149,8 +152,9 @@ export class Thread {
   quote(id: string): TiboQuote | null {
     const message = this.get(id);
     if (!message || message.role === "system_event") return null;
-    const body =
-      message.body.length > TIBO_QUOTE_LENGTH ? `${message.body.slice(0, TIBO_QUOTE_LENGTH - 1)}…` : message.body;
+    // A message of only files quotes their names.
+    const text = message.body || (message.attachments ?? []).map((attachment) => `📎 ${attachment.name}`).join(", ");
+    const body = text.length > TIBO_QUOTE_LENGTH ? `${text.slice(0, TIBO_QUOTE_LENGTH - 1)}…` : text;
     return { id: message.id, role: message.role, body };
   }
 

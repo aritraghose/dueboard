@@ -20,29 +20,18 @@ import {
   type Settings as UserSettings,
   type SettingsPatch,
 } from "@dueboard/api/rpc";
-import type { TiboMemory, TiboMemoryKind } from "@dueboard/api/tibo";
 import { useAtomValue } from "@effect/atom-react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Exit from "effect/Exit";
-import {
-  CalendarCheck2,
-  ExternalLink,
-  FileText,
-  FileUp,
-  CalendarClock,
-  Heart,
-  Info,
-  Trash2,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { ExternalLink, FileText, FileUp, Trash2, UserRound } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Page, PageHeader } from "@/components/page";
 import { PeopleList, PeopleLoadFailed, statusOf } from "@/components/people-lists";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { TiboMemoryList } from "@/components/tibo-memory-list";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -67,6 +56,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { resetLine, useAiUsage } from "@/hooks/use-ai-usage";
@@ -76,7 +66,6 @@ import { useUpdateSettings } from "@/hooks/use-settings";
 import { socialOverviewAtom, useSocialActions } from "@/hooks/use-social";
 import { failureMessage, useRun } from "@/hooks/use-tasks";
 import { useMounted } from "@/hooks/use-mounted";
-import { useTiboMemories } from "@/hooks/use-tibo-memories";
 import { PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_LABEL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
@@ -412,10 +401,12 @@ function Tibo() {
     <div className="flex flex-col gap-5">
       <Panel>
         <AiUsageRow />
+      </Panel>
+      <Panel>
         <Row
           id="relay-policy"
-          title="Messages through Tibo"
-          description="Who can ask their Tibo to pass you a message. Your Tibo tells you in chat and passes back only what you tell it to answer. Each message and its answer use half a message from each of you. Blocking someone closes their messages."
+          title="Tibo Message Relay"
+          description="Who can ask their Tibo to pass you a message. Your Tibo tells you in chat and passes back only what you tell it to answer. Each message and its answer use half a message from each of you. Blocking someone blocks the relay with them."
         >
           <Choice
             labelledBy="relay-policy"
@@ -510,13 +501,13 @@ function TiboCheckIns() {
       <div className="flex flex-col gap-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-0.5">
-            <h2 className="font-medium">Tibo messages you first</h2>
+            <h2 className="font-medium">Tibo Proactivity</h2>
             <p className="text-sm text-muted-foreground">
               A few short check-ins a day, never while you're chatting. Each one counts as a request.
             </p>
           </div>
           <Switch
-            aria-label="Tibo messages you first"
+            aria-label="Tibo Proactivity"
             checked={on}
             disabled={!shown}
             onCheckedChange={(checked) => change("tiboProactive", checked, "check-ins")}
@@ -629,86 +620,22 @@ function CheckInDay({ settings }: { settings: CheckInSettings }) {
   );
 }
 
-const MEMORY_KIND: Record<TiboMemoryKind, { label: string; icon: LucideIcon }> = {
-  fact: { label: "Fact", icon: Info },
-  preference: { label: "Preference", icon: Heart },
-  person: { label: "Person", icon: UserRound },
-  event: { label: "Event", icon: CalendarCheck2 },
-  plan: { label: "Plan", icon: CalendarClock },
-};
-
-/** Memories shown before "Show all". */
-const MEMORIES_SHOWN = 20;
-
 /**
- * What Tibo remembers about you: the lasting facts it picked up from your
- * chats (or was asked to keep), newest first, each with its kind and when
- * it was learned. Deleting one takes it out of Tibo's memory at once.
+ * What Tibo remembers about you (`TiboMemoryList`, also the inbox's
+ * Memory tab).
  */
 function TiboMemories() {
-  const { state, remove } = useTiboMemories();
-  const [showAll, setShowAll] = useState(false);
-  const memories = state.status === "ready" ? state.memories : [];
-  const shown = showAll ? memories : memories.slice(0, MEMORIES_SHOWN);
-
-  const forget = async (memory: TiboMemory) => {
-    if (!(await remove(memory))) toast.error("Couldn't delete that memory. Try again.");
-  };
-
   return (
     <Panel>
       <div className="flex flex-col gap-0.5 py-4">
         <h2 id="tibo-memories" className="font-medium">
-          What Tibo remembers
+          Tibo's Memory of You
         </h2>
         <p className="text-sm text-muted-foreground">
           Things Tibo picked up from your chats. Delete any you'd rather it forgot.
         </p>
       </div>
-      {state.status !== "ready" ? (
-        <p className="py-4 text-sm text-muted-foreground">
-          {state.status === "loading" ? "Loading…" : "Couldn't load what Tibo remembers. Reload to try again."}
-        </p>
-      ) : memories.length === 0 ? (
-        <p className="py-4 text-sm text-muted-foreground">
-          Nothing yet. Tibo keeps what matters as you chat, or say “remember that…”.
-        </p>
-      ) : (
-        <ul aria-labelledby="tibo-memories" className="flex flex-col divide-y">
-          {shown.map((memory) => {
-            const { label, icon: Icon } = MEMORY_KIND[memory.kind];
-            return (
-              <li key={memory.id} className="flex items-start gap-3 py-3">
-                <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <span className="sr-only">{label}:</span>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-4">
-                  <p className="min-w-0 flex-1 text-sm">{memory.text}</p>
-                  <p className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
-                    Since{" "}
-                    {new Date(memory.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" })}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="-my-1 shrink-0 text-muted-foreground hover:text-destructive"
-                  aria-label={`Delete memory: ${memory.text}`}
-                  onClick={() => void forget(memory)}
-                >
-                  <Trash2 />
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {!showAll && memories.length > MEMORIES_SHOWN && (
-        <div className="py-2">
-          <Button variant="ghost" size="sm" className="-mx-2.5" onClick={() => setShowAll(true)}>
-            Show all {memories.length}
-          </Button>
-        </div>
-      )}
+      <TiboMemoryList labelledBy="tibo-memories" />
     </Panel>
   );
 }
@@ -892,7 +819,6 @@ function AskPageSettings() {
           <p className="py-4 text-sm text-muted-foreground">Loading…</p>
         </Panel>
       )}
-      {settings && <AskFiles settings={settings} />}
       {settings && <AskPool settings={settings} saving={saving} save={save} />}
       <AskQuestions />
     </div>
@@ -903,7 +829,7 @@ type AskSave = (patch: AskSettingsPatch, what: string) => Promise<Exit.Exit<unkn
 
 const WRITING = "what your Ask page knows";
 
-/** The two texts the Ask agent answers from, saved together. */
+/** What the Ask agent answers from: two texts, saved together, then the files (each saved on its own). */
 function AskWriting({ settings, saving, save }: { settings: AskSettings; saving: string | null; save: AskSave }) {
   const [instructions, setInstructions] = useState(settings.instructions);
   const [context, setContext] = useState(settings.sharedContext);
@@ -968,6 +894,7 @@ function AskWriting({ settings, saving, save }: { settings: AskSettings; saving:
           {saving === WRITING ? "Saving…" : "Save"}
         </Button>
       </div>
+      <AskFiles settings={settings} />
     </Panel>
   );
 }
@@ -1062,13 +989,14 @@ function AskFiles({ settings }: { settings: AskSettings }) {
   };
 
   const over = (review?.text.length ?? 0) > ASK_DOCUMENT_MAX_LENGTH;
+  // Part of "What your Ask page knows": a block of its own in that card.
   return (
-    <Panel>
-      <div className="flex flex-wrap items-start justify-between gap-3 py-4">
+    <div className="flex flex-col py-1">
+      <div className="flex flex-wrap items-start justify-between gap-3 py-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 id="ask-files" className="font-medium">
+          <h3 id="ask-files" className="font-medium">
             Files
-          </h2>
+          </h3>
           <p className="text-sm text-muted-foreground">
             Add a PDF, like your CV, and your page answers from its text too. Anything in it can be shared with
             visitors, so you'll review the text first and can remove what you'd rather keep private.
@@ -1100,11 +1028,11 @@ function AskFiles({ settings }: { settings: AskSettings }) {
         </p>
       )}
       {settings.documents.length === 0 && !reading ? (
-        <p className="py-4 text-sm text-muted-foreground">
+        <p className="pb-4 text-sm text-muted-foreground">
           No files yet. Up to {ASK_DOCUMENTS_MAX} PDFs, 4 MB each.
         </p>
       ) : (
-        <ul aria-labelledby="ask-files" className="flex flex-col divide-y">
+        <ul aria-labelledby="ask-files" className="flex flex-col divide-y pb-2">
           {settings.documents.map((document) => (
             <li key={document.id} className="flex items-center gap-3 py-3">
               <FileText aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
@@ -1168,7 +1096,7 @@ function AskFiles({ settings }: { settings: AskSettings }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Panel>
+    </div>
   );
 }
 
@@ -1236,13 +1164,13 @@ function AskPool({ settings, saving, save }: { settings: AskSettings; saving: st
 const askedAt = (date: Date) =>
   date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-/** Questions from the last 30 days, newest first, so the owner can see what's missing. */
+/** Questions from the last 30 days, newest first, so the owner can see what's missing: one card each. */
 function AskQuestions() {
   const result = useAtomValue(askQuestionsAtom);
   const questions = AsyncResult.isSuccess(result) ? result.value : undefined;
   const mounted = useMounted();
   return (
-    <Panel>
+    <Panel className="divide-y-0">
       <div className="flex flex-col gap-0.5 py-4">
         <h2 id="ask-questions" className="font-medium">
           Recent questions
@@ -1253,15 +1181,31 @@ function AskQuestions() {
         </p>
       </div>
       {!questions ? (
-        <p className="py-4 text-sm text-muted-foreground">
-          {AsyncResult.isFailure(result) && mounted ? "Couldn't load your questions. Reload to try again." : "Loading…"}
-        </p>
+        AsyncResult.isFailure(result) && mounted ? (
+          <p className="pb-5 text-sm text-muted-foreground">Couldn't load your questions. Reload to try again.</p>
+        ) : (
+          <ul aria-label="Loading questions" className="flex flex-col gap-3 pb-5">
+            {[0, 1].map((card) => (
+              <li key={card} className="flex flex-col gap-3 rounded-xl border border-bubble-tibo-border/70 bg-bubble-tibo/60 p-4">
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="size-8 rounded-full bg-tibo-soft" />
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Skeleton className="h-3.5 w-32 bg-tibo-soft" />
+                    <Skeleton className="h-3 w-20 bg-tibo-soft" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-4/5 bg-tibo-soft" />
+                <Skeleton className="h-12 w-full rounded-lg bg-tibo-soft" />
+              </li>
+            ))}
+          </ul>
+        )
       ) : questions.length === 0 ? (
-        <p className="py-4 text-sm text-muted-foreground">No questions yet. Share your Ask page link to get some.</p>
+        <p className="pb-5 text-sm text-muted-foreground">No questions yet. Share your Ask page link to get some.</p>
       ) : (
-        <ul aria-labelledby="ask-questions" className="flex flex-col divide-y">
+        <ul aria-labelledby="ask-questions" className="flex flex-col gap-3 pb-5">
           {questions.map((question) => (
-            <AskQuestionRow key={question.id} question={question} />
+            <AskQuestionCard key={question.id} question={question} />
           ))}
         </ul>
       )}
@@ -1269,38 +1213,58 @@ function AskQuestions() {
   );
 }
 
-function AskQuestionRow({ question }: { question: AskQuestion }) {
+/**
+ * One question and its answer, as a card: who asked (their picture, name
+ * and @username when signed in, else "Logged-out user") and when, the
+ * question, then the answer on Tibo's soft teal, clipped until opened.
+ */
+function AskQuestionCard({ question }: { question: AskQuestion }) {
   const [open, setOpen] = useState(false);
   const { asker } = question;
+  const long = question.answer.length > 180;
   return (
-    <li className="flex flex-col gap-2 py-3">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <li className="flex flex-col gap-3 rounded-xl border border-bubble-tibo-border/70 bg-bubble-tibo/60 p-4 shadow-sm">
+      <div className="flex items-center gap-2.5">
         {asker ? (
           <Link
             to="/@{$username}"
             params={{ username: asker.username }}
-            className="flex items-center gap-1.5 rounded-sm font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <PersonAvatar person={asker} className="size-5 text-[0.625rem]" />@{asker.username}
+            <PersonAvatar person={asker} className="size-8 ring-2 ring-bubble-tibo-border" />
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-sm font-semibold">{asker.name}</span>
+              <span className="truncate text-xs text-muted-foreground">@{asker.username}</span>
+            </span>
           </Link>
         ) : (
-          <span>Someone logged out</span>
+          <span className="flex min-w-0 flex-1 items-center gap-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-tibo-soft text-tibo-foreground">
+              <UserRound aria-hidden="true" className="size-4" />
+            </span>
+            <span className="truncate text-sm font-semibold">Logged-out user</span>
+          </span>
         )}
-        <span className="ml-auto whitespace-nowrap">{askedAt(question.createdAt)}</span>
+        <time dateTime={question.createdAt.toISOString()} className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
+          {askedAt(question.createdAt)}
+        </time>
       </div>
       <p className="text-sm font-medium whitespace-pre-wrap">{question.question}</p>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-label={open ? "Show less of the answer" : "Show the whole answer"}
-        onClick={() => setOpen((was) => !was)}
-        className={cn(
-          "rounded-md text-left text-sm whitespace-pre-wrap text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          !open && "line-clamp-2",
+      <div className="rounded-lg border-l-[3px] border-tibo-live/60 bg-tibo-soft/60 px-3 py-2.5">
+        <p className={cn("text-sm whitespace-pre-wrap text-foreground/80", !open && long && "line-clamp-3")}>
+          {question.answer}
+        </p>
+        {long && (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((was) => !was)}
+            className="mt-1 rounded-sm text-xs font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {open ? "Show less" : "Show the whole answer"}
+          </button>
         )}
-      >
-        {question.answer}
-      </button>
+      </div>
     </li>
   );
 }

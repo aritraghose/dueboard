@@ -13,7 +13,7 @@ import {
   type AskConversion,
   type AskVisitor,
 } from "@dueboard/api/ask";
-import { TIBO_AGENT } from "@dueboard/api/tibo";
+import { TIBO_AGENT, TIBO_FILES_PATH, TIBO_FILE_MAX_BYTES } from "@dueboard/api/tibo";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import { env } from "./env.ts";
 
@@ -39,7 +39,10 @@ export default createServerEntry({
     const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
 
     if (pathname === "/agents" || pathname.startsWith("/agents/")) {
-      const { success } = await env.AGENT_RATE_LIMIT.limit({ key: ip });
+      // Showing a thread loads each of its images: those reads count
+      // against the page-load budget, not the agent's tighter one.
+      const fileRead = request.method === "GET" && isTiboFilePath(pathname);
+      const { success } = await (fileRead ? env.WEB_RATE_LIMIT : env.AGENT_RATE_LIMIT).limit({ key: ip });
       if (!success) return tooManyRequests();
       return await proxyAgent(request);
     }
@@ -66,6 +69,12 @@ export default createServerEntry({
 });
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/** `/agents/tibo-agent/<name>/files/<id>`: one of the user's chat files. */
+const isTiboFilePath = (pathname: string) => {
+  const [, , agent, , route, id, ...more] = pathname.split("/");
+  return agent === TIBO_AGENT && route === TIBO_FILES_PATH && id !== undefined && id !== "" && more.length === 0;
+};
 
 /**
  * The request came from one of this site's pages, or from no browser page
@@ -135,7 +144,32 @@ async function proxyAgent(request: Request): Promise<Response> {
   if (agent !== TIBO_AGENT) return new Response("Not found", { status: 404 });
   url.pathname = ["", "agents", agent, encodeURIComponent(userId), ...rest].join("/");
 
-  return await env.AGENT.fetch(new Request(url, request));
+  // A WebSocket upgrade has no body: pass it through untouched.
+  if (request.headers.get("upgrade") !== null) return await env.AGENT.fetch(new Request(url, request));
+
+  // HTTP never carries the user's cookies past here: the agent knows who
+  // it is from its pinned name alone.
+  const headers = new Headers(request.headers);
+  headers.delete("cookie");
+  headers.delete("authorization");
+
+  // `POST files`: a file for Tibo's chat (architecture.md §7.9). Only from
+  // this site's own pages (an `Origin` is required), under the per-user
+  // burst limit, and at most `TIBO_FILE_MAX_BYTES`, counted as it streams in.
+  const upload = request.method === "POST" && rest.length === 1 && rest[0] === TIBO_FILES_PATH;
+  if (upload) {
+    if (request.headers.get("origin") !== url.origin) return new Response("Forbidden", { status: 403 });
+    const { success } = await env.TIBO_FILE_RATE_LIMIT.limit({ key: userId });
+    if (!success) return Response.json({ ok: false, error: "limited" }, { status: 429 });
+  }
+  const limited = await limitBody(request, upload ? TIBO_FILE_MAX_BYTES : MAX_REQUEST_BODY_BYTES);
+  if (limited instanceof Response) {
+    return upload ? Response.json({ ok: false, error: "too_large" }, { status: 413 }) : limited;
+  }
+  const hasBody = limited.method !== "GET" && limited.method !== "HEAD";
+  return await env.AGENT.fetch(
+    new Request(url, { method: limited.method, headers, body: hasBody ? await limited.arrayBuffer() : null }),
+  );
 }
 
 /**

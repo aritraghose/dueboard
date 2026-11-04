@@ -22,24 +22,24 @@ function Discover() {
 
   return (
     <Page>
-      <PageHeader compact title="Discover">
-        <Button asChild variant="outline">
-          <Link to="/connections">
-            <UsersIcon />
-            Your connections
-            {data && data.connections.length > 0 && (
-              <span className="text-muted-foreground tabular-nums">{data.connections.length}</span>
-            )}
-          </Link>
-        </Button>
-      </PageHeader>
-      <div className="flex w-full flex-col gap-6 pb-8">
+      <PageHeader compact title="Discover" />
+      <div className="flex w-full flex-col gap-7 pb-8">
         <PeopleSection
           title="Find people"
+          bare
+          action={
+            <Button asChild variant="outline" size="sm" className="rounded-full bg-card shadow-(--card-shadow)">
+              <Link to="/connections">
+                <UsersIcon />
+                Your connections
+                {data && data.connections.length > 0 && (
+                  <span className="text-muted-foreground tabular-nums">{data.connections.length}</span>
+                )}
+              </Link>
+            </Button>
+          }
         >
-          <div className="py-3">
-            <PeopleSearch />
-          </div>
+          <PeopleSearch />
         </PeopleSection>
 
         {(failed || !data || data.incoming.length > 0) && (

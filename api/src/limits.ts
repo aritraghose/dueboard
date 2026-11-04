@@ -102,6 +102,18 @@ export const LIMITS = {
     key: "user",
     where: "Website: `/api/ask-documents/convert` (`web/src/server.ts`)",
   }),
+  /**
+   * Files sent to Tibo, per user: a burst limit, checked by the website's
+   * `/agents/*` proxy after the session lookup and before the body is read.
+   * The agent also caps uploads a day and storage per user.
+   */
+  tiboFile: limit({
+    name: "TIBO_FILE_RATE_LIMIT",
+    namespaceId: 1014,
+    simple: { limit: 10, period: 60 },
+    key: "user",
+    where: "Website: `POST /agents/tibo-agent/*/files` (`web/src/server.ts`)",
+  }),
   /** `/agents/*` WebSocket upgrades and HTTP, per IP, before the session lookup. */
   agent: limit({
     name: "AGENT_RATE_LIMIT",

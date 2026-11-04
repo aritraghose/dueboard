@@ -36,7 +36,59 @@ export interface TiboMessage {
    * Tibo's own record (the app hides app events; relays read as plain chat).
    */
   readonly relay?: TiboRelayCard;
+  /** Files the user sent with this message, in the order they were added. */
+  readonly attachments?: readonly TiboAttachment[];
 }
+
+// ─── Files in the chat ──────────────────────────────────────────────────────
+
+/**
+ * What a file is, decided by the agent from its bytes (never from the name
+ * or the browser's claim): `image` and `pdf` reach the model as they are,
+ * `text` and `document` as their text, `other` only by name.
+ */
+export type TiboAttachmentKind = "image" | "pdf" | "text" | "document" | "other";
+
+/** A file the user sent Tibo. Private: only its owner's agent serves it. */
+export interface TiboAttachment {
+  readonly id: string;
+  /** The file's name, tidied. */
+  readonly name: string;
+  /** The type it is served as (`application/octet-stream` for `other`). */
+  readonly mediaType: string;
+  readonly kind: TiboAttachmentKind;
+  /** Bytes. */
+  readonly size: number;
+  /** An image's pixel size, when it could be read. */
+  readonly width?: number;
+  readonly height?: number;
+}
+
+/** The answer to `POST files`. */
+export type TiboUpload =
+  | { readonly ok: true; readonly attachment: TiboAttachment }
+  | {
+      readonly ok: false;
+      readonly error: "too_large" | "empty" | "limited" | "storage_full" | "daily_limit" | "failed";
+    };
+
+/**
+ * The agent's file routes, under `/agents/tibo-agent/<name>/` (the proxy
+ * pins `<name>` to the signed-in user, so only their own files are ever
+ * reachable): `POST files` with the raw bytes as the body and the name in
+ * `x-file-name` (URI-encoded) → `TiboUpload`; `GET files/<id>` → the file
+ * (`?download=1` to save it).
+ */
+export const TIBO_FILES_PATH = "files";
+/** The largest file, in bytes. */
+export const TIBO_FILE_MAX_BYTES = 10 * 1024 * 1024;
+/** Most files in one message. */
+export const TIBO_MAX_ATTACHMENTS = 4;
+/** The longest file name kept. */
+export const TIBO_FILE_NAME_MAX_LENGTH = 120;
+/** The browser path of one of the signed-in user's files. */
+export const tiboFileUrl = (id: string, download = false) =>
+  `/agents/${TIBO_AGENT}/me/${TIBO_FILES_PATH}/${encodeURIComponent(id)}${download ? "?download=1" : ""}`;
 
 /** Where a relay stands (the domain's `relay_status`). */
 export type TiboRelayStatus = "pending" | "delivered" | "answered" | "declined" | "expired" | "cancelled";
@@ -119,6 +171,8 @@ export type TiboClientFrame =
       readonly clientId: string;
       /** Replying to this message (swipe to reply). */
       readonly replyTo?: string;
+      /** Ids of files uploaded with `POST files` and not sent yet (`text` may then be empty). */
+      readonly attachments?: readonly string[];
     }
   | { readonly type: "loadOlder"; readonly beforeId: string }
   /** The user reacts to one of Tibo's messages; `null` takes the reaction back. */
@@ -140,6 +194,8 @@ export type TiboServerFrame =
       readonly messages: readonly TiboMessage[];
       readonly hasMore: boolean;
       readonly unread: boolean;
+      /** What Tibo is doing right now: running activities, threads and steps. */
+      readonly activity?: readonly TiboActivity[];
     }
   /** Everything so far was read, on some device. */
   | { readonly type: "read" }
@@ -162,6 +218,8 @@ export type TiboServerFrame =
   | { readonly type: "seen"; readonly messageIds: readonly string[] }
   /** Tibo finished replying, whatever the outcome. */
   | { readonly type: "turnDone"; readonly turnId: string }
+  /** One of Tibo's activities started, changed or ended (`TiboActivity`). */
+  | { readonly type: "activity"; readonly activity: TiboActivity }
   /** Messages left this month, after a turn was charged. */
   | { readonly type: "usage"; readonly remaining: number; readonly limit: number }
   /** Out of AI messages: no reply this time. The UI shows its own notice; nothing is stored. */
@@ -171,6 +229,79 @@ export type TiboServerFrame =
    * thread (never stored); `message` is plain text for a toast or alert.
    */
   | { readonly type: "error"; readonly message: string; readonly bubble?: string };
+
+// ─── What Tibo is doing (the inbox's side section) ──────────────────────────
+
+/**
+ * A thread of activity (a reply, a check-in, a reminder, a relay, a
+ * confirmed action, memory upkeep, reading a file) or one step inside one
+ * (reading the message, gathering context, thinking, a tool, writing).
+ */
+export type TiboActivityKind =
+  | "reply"
+  | "check_in"
+  | "reminder"
+  | "relay"
+  | "confirm"
+  | "memory"
+  | "file"
+  | "reading"
+  | "context"
+  | "thinking"
+  | "tool"
+  | "writing"
+  | "step";
+
+export type TiboActivityStatus = "running" | "done" | "failed" | "skipped";
+
+export interface TiboActivity {
+  readonly id: string;
+  /** The thread a step belongs to; none for a thread. */
+  readonly parentId?: string;
+  readonly kind: TiboActivityKind;
+  /** What it is, as the user reads it: "Looking at your tasks". */
+  readonly label: string;
+  /** More about it, once known: "Created task: Call mom · Tomorrow". */
+  readonly detail?: string;
+  readonly status: TiboActivityStatus;
+  /** Milliseconds since the epoch. */
+  readonly startedAt: number;
+  readonly endedAt?: number;
+}
+
+/** A thread of activity with its steps, oldest step first. */
+export interface TiboActivityThread extends TiboActivity {
+  readonly steps: readonly TiboActivity[];
+}
+
+/**
+ * The one activity to show as "now": the newest running step, else the
+ * newest running thread, else `null` (Tibo is free).
+ */
+export function currentActivity(running: readonly TiboActivity[]): TiboActivity | null {
+  const live = running.filter((activity) => activity.status === "running");
+  const newest = (list: readonly TiboActivity[]) =>
+    list.reduce<TiboActivity | null>((best, next) => (!best || next.startedAt >= best.startedAt ? next : best), null);
+  return newest(live.filter((activity) => activity.parentId !== undefined)) ?? newest(live);
+}
+
+/**
+ * `GET activity?before=<ms>` → `{ threads: TiboActivityThread[], hasMore }`,
+ * newest first, `TIBO_ACTIVITY_PAGE` at a time.
+ */
+export const TIBO_ACTIVITY_PATH = "activity";
+export const TIBO_ACTIVITY_PAGE = 30;
+
+/** A file the user sent, as the Media tab lists it. */
+export interface TiboSentFile extends TiboAttachment {
+  /** The message it came with. */
+  readonly messageId: string;
+  /** Milliseconds since the epoch. */
+  readonly sentAt: number;
+}
+
+/** `GET files` → `{ files: TiboSentFile[] }`, newest first, at most `TIBO_MEDIA_LIMIT`. */
+export const TIBO_MEDIA_LIMIT = 500;
 
 /** The agent's route name: `/agents/tibo-agent/<user id>`. */
 export const TIBO_AGENT = "tibo-agent";

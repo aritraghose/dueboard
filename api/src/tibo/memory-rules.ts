@@ -3,6 +3,7 @@
 // model's JSON. No storage and no I/O, so they're unit-tested
 // (`memory-rules.test.ts`).
 
+import { fileLine, type FileLine } from "./attachment-rules.ts";
 import { addDays } from "./dates.ts";
 
 // ─── Budgets and thresholds (planning.md decision log, step 19) ──────────
@@ -155,6 +156,8 @@ export interface ChunkInput {
   readonly createdAt: number;
   /** Its day in the user's zone. */
   readonly day: string;
+  /** Files sent with it, with their notes (search finds what was in them). */
+  readonly files?: readonly FileLine[];
 }
 
 export interface Chunk {
@@ -168,9 +171,11 @@ export interface Chunk {
 
 const SPEAKER = { user: "User", tibo: "Tibo", system_event: "App" } as const;
 
-/** One line of a transcript the background jobs and chunks read. */
-export const transcriptLine = (message: Pick<ChunkInput, "role" | "body">) =>
-  `${SPEAKER[message.role]}: ${message.body.replace(/\s+/g, " ").trim()}`;
+/** One line of a transcript the background jobs and chunks read, with any files sent and what's in them. */
+export const transcriptLine = (message: Pick<ChunkInput, "role" | "body" | "files">) =>
+  `${SPEAKER[message.role]}: ${[message.body.replace(/\s+/g, " ").trim(), ...(message.files ?? []).map(fileLine)]
+    .filter((part) => part.length > 0)
+    .join(" ")}`;
 
 /**
  * Consecutive messages grouped into chunks for embedding: never across a
@@ -193,7 +198,7 @@ export const chunkMessages = (messages: readonly ChunkInput[], final: boolean): 
       day: first.day,
       startedAt: first.createdAt,
       endedAt: last.createdAt,
-      text: [`[${first.day}]`, ...current.map(transcriptLine)].join("\n"),
+      text: [`[${first.day}]`, ...current.map((message) => transcriptLine(message))].join("\n"),
     });
     current = [];
     length = 0;

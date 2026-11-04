@@ -54,6 +54,22 @@ export const MEMORY_METADATA = [
 ] as const;
 
 /**
+ * Files people send Tibo in the chat (architecture.md §7.9). Private: no
+ * public access, no custom domain, no CORS, no S3 credentials; bound to the
+ * AgentWorker alone, where each user's `TiboAgent` reads and writes only
+ * under `tibo/<its own user id>/`. The browser reaches a file only through
+ * the website's session-pinned `/agents/*` proxy. R2 encrypts it at rest.
+ * Files uploaded but never sent are deleted by the agent after a day; the
+ * lifecycle rule is a backstop for any multipart upload left open.
+ */
+export const TiboFiles = Cloudflare.R2.Bucket("TiboFiles", {
+  publicAccess: false,
+  lifecycleRules: [
+    { id: "abort-incomplete-uploads", abortMultipartUploadsTransition: { condition: { type: "Age", maxAge: 24 * 60 * 60 } } },
+  ],
+});
+
+/**
  * The website's hostname (from `AUTH_BASE_URL`), for Turnstile. Required to
  * deploy, like the ApiWorker's own check (`./auth.ts`).
  */
@@ -127,6 +143,8 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     DOMAIN: DomainWorker,
     // Long-term memory vectors (namespace = user id).
     MEMORY: MemoryIndex,
+    // Files sent in Tibo's chat (private; `./tibo/attachments.ts`).
+    TIBO_FILES: TiboFiles,
     // "true" under `alchemy dev`: logs context sizes, raises the memory
     // jobs' daily cap and turns on the `dev/*` routes (seeding a thread).
     TIBO_DEV: Effect.map(ALCHEMY_DEV, (dev) => (dev ? "true" : "false")),
