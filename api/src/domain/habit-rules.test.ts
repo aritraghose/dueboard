@@ -54,11 +54,9 @@ const onMonthDays = (monthDays: Array<number>, targetCount = 1, startDate = "202
   startDate: d(startDate),
 });
 
-/** `{ "2026-11-02": 2 }` → check-ins. */
 const taps = (days: Record<string, number>): Array<HabitCheckinCount> =>
   Object.entries(days).map(([localDate, count]) => ({ localDate: d(localDate), count }));
 
-/** One tap on each listed day. */
 const tapped = (...days: Array<string>) => taps(Object.fromEntries(days.map((day) => [day, 1])));
 
 const pause = (startDate: string, endDate: string | null = null): HabitPause => ({
@@ -67,8 +65,6 @@ const pause = (startDate: string, endDate: string | null = null): HabitPause => 
 });
 
 const period = (start: string, end: string) => ({ start: d(start), end: d(end) });
-
-// November 2026: Sun 1, Sat 7, Sun 8 … Mon 30.
 
 describe("normalizeSchedule", () => {
   test("flexible keeps its period and drops nothing", () => {
@@ -151,7 +147,7 @@ describe("normalizeSchedule", () => {
 
 describe("periodFor", () => {
   test("a 1-week period is the Sunday-to-Saturday week, wherever start_date falls", () => {
-    const habit = flexible(3, 1, "week", "2026-11-04"); // a Wednesday
+    const habit = flexible(3, 1, "week", "2026-11-04");
     expect(periodFor(habit, d("2026-11-04"))).toEqual(period("2026-11-01", "2026-11-07"));
     expect(periodFor(habit, d("2026-11-01"))).toEqual(period("2026-11-01", "2026-11-07"));
     expect(periodFor(habit, d("2026-11-07"))).toEqual(period("2026-11-01", "2026-11-07"));
@@ -223,12 +219,12 @@ describe("isScheduledOn", () => {
 
   test("weekdays", () => {
     const habit = onWeekdays([1, 3, 5]);
-    expect(isScheduledOn(habit, [], d("2026-11-01"))).toBe(false); // Sun
-    expect(isScheduledOn(habit, [], d("2026-11-02"))).toBe(true); // Mon
-    expect(isScheduledOn(habit, [], d("2026-11-03"))).toBe(false); // Tue
-    expect(isScheduledOn(habit, [], d("2026-11-04"))).toBe(true); // Wed
-    expect(isScheduledOn(habit, [], d("2026-11-06"))).toBe(true); // Fri
-    expect(isScheduledOn(habit, [], d("2026-11-07"))).toBe(false); // Sat
+    expect(isScheduledOn(habit, [], d("2026-11-01"))).toBe(false);
+    expect(isScheduledOn(habit, [], d("2026-11-02"))).toBe(true);
+    expect(isScheduledOn(habit, [], d("2026-11-03"))).toBe(false);
+    expect(isScheduledOn(habit, [], d("2026-11-04"))).toBe(true);
+    expect(isScheduledOn(habit, [], d("2026-11-06"))).toBe(true);
+    expect(isScheduledOn(habit, [], d("2026-11-07"))).toBe(false);
   });
 
   test("month days", () => {
@@ -423,10 +419,9 @@ describe("streak (flexible)", () => {
   test("a pause spanning a week boundary skips both partly paused weeks", () => {
     const habit = flexible(3, 1, "week");
     const checkins = tapped(
-      "2026-10-18", "2026-10-19", "2026-10-20", // week of Oct 18: met
-      "2026-10-26", // week of Oct 25: paused from Thu, 1 of 3
-      // week of Nov 1: paused until Wed, nothing yet
-      "2026-11-09", "2026-11-10", "2026-11-11", // week of Nov 8: met
+      "2026-10-18", "2026-10-19", "2026-10-20",
+      "2026-10-26",
+      "2026-11-09", "2026-11-10", "2026-11-11",
     );
     const pauses = [pause("2026-10-29", "2026-11-04")];
     expect(streak(habit, pauses, checkins, d("2026-11-12"))).toBe(2);
@@ -446,7 +441,6 @@ describe("streak (flexible)", () => {
 
   test("5-day periods anchored mid-month", () => {
     const habit = flexible(2, 5, "day", "2026-10-17");
-    // Periods: Oct 17–21, Oct 22–26, Oct 27–31, Nov 1–5.
     const checkins = tapped("2026-10-18", "2026-10-21", "2026-10-22", "2026-10-26", "2026-10-27", "2026-10-31");
     expect(streak(habit, [], checkins, d("2026-11-02"))).toBe(3);
     expect(streak(habit, [], checkins.slice(1), d("2026-11-02"))).toBe(2);
@@ -462,17 +456,17 @@ describe("streak (flexible)", () => {
 
 describe("streak (specific days)", () => {
   test("only scheduled days count; off days don't break it", () => {
-    const habit = onWeekdays([1, 3, 5]); // Mon, Wed, Fri
+    const habit = onWeekdays([1, 3, 5]);
     const checkins = tapped("2026-10-26", "2026-10-28", "2026-10-30", "2026-11-02");
     expect(streak(habit, [], checkins, d("2026-11-02"))).toBe(4);
-    expect(streak(habit, [], checkins, d("2026-11-03"))).toBe(4); // Tue: nothing scheduled
+    expect(streak(habit, [], checkins, d("2026-11-03"))).toBe(4);
   });
 
   test("today's unmet day doesn't break it, a missed past day does", () => {
     const habit = onWeekdays([1, 3, 5]);
     const checkins = tapped("2026-10-28", "2026-10-30");
-    expect(streak(habit, [], checkins, d("2026-11-02"))).toBe(2); // Mon today, not yet
-    expect(streak(habit, [], checkins, d("2026-11-03"))).toBe(0); // Mon was missed
+    expect(streak(habit, [], checkins, d("2026-11-02"))).toBe(2);
+    expect(streak(habit, [], checkins, d("2026-11-03"))).toBe(0);
   });
 
   test("needs target_count taps on each day", () => {
@@ -545,7 +539,6 @@ describe("describeSchedule", () => {
 
 describe("occurrences", () => {
   const dates = (list: ReadonlyArray<{ date: LocalDate }>): Array<string> => list.map((o) => o.date);
-  // Nov 1, 2026 is a Sunday.
 
   test("weekday habits show on each of their days", () => {
     const habit = onWeekdays([1, 3, 5]);
@@ -598,7 +591,6 @@ describe("occurrences", () => {
     ]);
     const open: Array<HabitPause> = [{ startDate: d("2026-11-01"), endDate: null }];
     expect(occurrences(flexible(3, 1, "week"), open, [], d("2026-11-04"), d("2026-12-01"))).toEqual([]);
-    // A pause ending mid-week: the week shows on its first unpaused day.
     const ending: Array<HabitPause> = [{ startDate: d("2026-11-01"), endDate: d("2026-11-11") }];
     expect(dates(occurrences(flexible(3, 1, "week"), ending, [], d("2026-11-04"), d("2026-11-16")))).toEqual([
       "2026-11-11", "2026-11-15",

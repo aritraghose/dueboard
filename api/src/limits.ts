@@ -1,28 +1,16 @@
-// Every Cloudflare Rate Limiting binding in the app, in one registry
-// (architecture.md §9). Both stacks read it: the ApiWorker and AgentWorker
-// here in `api/`, and the website through `@dueboard/api`
-// (`web/alchemy.run.ts`). Counting is approximate and per Cloudflare
-// location: abuse protection, not exact quotas. Each `namespaceId` must be
-// unique within the Cloudflare account, and the binding only counts per 10
-// or 60 seconds, so daily caps are counted in Postgres by the services.
-
-/** What a limit counts by. */
 export type LimitKey = "ip" | "user" | "visitor";
 
 export interface RateLimitSpec {
-  /** The binding's name in its Worker's `env`. */
   readonly name: string;
   readonly namespaceId: number;
   readonly simple: { readonly limit: number; readonly period: 10 | 60 };
   readonly key: LimitKey;
-  /** The Worker that binds it and where it's checked. */
   readonly where: string;
 }
 
 const limit = <const S extends RateLimitSpec>(spec: S): S => spec;
 
 export const LIMITS = {
-  /** Better Auth's routes, per IP. */
   auth: limit({
     name: "AUTH_RATE_LIMIT",
     namespaceId: 1003,
@@ -30,7 +18,6 @@ export const LIMITS = {
     key: "ip",
     where: "Website: `/api/auth/*` (`web/src/routes/api/auth/$.ts`)",
   }),
-  /** Every authenticated RPC, per user. */
   rpc: limit({
     name: "RPC_RATE_LIMIT",
     namespaceId: 1004,
@@ -38,7 +25,6 @@ export const LIMITS = {
     key: "user",
     where: "ApiWorker: `Authentication` middleware, and `PublicRpcs` for signed-in viewers",
   }),
-  /** Tibo turns, per user. Each is a paid model call, sent over the WebSocket. */
   chat: limit({
     name: "CHAT_RATE_LIMIT",
     namespaceId: 1005,
@@ -46,10 +32,6 @@ export const LIMITS = {
     key: "user",
     where: "AgentWorker: `TiboAgent.turn` (`tibo/TiboAgent.ts`)",
   }),
-  /**
-   * Sending connection requests, per user: a burst limit. The 20-a-day cap
-   * (`CONNECTION_REQUESTS_PER_DAY`) is counted from `connection_requests`.
-   */
   connectionRequest: limit({
     name: "CONNECTION_REQUEST_RATE_LIMIT",
     namespaceId: 1006,
@@ -57,10 +39,6 @@ export const LIMITS = {
     key: "user",
     where: "ApiWorker: `domain/social.ts` through `RateLimiter`",
   }),
-  /**
-   * Relays sent through Tibo, per user: a burst limit. The 30-a-day cap
-   * (`RELAYS_PER_DAY`) is counted from `relays`.
-   */
   relay: limit({
     name: "RELAY_RATE_LIMIT",
     namespaceId: 1007,
@@ -68,7 +46,6 @@ export const LIMITS = {
     key: "user",
     where: "DomainWorker: `domain/relays.ts` through `RateLimiter`",
   }),
-  /** Public reads (`PublicRpcs`) by logged-out visitors, per IP. */
   publicRead: limit({
     name: "PUBLIC_READ_RATE_LIMIT",
     namespaceId: 1008,
@@ -76,13 +53,6 @@ export const LIMITS = {
     key: "ip",
     where: "ApiWorker: `OptionalAuthentication` middleware, logged-out viewers",
   }),
-  /**
-   * Ask page questions (step 22), per visitor: a burst limit, checked by
-   * the `AskAgent` before every model call, keyed by the visitor (signed-in
-   * user id or cookie id) and, for logged-out visitors, by IP too, so a
-   * cleared cookie doesn't reset it. The hourly cap per owner
-   * (`ASK_VISITOR_HOURLY`) is counted in the agent's own storage.
-   */
   ask: limit({
     name: "ASK_RATE_LIMIT",
     namespaceId: 1009,
@@ -90,11 +60,6 @@ export const LIMITS = {
     key: "visitor",
     where: "AgentWorker: `AskAgent` (`ask/AskAgent.ts`), before each model call",
   }),
-  /**
-   * Turning an Ask page file (a PDF) into text, per user: each is a Workers
-   * AI conversion of up to 4 MiB. Checked by the website's
-   * `/api/ask-documents/convert` route after the session lookup.
-   */
   askDocument: limit({
     name: "ASK_DOCUMENT_RATE_LIMIT",
     namespaceId: 1013,
@@ -102,11 +67,6 @@ export const LIMITS = {
     key: "user",
     where: "Website: `/api/ask-documents/convert` (`web/src/server.ts`)",
   }),
-  /**
-   * Files sent to Tibo, per user: a burst limit, checked by the website's
-   * `/agents/*` proxy after the session lookup and before the body is read.
-   * The agent also caps uploads a day and storage per user.
-   */
   tiboFile: limit({
     name: "TIBO_FILE_RATE_LIMIT",
     namespaceId: 1014,
@@ -114,7 +74,6 @@ export const LIMITS = {
     key: "user",
     where: "Website: `POST /agents/tibo-agent/*/files` (`web/src/server.ts`)",
   }),
-  /** `/agents/*` WebSocket upgrades and HTTP, per IP, before the session lookup. */
   agent: limit({
     name: "AGENT_RATE_LIMIT",
     namespaceId: 1010,
@@ -122,7 +81,6 @@ export const LIMITS = {
     key: "ip",
     where: "Website: `/agents/*` proxy (`web/src/server.ts`)",
   }),
-  /** People search, per user. Searches are debounced as the user types. */
   peopleSearch: limit({
     name: "PEOPLE_SEARCH_RATE_LIMIT",
     namespaceId: 1011,
@@ -130,11 +88,6 @@ export const LIMITS = {
     key: "user",
     where: "ApiWorker: `domain/social.ts` through `RateLimiter`",
   }),
-  /**
-   * Everything else the website's Worker serves, per IP, before any session
-   * lookup: `/rpc` (signed out or not), page loads and server functions
-   * (`getSessionUser`). `/api/auth/*` and `/agents/*` have their own.
-   */
   web: limit({
     name: "WEB_RATE_LIMIT",
     namespaceId: 1012,
@@ -144,21 +97,13 @@ export const LIMITS = {
   }),
 } as const;
 
-/** Ids taken by limits a later step adds, so nothing else claims them. */
 export const RESERVED_NAMESPACE_IDS = {} as const;
 
-/** The props `Cloudflare.RateLimit(name, props)` takes. */
 export const bindingProps = ({ namespaceId, simple }: RateLimitSpec) => ({
   namespaceId,
   simple: { limit: simple.limit, period: simple.period },
 });
 
-/**
- * The largest request body the website accepts (`web/src/server.ts`). The
- * biggest RPC input (a task with a 2000-character description and its
- * fields) is a few KiB.
- */
 export const MAX_REQUEST_BODY_BYTES = 64 * 1024;
 
-/** The longest chat message the agent takes, in characters. */
 export const MAX_CHAT_MESSAGE_LENGTH = 4000;

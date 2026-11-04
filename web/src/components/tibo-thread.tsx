@@ -78,18 +78,9 @@ const SUGGESTIONS = [
   "Everything is due at once. Where do I start?",
 ];
 
-/** Back-to-back messages from one side within this long share a group. */
 const GROUP_GAP_MS = 5 * 60_000;
-/** Scrolled this close to the top, older messages load. */
 const LOAD_OLDER_PX = 160;
 
-/**
- * Tibo's thread: the side panel and `/inbox` both render this, reading the
- * app's one copy of the thread (`lib/tibo-store.ts`), so they always agree.
- * One thread forever: no new chat, no clear button. Renders in the browser
- * only. `headerEnd` adds controls (the panel's close button); `onNavigate`
- * runs when a link inside it leaves the page (the panel closes).
- */
 export function TiboThread({
   className,
   headerEnd,
@@ -101,20 +92,14 @@ export function TiboThread({
   className?: string;
   headerEnd?: React.ReactNode;
   onNavigate?: () => void;
-  /** Tibo's avatar at the top is a button (the inbox: it opens or closes the Tibo section). `headerEnd` may be a list: each control gets its own disc. */
   onTiboClick?: () => void;
-  /** Whether what `onTiboClick` opens is open. */
   tiboExpanded?: boolean;
-  /** On a page of its own (`/inbox`): from `md` up the message box is half the thread's width, centered. */
   fullPage?: boolean;
 }) {
   const { store } = useTibo();
   const thread = useTiboThread();
-  // While this is on screen, Tibo's new bubbles aren't unread.
   React.useEffect(() => store.view(), [store]);
-  // The message you're replying to (swipe or Reply), until you send or cancel.
   const [replyTo, setReplyTo] = React.useState<TiboMessage | null>(null);
-  // Files in the message box; dropping files anywhere on the thread adds them.
   const drafts = useDraftFiles();
   const canAttach = thread.loaded && !thread.limitReached;
   const drop = useFileDrop(drafts.add, canAttach);
@@ -147,7 +132,6 @@ export function TiboThread({
               />
             )}
           </div>
-          {/* Narrower than the thread on wide screens: half its width on a page of its own. */}
           <div
             className={cn(
               "flex flex-col gap-2 px-3 pt-2 pb-3 md:mx-auto",
@@ -172,12 +156,6 @@ export function TiboThread({
   );
 }
 
-/**
- * Tibo floats over the top of the thread, like a contact in a messaging
- * app: its avatar on a disc, and under it a pill with its name, or what it's
- * doing. Messages scroll (and fade) beneath. Each time it starts typing a
- * bubble, the rings turn.
- */
 function ThreadHeader({
   thread,
   headerEnd,
@@ -193,7 +171,6 @@ function ThreadHeader({
   React.useEffect(() => {
     if (thread.typing) setSpins((n) => n + 1);
   }, [thread.typing]);
-  // What Tibo is doing, under its name; nothing when it's idle.
   const activity = thread.typing ? "typing…" : thread.loaded && !thread.connected ? "reconnecting…" : null;
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-3">
@@ -219,7 +196,6 @@ function ThreadHeader({
         )}
         <div className="-mt-2 flex flex-col items-center rounded-2xl border border-bubble-tibo-border bg-bubble-tibo px-3.5 py-0.5 text-bubble-tibo-foreground shadow-md">
           <h2 className="text-[0.9375rem] leading-snug font-semibold">Tibo</h2>
-          {/* Always there, so screen readers hear it change; empty (and hidden) when idle. */}
           <p
             aria-live="polite"
             className="-mt-0.5 pb-0.5 text-[0.6875rem] leading-tight text-muted-foreground empty:hidden"
@@ -229,7 +205,6 @@ function ThreadHeader({
         </div>
       </div>
       {headerEnd && (
-        // Each control floats on a disc of its own, side by side.
         <div className="pointer-events-auto absolute top-3 right-3 flex items-center gap-2">
           {React.Children.toArray(headerEnd).map((control, index) => (
             <div key={index} className="rounded-full border border-bubble-tibo-border bg-bubble-tibo shadow-md">
@@ -272,9 +247,6 @@ function ThreadEmpty({ canSend, send }: { canSend: boolean; send: (text: string)
   );
 }
 
-// ─── Messages ────────────────────────────────────────────────────────────────
-
-/** One bubble on screen: stored, still sending, or a failure line. */
 type Entry =
   | {
       kind: "message";
@@ -282,44 +254,29 @@ type Entry =
       side: "user" | "tibo";
       body: string;
       at: number;
-      /** The stored message; absent while yours is still sending. */
       message?: TiboMessage;
-      /** The other side's reaction. */
       reaction?: string;
       seen: boolean;
       replyTo?: TiboQuote;
       attachments?: readonly TiboAttachment[];
-      /**
-       * The message's last card (its ticks go here). A message sent with
-       * files shows each file as its own card, then its words.
-       */
       tail?: boolean;
     }
   | { kind: "error"; key: string; side: "tibo"; body: string; at: number }
-  /** Your answer to actions Tibo held, centered after the message that asked. */
   | { kind: "notice"; key: string; side: "center"; at: number; confirm: TiboConfirm };
 
-/** A bubble: anything but a notice. */
 type BubbleEntry = Exclude<Entry, { kind: "notice" }>;
 
 type Group = { key: string; side: "user" | "tibo" | "center"; day: string | null; entries: Entry[] };
 
 const dayKey = (at: number) => new Date(at).toDateString();
 
-/**
- * Bubbles grouped like a messaging app: back-to-back from one side within a
- * few minutes, never across midnight. A group that starts a new day carries
- * its day label, so loading older messages only ever adds groups above.
- */
 function groupEntries(thread: TiboThreadState): Group[] {
   const entries: Entry[] = [
     ...thread.messages
-      // App events (check-ins, relays) are for Tibo: relays read as plain chat.
       .filter((message) => message.role !== "system_event")
       .flatMap((message: TiboMessage): Entry[] => [
         {
           kind: "message",
-          // A message you sent keeps its key from optimistic copy to stored row.
           key: message.clientId ?? message.id,
           side: message.role === "user" ? "user" : "tibo",
           body: message.body,
@@ -375,12 +332,6 @@ function groupEntries(thread: TiboThreadState): Group[] {
   return groups;
 }
 
-/**
- * A message sent with files, as cards of its own: one per file, then its
- * words, stacked like back-to-back messages. The quote rides on the first
- * card; the ticks and Tibo's reaction on the last. They're still one message
- * (to Tibo, and to reply to).
- */
 function splitFiles(entry: Entry): Entry[] {
   if (entry.kind !== "message" || !entry.attachments || entry.attachments.length === 0) return [entry];
   const { attachments, body, replyTo, reaction, ...rest } = entry;
@@ -392,14 +343,12 @@ function splitFiles(entry: Entry): Entry[] {
     tail: false,
     ...(index === 0 && replyTo ? { replyTo } : {}),
   }));
-  // The words keep the message's own key, so the bubble stays put when the stored copy arrives.
   if (body) cards.push({ ...rest, body, tail: false });
   const last = cards.at(-1)!;
   cards[cards.length - 1] = { ...last, tail: true, ...(reaction ? { reaction } : {}) };
   return cards;
 }
 
-/** What a message can do once tapped. */
 type EntryActions = {
   onReply: (message: TiboMessage) => void;
   onReact: (messageId: string, emoji: string | null) => void;
@@ -412,19 +361,12 @@ function ThreadMessages({
   ...actions
 }: { thread: TiboThreadState; loadOlder: () => void } & EntryActions) {
   const groups = groupEntries(thread);
-  // The newest bubble shows its time; a notice after it isn't a bubble.
   const latestKey = groups.findLast((group) => group.side !== "center")?.entries.at(-1)?.key;
-  // The bubble you tapped: it shows its time, Reply, and reactions on Tibo's.
   const [selected, setSelected] = React.useState<string | null>(null);
 
-  // Loading older messages keeps your place: the distance from the bottom
-  // is kept across the prepend. Done here rather than by the scroller,
-  // because older bubbles can join the top group, which changes its key.
   const viewport = React.useRef<HTMLDivElement>(null);
   const fromBottom = React.useRef<number | null>(null);
   const firstId = thread.messages[0]?.id;
-  // Only the person's own scrolling loads more, not the jump to the
-  // bottom on open (which passes the top first).
   const userScrolled = React.useRef(false);
   const markUserScroll = () => {
     userScrolled.current = true;
@@ -445,7 +387,6 @@ function ThreadMessages({
 
   return (
     <MessageScroller>
-      {/* Outside the list, so the first message stays the first item and loading older keeps your place. */}
       {thread.loadingOlder && (
         <div className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center">
           <Spinner className="size-4 text-muted-foreground" />
@@ -455,7 +396,6 @@ function ThreadMessages({
         ref={viewport}
         aria-label="Messages with Tibo"
         preserveScrollOnPrepend={false}
-        // Messages fade out under the floating header.
         className="scroll-fade [--scroll-fade-t-size:6rem]"
         onScroll={onScroll}
         onWheel={markUserScroll}
@@ -463,12 +403,8 @@ function ThreadMessages({
         onKeyDown={markUserScroll}
         onPointerDown={markUserScroll}
       >
-        {/* Narrow side margins on phones, so the bubbles get the room. */}
         <MessageScrollerContent aria-busy={thread.typing} className="gap-4 pt-24 pb-5 pr-3 pl-1 md:px-4">
           {groups.map((group, index) => (
-            // Always laid out: a group can hold many bubbles, and the
-            // scroller's offscreen placeholder height would break keeping
-            // your place when older messages load.
             <MessageScrollerItem
               key={group.key}
               messageId={group.key}
@@ -503,10 +439,8 @@ function ThreadMessages({
   );
 }
 
-/** Three dots in a small bubble of Tibo's, while it types the next one. */
 function TypingBubble() {
   return (
-    // Lined up with Tibo's bubbles, past the avatar column.
     <div role="status" aria-label="Tibo is typing" className="flex pl-9">
       <div className="flex h-8 items-center gap-1 rounded-full border border-bubble-tibo-border bg-bubble-tibo px-3">
         {[0, 1, 2].map((dot) => (
@@ -530,7 +464,6 @@ function DaySeparator({ at }: { at: number }) {
   );
 }
 
-/** "Today", "Yesterday", "Monday, Nov 2", or with the year when it isn't this one. */
 function dayLabel(at: number) {
   const date = new Date(at);
   const today = new Date();
@@ -549,10 +482,6 @@ function dayLabel(at: number) {
 const timeLabel = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
-/**
- * Bubble corners: a group reads as one stack, so the corners facing the
- * sender's side tighten where bubbles meet.
- */
 function cornerClass(side: "user" | "tibo", index: number, count: number) {
   if (count === 1) return "rounded-2xl";
   const first = index === 0;
@@ -601,16 +530,9 @@ function GroupView({
   );
 }
 
-/** How far a bubble must be swiped right to reply to it. */
 const SWIPE_REPLY_PX = 56;
-/** The farthest a swiped bubble follows the finger. */
 const SWIPE_MAX_PX = 80;
 
-/**
- * Swipe right to reply: the bubble follows the finger (or mouse) sideways,
- * a reply arrow shows behind it, and letting go past the mark replies.
- * Vertical moves stay scrolls (`touch-action: pan-y`).
- */
 function useSwipeToReply(onReply: (() => void) | null) {
   const [offset, setOffsetState] = React.useState(0);
   const current = React.useRef(0);
@@ -637,7 +559,6 @@ function useSwipeToReply(onReply: (() => void) | null) {
             from.horizontal = Math.abs(dx) > Math.abs(dy) && dx > 0;
             if (from.horizontal) {
               event.currentTarget.setPointerCapture(event.pointerId);
-              // A swipe isn't a text selection.
               window.getSelection()?.removeAllRanges();
             }
           }
@@ -659,7 +580,6 @@ function useSwipeToReply(onReply: (() => void) | null) {
       }
     : {};
 
-  /** A click right after a swipe isn't a tap. */
   const wasSwipe = () => {
     const result = swiped.current;
     swiped.current = false;
@@ -691,9 +611,7 @@ function EntryView({
   const swipe = useSwipeToReply(message ? () => onReply(message) : null);
   const attachments = entry.kind === "message" ? (entry.attachments ?? []) : [];
   const hasFiles = attachments.length > 0;
-  // Only photos, no words: the ticks sit on the last photo.
   const photosOnly = hasFiles && !entry.body && attachments.every((attachment) => attachment.kind === "image");
-  // A file card before the message's last card carries no ticks.
   const tail = entry.kind !== "message" || entry.tail !== false;
 
   return (
@@ -704,7 +622,6 @@ function EntryView({
         "group/entry flex flex-col",
         tibo ? "items-start" : "items-end",
         sending && "opacity-60",
-        // Room for the reaction hanging off the bubble's bottom edge.
         reaction && "mb-3",
       )}
     >
@@ -727,20 +644,17 @@ function EntryView({
           {...swipe.handlers}
         >
           <BubbleContent
-            // A tap shows the time and what you can do with the message.
             onClick={() => {
               if (!swipe.wasSwipe() && entry.kind === "message") select();
             }}
             aria-expanded={entry.kind === "message" ? selected : undefined}
             className={cn(
               "cursor-default select-text",
-              // A file card sits in the bubble with a thin rim; words keep their padding.
               hasFiles ? "p-1!" : "px-3.5 py-2",
               tibo
                 ? "border-bubble-tibo-border! bg-bubble-tibo! text-bubble-tibo-foreground!"
-                : // Room on the right for the tick in the bottom corner.
+                :
                   cn("relative border-transparent! bg-bubble-me! whitespace-pre-wrap text-bubble-me-foreground!", !hasFiles && (tail ? "pr-9!" : "pr-3.5!")),
-              // A photo is its own card: the picture itself, edge to edge, in the bubble's shape.
               photosOnly && !(entry.kind === "message" && entry.replyTo) && "bg-transparent! p-0! shadow-sm ring-1 ring-foreground/10",
               corners,
             )}
@@ -762,7 +676,6 @@ function EntryView({
             )}
           </BubbleContent>
           {message && (
-            // Another way to reply: beside the bubble on hover (or once tapped).
             <button
               type="button"
               aria-label="Reply"
@@ -770,8 +683,6 @@ function EntryView({
               className={cn(
                 "absolute top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity outline-none entry-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50",
                 tibo ? "left-full ml-1" : "right-full mr-1",
-                // Shown with the tapped message too. `entry-hover`, not
-                // `group-hover`: see styles.css.
                 selected && "opacity-100",
               )}
             >
@@ -822,12 +733,6 @@ function EntryView({
   );
 }
 
-/** One tick once your message is stored, two once Tibo has read it; in the bubble's corner. */
-/**
- * Under the last bubble of a Tibo turn: the cards of what it changed, and
- * the actions it's holding for your go-ahead. Your answer shows as a
- * notice in the middle of the thread (`ConfirmNotice`).
- */
 function TurnActions({
   message,
   onConfirm,
@@ -846,7 +751,6 @@ function TurnActions({
   );
 }
 
-/** "Delete task: Gym" → what to do, and to what. */
 const splitHeld = (text: string) => {
   const colon = text.indexOf(": ");
   return colon === -1 ? { action: text, target: null } : { action: text.slice(0, colon), target: text.slice(colon + 2) };
@@ -861,15 +765,9 @@ const KIND_ICON: Record<string, LucideIcon> = {
   tag: TagIcon,
 };
 
-/** The icon for a held action: a bin for deletes, a stop for stops, else the item's kind. */
 const heldIcon = ({ text, item }: TiboHeldItem): LucideIcon =>
   text.startsWith("Delete") ? Trash2Icon : text.startsWith("Stop") ? SquareIcon : item ? (KIND_ICON[item.kind] ?? PencilIcon) : PencilIcon;
 
-/**
- * What Tibo is holding, one row per action, with Cancel and Confirm side by
- * side across the bottom. Only a delete's or stop's icon is red. Both
- * buttons wait once one is tapped.
- */
 function ConfirmCard({ confirm, onConfirm }: { confirm: TiboConfirm; onConfirm: EntryActions["onConfirm"] }) {
   const [answer, setAnswer] = React.useState<boolean | null>(null);
   const items = confirm.items.map(heldItem);
@@ -936,7 +834,6 @@ const NOTICE: Record<Exclude<TiboConfirm["status"], "pending">, { icon: LucideIc
   expired: { icon: ClockIcon, label: "Expired before you answered" },
 };
 
-/** Your answer to held actions, in the middle of the thread like an app event. */
 function ConfirmNotice({ confirm }: { confirm: TiboConfirm }) {
   if (confirm.status === "pending") return null;
   const { icon: Icon, label } = NOTICE[confirm.status];
@@ -964,9 +861,7 @@ function Ticks({ sending, seen, onPhoto = false }: { sending: boolean; seen: boo
       role="img"
       aria-label={sending ? "Sending" : seen ? "Seen" : "Sent"}
       className={cn(
-        // The bubble's bottom-right corner, like a messaging app.
         "pointer-events-none absolute right-2.5 bottom-1.5 inline-flex",
-        // Over a photo: on a small dark pill so it reads on any picture.
         onPhoto && "right-2.5 bottom-2.5 rounded-full bg-black/45 px-1 py-0.5",
         seen ? "text-tick-seen" : onPhoto ? "text-white/85" : "text-bubble-me-foreground/60",
       )}
@@ -976,7 +871,6 @@ function Ticks({ sending, seen, onPhoto = false }: { sending: boolean; seen: boo
   );
 }
 
-/** The message a reply quotes, at the top of the reply's bubble. Tap to find it. */
 function QuoteView({ quote, mine }: { quote: TiboQuote; mine: boolean }) {
   return (
     <button
@@ -998,7 +892,6 @@ function QuoteView({ quote, mine }: { quote: TiboQuote; mine: boolean }) {
   );
 }
 
-/** Under a tapped message: Reply, and quick reactions on Tibo's. */
 function MessageActions({
   message,
   reaction,
@@ -1033,8 +926,6 @@ function MessageActions({
   );
 }
 
-// ─── Composer ────────────────────────────────────────────────────────────────
-
 function Composer({
   thread,
   send,
@@ -1051,15 +942,11 @@ function Composer({
   const [draft, setDraft] = React.useState("");
   const formRef = React.useRef<HTMLFormElement>(null);
   const textarea = React.useRef<HTMLTextAreaElement>(null);
-  // Mid-reply is fine: the message waits, and Tibo answers it next. Files
-  // must finish uploading first; ones that failed stay behind.
   const canSend =
     (draft.trim().length > 0 || drafts.ready.length > 0) && !drafts.uploading && thread.connected;
   const low = thread.usage && thread.usage.remaining < TIBO_LOW_USAGE ? thread.usage.remaining : null;
-  // A line under the box: only when there's something to say.
   const hint = !thread.connected ? "Reconnecting…" : low !== null ? `${low} ${low === 1 ? "message" : "messages"} left this month` : null;
 
-  // Picking a message to reply to puts you in the message box.
   React.useEffect(() => {
     if (replyTo) textarea.current?.focus();
   }, [replyTo]);
@@ -1084,7 +971,6 @@ function Composer({
         <InputGroup className="rounded-2xl! border-composer-border! bg-composer!">
           {replyTo && (
             <InputGroupAddon align="block-start" className="pb-0 font-normal">
-              {/* Solid and full-contrast: the addon's muted, translucent defaults read as blurry here. */}
               <div className="flex w-full min-w-0 items-center gap-2 rounded-xl border-l-[3px] border-primary bg-muted py-1.5 pr-1 pl-2.5">
                 <div className="min-w-0 flex-1 text-xs leading-snug">
                   <p className="font-semibold text-primary">
@@ -1109,10 +995,8 @@ function Composer({
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Message Tibo…"
             aria-label="Message"
-            // Message-sized text (the base textarea is 16px on phones).
             className={cn("max-h-40 min-h-12 py-3 text-sm md:min-h-12", !hint && "pr-12 pl-12")}
             maxLength={MAX_CHAT_MESSAGE_LENGTH}
-            // Pasted pictures and files join the message.
             onPaste={(event) => {
               if (event.clipboardData.files.length === 0) return;
               event.preventDefault();
@@ -1129,10 +1013,6 @@ function Composer({
               }
             }}
           />
-          {/*
-            With no hint line, + and Send float in the box's bottom corners
-            (+ on the left) so the box stays one row tall.
-          */}
           {!hint && (
             <InputGroupAddon align="block-end" className="absolute bottom-0 left-0 w-auto p-2">
               <AttachButton drafts={drafts} disabled={!thread.connected} />
@@ -1144,12 +1024,6 @@ function Composer({
           >
             {hint && <AttachButton drafts={drafts} disabled={!thread.connected} className="-ml-1" />}
             {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-            {/*
-              `aria-disabled`, not `disabled`: the input group fades itself to
-              half opacity whenever it holds a disabled control, which made the
-              whole box (and the reply bar) look washed out while empty.
-            */}
-            {/* Just the icon, no fill: in the ink color, dimmed while there's nothing to send. */}
             <InputGroupButton
               type="submit"
               variant="ghost"
@@ -1158,7 +1032,6 @@ function Composer({
               aria-label="Send"
               aria-disabled={!canSend}
             >
-              {/* Sized on the icon: the button's own icon rule beats a class on the button. */}
               <SendIcon className="size-5" />
             </InputGroupButton>
           </InputGroupAddon>
@@ -1168,11 +1041,6 @@ function Composer({
   );
 }
 
-/**
- * Shown instead of the composer when the month's AI messages are used up.
- * Laid out like Tibo's words, but built here only: never sent to the model
- * or kept in the thread.
- */
 function LimitNotice({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <Message role="status" aria-live="polite">

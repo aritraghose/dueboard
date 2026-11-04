@@ -5,17 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-/**
- * Filters a list by tag: pick one or several (a task shows when it has any
- * of them), or "Any tag" to clear. The list stays open while picking.
- */
 export function TagFilter({
   tags,
   value,
   onChange,
 }: {
   tags: readonly Tag[] | undefined;
-  /** The picked tag ids; empty means any tag. */
   value: readonly string[];
   onChange: (ids: readonly string[]) => void;
 }) {

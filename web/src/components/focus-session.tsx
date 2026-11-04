@@ -49,14 +49,6 @@ import {
 } from "@/lib/sessions";
 import { cn } from "@/lib/utils";
 
-// Focus sessions on `/now` and in the header: the widget (start, the
-// countdown with pause / extend / stop, the completion moment), the day's
-// list, the header timer, and `SessionSync`, which keeps them all honest.
-
-/**
- * The Sessions tab on today: the widget for the active session (or the
- * start form), then the day's other sessions.
- */
 export function SessionWidget({ sessions }: { sessions: readonly FocusSession[] | undefined }) {
   const active = useActiveSession();
   const { finished, dismiss } = useFinishedSession();
@@ -66,10 +58,8 @@ export function SessionWidget({ sessions }: { sessions: readonly FocusSession[] 
   const remaining = active.remainingAt(now);
   const { reload } = useSessionActions();
 
-  // Ran out here: the completion moment, until dismissed or replaced.
   const done =
     finished && (!session || (session.id === finished.id && remaining === 0)) ? finished : null;
-  // The day's other sessions: not the one in the widget.
   const others = (sessions ?? []).filter((item) => item.id !== session?.id && item.id !== done?.id);
 
   let main: ReactNode;
@@ -120,7 +110,6 @@ function WidgetSkeleton() {
 
 const MINUTES_KEY = "dueboard-session-minutes";
 
-/** The length last started, remembered per viewer. Read after mount, like other stored choices. */
 function useRememberedMinutes() {
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
   useEffect(() => {
@@ -128,20 +117,17 @@ function useRememberedMinutes() {
       const stored = parseMinutes(localStorage.getItem(MINUTES_KEY) ?? "");
       if (stored) setMinutes(stored);
     } catch {
-      // Storage blocked: start from the default.
     }
   }, []);
   const remember = (value: number) => {
     try {
       localStorage.setItem(MINUTES_KEY, String(value));
     } catch {
-      // Not remembered this time.
     }
   };
   return [minutes, setMinutes, remember] as const;
 }
 
-/** The `ActiveSessionExists` error's session, when that's why a start failed. */
 const conflictOf = (exit: Exit.Exit<unknown, unknown>): FocusSession | null => {
   if (Exit.isSuccess(exit)) return null;
   const error = Cause.squash(exit.cause);
@@ -150,11 +136,6 @@ const conflictOf = (exit: Exit.Exit<unknown, unknown>): FocusSession | null => {
     : null;
 };
 
-/**
- * Starting: a length (presets or custom), an optional label, who sees it
- * and Live (from the user's defaults). Starting while another session is
- * active asks first, since that one will be stopped.
- */
 function StartForm({
   active,
   onStarted,
@@ -175,7 +156,6 @@ function StartForm({
   const [conflict, setConflict] = useState<FocusSession | null>(null);
   const customId = useId();
 
-  // A remembered length that isn't a preset shows in the Other field.
   useEffect(() => {
     if (!(START_PRESETS as readonly number[]).includes(minutes)) setCustom(String(minutes));
   }, [minutes]);
@@ -213,7 +193,6 @@ function StartForm({
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        // Known to be active here: ask straight away instead of after a refusal.
         if (active) setConflict(active);
         else void submit(false);
       }}
@@ -303,7 +282,6 @@ function StartForm({
   );
 }
 
-/** Warns that starting will stop the active session, showing which one and its time left. */
 function ReplaceDialog({
   session,
   busy,
@@ -315,7 +293,6 @@ function ReplaceDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  // Kept while the dialog closes, so its text doesn't vanish mid-animation.
   const shown = useRef(session);
   if (session) shown.current = session;
   const now = useTicker(session?.status === "running");
@@ -342,7 +319,6 @@ function ReplaceDialog({
             variant="destructive"
             disabled={busy}
             onClick={(event) => {
-              // Stays open until the start answers.
               event.preventDefault();
               onConfirm();
             }}
@@ -356,10 +332,6 @@ function ReplaceDialog({
   );
 }
 
-/**
- * Running or paused: the label, the big countdown over a bar that drains
- * as time passes, when it ends, and the controls.
- */
 function ActiveView({
   session,
   remaining,
@@ -502,7 +474,6 @@ function ActiveView({
   );
 }
 
-/** "+…": add any number of minutes, up to what the 600-minute cap leaves. */
 function ExtendCustom({
   room,
   disabled,
@@ -568,10 +539,6 @@ function ExtendCustom({
   );
 }
 
-/**
- * The completion moment: the bar full in the done color, a check that
- * bursts once (not with reduced motion), and how long was focused.
- */
 function DoneView({ session, onAgain }: { session: FocusSession; onAgain: () => void }) {
   const reduced = useReducedMotion();
   return (
@@ -625,10 +592,6 @@ export function SessionStatusPill({ status }: { status: FocusSession["status"] }
   );
 }
 
-/**
- * A day's sessions as rows: start time, name, focused of planned and
- * status. Read-only unless `onDelete` is given.
- */
 export function SessionList({
   sessions,
   label,
@@ -649,7 +612,6 @@ export function SessionList({
           <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">
             {formatTime(session.startedAt, timeZone)}
           </span>
-          {/* On phones the time it ran goes under the name, so the name keeps the width. */}
           <div className="flex min-w-0 flex-1 items-center gap-3 max-sm:flex-col max-sm:items-start max-sm:gap-0">
             <span
               className={cn("min-w-0 truncate sm:flex-1 max-sm:w-full", !session.label && "text-muted-foreground")}
@@ -678,11 +640,6 @@ export function SessionList({
   );
 }
 
-/**
- * The active session's small timer for the app's top row: a breathing dot
- * and the time left (a pause mark while paused). It opens `/now`'s
- * Sessions tab. Nothing shows without an active session.
- */
 export function SessionIndicator({ className }: { className?: string }) {
   const { session, remainingAt } = useTimerSession();
   const now = useTicker(session?.status === "running");
@@ -715,28 +672,17 @@ export function SessionIndicator({ className }: { className?: string }) {
 
 const TITLE_PREFIX = /^\d+:\d{2}(:\d{2})? · /;
 
-/**
- * Keeps sessions honest across the app (mounted once, in the `_app`
- * layout): refetches the active session when the tab comes back or gets
- * focus, catches the moment the countdown reaches 0 (the completion moment,
- * then a refetch so the server's completion shows), and puts the time left
- * in the tab's title while running.
- */
 export function SessionSync() {
   const { session, remainingAt, waiting } = useActiveSession();
   const { reload, reloadActive, finish } = useSessionActions();
   const running = session?.status === "running";
   const now = useTicker(running, 250);
   const left = running ? remainingAt(now) : null;
-  // A reload cancels the requests in flight, so a slow answer would never land.
   const inFlight = useRef(waiting);
   inFlight.current = waiting;
   const latest = useRef(session);
   latest.current = session;
 
-  // Checks only the active session (cheap); when its answer shows it changed
-  // (completed while away, stopped elsewhere), every session list reloads,
-  // `/now`'s days included.
   const checkingFrom = useRef<{ id: string | null; status: string | null } | null>(null);
   const check = useCallback(() => {
     if (inFlight.current) return;
@@ -750,7 +696,6 @@ export function SessionSync() {
     if ((session?.id ?? null) !== before.id || (session?.status ?? null) !== before.status) void reload();
   }, [session, waiting, reload]);
 
-  // Back from another tab, a sleeping laptop or another window: ask again.
   useEffect(() => {
     let last = 0;
     const refresh = () => {
@@ -766,9 +711,6 @@ export function SessionSync() {
     };
   }, [check]);
 
-  // Reached 0: show the moment, then let the server's completion replace the
-  // session. If it's still running on the next answer (an answer in flight),
-  // ask again every few seconds.
   const endedId = session && left === 0 ? session.id : null;
   const finishedId = useRef<string | null>(null);
   useEffect(() => {
@@ -784,7 +726,6 @@ export function SessionSync() {
     return () => clearInterval(timer);
   }, [endedId, finish, check]);
 
-  // The tab's title starts with the time left while running.
   const countdown = left !== null && left > 0 ? formatCountdown(left) : null;
   useEffect(() => {
     const base = document.title.replace(TITLE_PREFIX, "");

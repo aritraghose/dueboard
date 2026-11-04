@@ -173,11 +173,8 @@ describe("linkedDelta", () => {
   });
 
   test("an undo never takes back more than was added", () => {
-    // A tap from before the link added nothing.
     expect(linkedDelta(1, -1, 0)).toBe(0);
-    // The amount was raised from 1 to 3 after the settle.
     expect(linkedDelta(3, -1, 1)).toBe(-1);
-    // Clamped at zero earlier, so the net can be negative.
     expect(linkedDelta(2, -1, -1)).toBe(0);
   });
 });

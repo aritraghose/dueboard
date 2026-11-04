@@ -8,31 +8,20 @@ import { type LocalDate, formatDay } from "@/lib/dates";
 import { IMPORTANCE_LABEL, deadlineLabel, formatMinutes, isOverdue } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
-// Task rows: a settle checkbox, the title, then only the fields that are
-// set. The same rows fill `/now` and `/tasks`; a click opens the task card.
-
-/** How long a checked row lingers, struck through, before it moves to Settled. */
 const SETTLE_LINGER_MS = 320;
 
 const rowTransition = { type: "spring", stiffness: 520, damping: 42, mass: 0.8 } as const;
 
 type RowProps = {
   readonly task: Task;
-  /** `task.status` with the user's latest click applied. */
   readonly status: TaskStatus;
   readonly tag: Tag | undefined;
   readonly today: LocalDate;
-  /** Show the assigned date (lists that aren't grouped by day). */
   readonly showAssigned?: boolean;
   readonly onStatusChange: (task: Task, status: TaskStatus) => void;
   readonly onOpen: (task: Task) => void;
 };
 
-/**
- * A list of task rows. Rows share `layoutId`s across lists in the same
- * `LayoutGroup`, so a settled row flies into the Settled list when that list
- * is showing, and folds away toward it when it isn't.
- */
 export function TaskList({
   tasks,
   label,
@@ -58,8 +47,6 @@ export function TaskList({
 
 function TaskRow({ task, status, tag, today, showAssigned, onStatusChange, onOpen }: RowProps) {
   const settled = status === "settled";
-  // Checked but not yet moved: the row shows its check and strike for a
-  // moment, so the move reads as the result of the click.
   const [lingering, setLingering] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -131,7 +118,6 @@ function TaskRow({ task, status, tag, today, showAssigned, onStatusChange, onOpe
   );
 }
 
-/** The set fields, and nothing for the unset ones. Renders nothing when none are set. */
 export function TaskMeta({
   task,
   status,
@@ -200,7 +186,6 @@ export function TaskMeta({
   );
 }
 
-/** A task's importance in a row: a star and its 1–5 level on a soft amber pill. */
 function Stars({ value }: { value: number }) {
   const label = IMPORTANCE_LABEL[value - 1] ?? "";
   return (

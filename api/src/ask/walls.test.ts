@@ -4,16 +4,10 @@ import { join } from "node:path";
 import { askEnv } from "../ask-env.ts";
 import type { AgentEnv } from "../AgentWorker.ts";
 
-// The Ask agent is walled off from everything else about the owner in code
-// (architecture.md §7.6): its modules import nothing of Tibo's and never name
-// the bindings that reach the owner's data, and the env it's built with
-// holds only the narrow `ASK` port.
-
 const here = import.meta.dirname;
 const sources = readdirSync(here)
   .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
   .map((file) => ({ file, text: readFileSync(join(here, file), "utf8") }))
-  // Code only: the doc comments explain what the agent doesn't get.
   .map(({ file, text }) => ({ file, text: text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "") }));
 
 describe("Ask agent walls", () => {
@@ -23,7 +17,6 @@ describe("Ask agent walls", () => {
       for (const path of imports) {
         expect({ file, path, tibo: path.includes("/tibo/") || path.includes("tibo") }).toEqual({ file, path, tibo: false });
         expect({ file, path, global: path === "cloudflare:workers" }).toEqual({ file, path, global: false });
-        // Only the domain's plain constants (no services, no database).
         if (path.startsWith("../domain/")) expect({ file, path }).toEqual({ file, path: "../domain/ask-constants.ts" });
       }
     }

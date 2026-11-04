@@ -64,24 +64,10 @@ import { formatMinutes, groupByTag, sortTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 type NowSearch = {
-  /** The selected day. Absent means today in the user's time zone. */
   date?: LocalDate | undefined;
 };
 
-/**
- * Where users land after signing in: one day at a time. The day lives in
- * `?date=YYYY-MM-DD`; anything else in that param is dropped. Two cards: the
- * day (tasks, habits and goals, then at its bottom the Settled / Sessions /
- * Unscheduled tab row with a fold chevron) takes two thirds, Live (with a
- * note box) one third, and the day card takes it all when Live is collapsed.
- * Live (14) is a placeholder until its build step. The whole day comes from
- * one `GetDay` request; the days before and after are kept loaded, so ← and
- * → show them at once. Upcoming (the button in the day card's top-right
- * corner, or U) opens a sheet over the page.
- */
 export const Route = createFileRoute("/_app/now")({
-  // `date` is always set, even to `undefined`: the router merges this over
-  // the raw search, so leaving the key out would let an invalid date through.
   validateSearch: (search: Record<string, unknown>): NowSearch => ({
     date: typeof search.date === "string" && isLocalDate(search.date) ? search.date : undefined,
   }),
@@ -90,11 +76,6 @@ export const Route = createFileRoute("/_app/now")({
   component: Now,
 });
 
-/**
- * In the top row: start a focus session, on a cream pill. It opens today's
- * Sessions tab, where the start form is. While a session is running or
- * paused, its timer takes this button's place.
- */
 function StartSessionButton() {
   const { session } = useTimerSession();
   const openTab = useOpenSessionsTab();
@@ -117,7 +98,6 @@ function StartSessionButton() {
   );
 }
 
-/** In the top row's center: today's date and the local time. */
 function TopBarClock() {
   const timeZone = useTimeZone();
   return <NowClock today={useToday(timeZone)} timeZone={timeZone} />;
@@ -134,7 +114,6 @@ function Now() {
   const habitDialog = useHabitDialog();
   const goalDialog = useGoalDialog();
   const [view, setView] = useViewOptions("now");
-  // N adds what the list shows: a habit or goal in those views, a task otherwise.
   const newItem = () => {
     if (view.show === "habits") habitDialog.openNew();
     else if (view.show === "goals") goalDialog.openNew();
@@ -147,24 +126,17 @@ function Now() {
 
   const changeDate = useCallback(
     (next: LocalDate) => {
-      // Today keeps a clean `/now`, so a bookmark always opens on the current day.
       void navigate({ search: { date: next === today ? undefined : next }, replace: true });
     },
     [navigate, today],
   );
 
-  // "today" or "on Wed, Nov 4", to finish a sentence.
   const onDay = !date || date === today ? "today" : `on ${formatDay(date, today ?? undefined)}`;
 
-  // Phones show the day and Live as two tabs. From `md` up both cards sit
-  // side by side (two thirds and one third) and the tabs hide; a collapsed
-  // Live gives the day card the full width. The page is exactly one screen
-  // tall, so the day card's tab rows sit at its bottom without scrolling.
   return (
     <main
       className={cn(
         "flex min-h-96 flex-col",
-        // Without the 3rem top row, the page starts a hair below the screen's top edge.
         topBarHidden
           ? "h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] pt-1.5 md:h-[calc(100dvh-0.375rem)]"
           : "h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] md:h-[calc(100dvh-3.375rem)]",
@@ -173,7 +145,6 @@ function Now() {
       <Tabs
         defaultValue="day"
         className={cn(
-          // One stacking layer for both panes, so both glows sit under both cards.
           "isolate min-h-0 flex-1 gap-1.5 md:grid md:grid-rows-1 md:gap-1.5",
           liveCollapsed ? "md:grid-cols-1" : "md:grid-cols-3",
         )}
@@ -300,13 +271,6 @@ function Now() {
   );
 }
 
-/**
- * The day card's body: the view row (show, tags, sort, group), the day's
- * open tasks, due habits and active goals (as the Show choice says) with
- * New task, habit or goal floating at their bottom right, then the
- * Settled / Sessions / Unscheduled tab row. Unscheduled shows on every day,
- * not only today (planning.md, step 4 decision).
- */
 function DayBody({
   date,
   today,
@@ -357,8 +321,6 @@ function DayBody({
   );
   const { statusOf, change, overridden } = useOptimisticStatus(all);
   const kept = new Set(useWithoutRemoved(all).map((task) => task.id));
-  // The tag filter: tasks with any picked tag. Habits and goals wear their
-  // system tags, so they show only when those are picked.
   const tagFilter = view.tags.filter((id) => tags.has(id));
   const filtering = tagFilter.length > 0;
   const systemTagPicked = (kind: "habit" | "goal") =>
@@ -371,8 +333,6 @@ function DayBody({
   const activeGoals = showGoals ? goals.active.length + goals.celebrating.size : 0;
   const completedGoals = showGoals ? goals.completed.length : 0;
 
-  // Lists with the user's latest clicks applied: a just-settled task moves
-  // to the top of Settled, a reopened one back to its open list.
   const dayTasks = [...(day?.open ?? []), ...(day?.settled ?? [])].map(({ task }) => task).filter(shown);
   const open = sortTasks(
     dayTasks.filter((task) => statusOf(task) !== "settled"),
@@ -393,18 +353,13 @@ function DayBody({
   const failed = AsyncResult.isFailure(dayResult) || AsyncResult.isFailure(unscheduledResult);
   const rowProps = { tags, today, onStatusChange: change, onOpen: onOpenTask, statusOf };
 
-  // In All, habits show only while some are due (checked ones are in Settled).
   const habitsInline = view.show === "all" && dueHabits > 0;
-  // Active goals show every day until completed (a just-completed one stays for its celebration).
   const goalsInline = view.show === "all" && activeGoals > 0;
   const inlineBelow = habitsInline || goalsInline;
-  // Settled holds the day's checked-off habits and completed goals too.
   const settledCount =
     day && unscheduled && habits.loaded && goals.loaded
       ? settledList.length + settledHabits + completedGoals
       : null;
-  // Nothing left: no open tasks, due habits or active goals, no session
-  // running or paused today, and something was settled.
   const sessionGoing = date === today && Boolean(activeSession);
   const everythingSettled =
     settledCount !== null &&
@@ -436,7 +391,6 @@ function DayBody({
         <TaskList tasks={open} label={`Tasks ${onDay}`} {...rowProps} />
       )
     ) : view.show === "all" && settledCount === null ? (
-      // Which message fits depends on habits and goals too; wait for them.
       <TaskRowsSkeleton />
     ) : view.show === "all" && everythingSettled ? (
       <SettledState>Everything {onDay} is settled.</SettledState>
@@ -456,7 +410,6 @@ function DayBody({
 
   const newLabel = view.show === "habits" ? "New habit" : view.show === "goals" ? "New goal" : "New task";
 
-  // Past days sum up what happened; future days what's planned.
   const notesCount = AsyncResult.isSuccess(notesResult) ? notesResult.value : null;
   const focused = AsyncResult.isSuccess(sessionsResult) ? sessionsResult.value.focusedMinutes : null;
   const summary: SummaryItem[] | null =
@@ -544,7 +497,6 @@ function DayBody({
       </div>
 
       <DayTabs
-        // Past days open on what got done; crossing into the past remounts it unfolded.
         key={tense === "past" ? "past" : "current"}
         defaultOpen={tense === "past"}
         label="settled, sessions and unscheduled"
@@ -612,9 +564,6 @@ function DayBody({
   );
 }
 
-/**
- * The Habits view: the due cards, or "All habits today checked".
- */
 function HabitsView({
   habits,
   date,
@@ -649,7 +598,6 @@ function HabitsView({
       </EmptyState>
     );
   }
-  // Checked-off habits are in the Settled tab below.
   return (
     <div className="px-2">
       <DueHabits habits={habits} date={date} today={today} onEdit={onEdit} />
@@ -657,7 +605,6 @@ function HabitsView({
   );
 }
 
-/** The Goals view: the active goal cards. Completed ones are in the tabs below. */
 function GoalsView({
   goals,
   today,
@@ -703,15 +650,9 @@ type SummaryItem = {
   readonly icon: LucideIcon;
   readonly count: number;
   readonly text: (count: number) => string;
-  /** Where the item links, if anywhere. */
   readonly to?: "/notes";
 };
 
-/**
- * One quiet line under the day's heading on past and future days: what got
- * done (tasks settled, habits checked, minutes focused, notes) or what's
- * planned. Only the counts above zero show; `null` while the day loads.
- */
 function DaySummary({ items, empty }: { items: readonly SummaryItem[] | null; empty: string }) {
   if (!items) {
     return (
@@ -756,7 +697,6 @@ function DaySummary({ items, empty }: { items: readonly SummaryItem[] | null; em
   );
 }
 
-/** Keeps the days before and after `date` loaded once `date` itself has, so ← and → are instant. */
 function PrefetchNeighbors({ date }: { date: LocalDate }) {
   const loaded = !AsyncResult.isInitial(useAtomValue(dayAtom(date)));
   return loaded ? <Neighbors date={date} /> : null;
@@ -788,7 +728,6 @@ function TaskRowsSkeleton() {
   );
 }
 
-/** A day (or part of it) with nothing left: a check and the line in `--success`. */
 function SettledState({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
@@ -819,18 +758,11 @@ function EmptyState({ children, className }: { children: ReactNode; className?: 
   );
 }
 
-// Both panes stay mounted: on phones the inactive one is hidden; from `md`
-// up both show. Each card fills its pane's full height.
 const paneClass =
   "relative flex min-h-0 flex-col data-[state=inactive]:hidden md:data-[state=inactive]:flex";
 const cardClass =
   "min-h-0 flex-1 rounded-2xl [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(5)]";
 
-/**
- * A soft gradient shadow under a card (`--card-glow`), in both themes. It
- * stacks in the panes' shared layer (`isolate` on the tabs), under both
- * cards, so one card's glow never paints over the other card.
- */
 function CardGlow() {
   return (
     <div
@@ -844,12 +776,7 @@ function Placeholder({ children }: { children: ReactNode }) {
   return <p className="py-4 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
-/**
- * A tab label with its count. Once loaded (`count` isn't `null`), a change
- * pops the badge, so a settled task is seen landing in Settled.
- */
 function Counted({ label, count }: { label: string; count: number | null }) {
-  // The first loaded count doesn't pop; every change after it does.
   const first = useRef<number | null>(null);
   const changed = useRef(false);
   if (first.current === null) first.current = count;
@@ -875,19 +802,11 @@ function Counted({ label, count }: { label: string; count: number | null }) {
 
 type DayTab = {
   readonly value: string;
-  /** The tab's title, with its count. */
   readonly label: ReactNode;
   readonly content: ReactNode;
-  /** Replaces the content's default height cap. */
   readonly contentClassName?: string | undefined;
 };
 
-/**
- * A row of tabs in the day card, with its own fold chevron beside it. The
- * tabs only switch what shows; the chevron alone folds and unfolds. It
- * starts folded. `request` names a tab to open and unfold (the top row's
- * "Start a session"); `onRequestHandled` is called once it's shown.
- */
 function DayTabs({
   label,
   tabs,
@@ -924,8 +843,6 @@ function DayTabs({
                 key={value}
                 value={value}
                 className={cn(
-                  // The text keeps its color on hover and when picked; in dark
-                  // mode a dim outline marks the picked tab instead.
                   "gap-1 px-1.5 text-[0.8125rem] hover:text-foreground/60 data-active:hover:text-foreground sm:gap-1.5 sm:px-3 sm:text-sm dark:hover:text-muted-foreground dark:data-active:border-white/25 dark:data-active:text-muted-foreground",
                 )}
               >
@@ -950,7 +867,6 @@ function DayTabs({
             <TabsContent
               key={value}
               value={value}
-              // On phones the last row can scroll clear of Tibo's floating button.
               className={cn("max-h-[min(14rem,30dvh)] overflow-y-auto max-md:pb-12", contentClassName)}
             >
               {typeof content === "string" ? <Placeholder>{content}</Placeholder> : content}
@@ -964,17 +880,12 @@ function DayTabs({
 
 const LIVE_COLLAPSED_KEY = "dueboard-live-collapsed";
 
-/**
- * Whether Live is collapsed on wide screens, remembered per viewer in
- * localStorage. Read after mount, so the server render and hydration agree.
- */
 function useLiveCollapsed() {
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(LIVE_COLLAPSED_KEY) === "true");
     } catch {
-      // Storage blocked (private mode, site data off): start expanded.
     }
   }, []);
   const update = (next: boolean) => {
@@ -982,7 +893,6 @@ function useLiveCollapsed() {
     try {
       localStorage.setItem(LIVE_COLLAPSED_KEY, String(next));
     } catch {
-      // Not remembered this time; the toggle still works.
     }
   };
   return [collapsed, update] as const;

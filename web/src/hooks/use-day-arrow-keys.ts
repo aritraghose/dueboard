@@ -1,12 +1,9 @@
 import { useEffect } from "react";
 import { type LocalDate, addDays } from "@/lib/dates";
 
-// Keys typed here mean text, not "next day": fields, editors, and widgets
-// that use the arrow keys themselves (menus, dialogs, sliders, tabs).
 const ARROW_KEY_OWNERS =
   'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"], [role="menu"], [role="listbox"], [role="slider"], [role="tablist"], [role="radiogroup"]';
 
-/** The ← and → keys move between days, except while typing. */
 export function useDayArrowKeys(date: LocalDate | null, onChange: (date: LocalDate) => void) {
   useEffect(() => {
     if (!date) return;

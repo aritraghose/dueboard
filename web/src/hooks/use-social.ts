@@ -14,31 +14,20 @@ import { toast } from "sonner";
 import { ApiClient } from "../rpc-client.ts";
 import { failureMessage, useRun } from "./use-tasks.ts";
 
-// Profiles, connections, requests, blocks and people search. Every read
-// carries the `social` reactivity key and every write invalidates it, so a
-// profile, the Connections tab and search results all agree after a click.
-
 const SOCIAL = ["social"];
 
-/** `/@username`, for any viewer (signed in or not). */
 export const profileAtom = Atom.family((username: string) =>
   ApiClient.query("GetProfile", { username }, { reactivityKeys: SOCIAL }),
 );
 
-/** Settings' Connections tab. */
 export const socialOverviewAtom = ApiClient.query("GetSocialOverview", undefined, {
   reactivityKeys: SOCIAL,
 });
 
-/** People search for a (debounced) query of two characters or more. */
 export const peopleSearchAtom = Atom.family((query: string) =>
   ApiClient.query("SearchPeople", { query }, { reactivityKeys: SOCIAL }),
 );
 
-/**
- * A profile tab's first `pages` pages, joined. Each page is its own query
- * atom (with the `social` key), so "Load more" fetches only the new page.
- */
 export const profileItemsAtom = Atom.family(
   ({ username, feed, pages }: { username: string; feed: ProfileFeed; pages: number }) =>
     Atom.make((get) =>
@@ -62,7 +51,6 @@ export const profileItemsAtom = Atom.family(
     ),
 );
 
-/** The leaderboard for a scope and period; fetched again whenever the page opens. */
 export const leaderboardAtom = Atom.family(
   ({ scope, period }: { scope: LeaderboardScope; period: LeaderboardPeriod }) =>
     ApiClient.query("GetLeaderboard", { scope, period }, { reactivityKeys: SOCIAL }),
@@ -90,12 +78,6 @@ const FAILED: Record<Action, string> = {
   unblock: "Couldn't unblock them.",
 };
 
-/**
- * The social writes. Each takes the other person's username (and the
- * request id where one is needed), toasts its outcome and resolves to the
- * call's `Exit`. Sending to someone who already asked connects at once,
- * and the toast says so.
- */
 export function useSocialActions() {
   const run = useRun();
 
@@ -137,7 +119,6 @@ export function useSocialActions() {
       accept: (username: string, requestId: string) => act("accept", username, () => accept(requestId)),
       decline: (username: string, requestId: string) => act("decline", username, () => decline(requestId)),
       cancel: (username: string, requestId: string) => act("cancel", username, () => cancel(requestId)),
-      /** Refetches every social read on screen, failed ones included ("Try again"). */
       reload: () => run(Reactivity.invalidate(SOCIAL)),
     };
   }, [run, act]);

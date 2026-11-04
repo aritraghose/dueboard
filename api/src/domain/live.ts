@@ -40,29 +40,15 @@ import {
   liveDisplay,
 } from "./visibility.ts";
 
-// Live (architecture.md §5): what the viewer and their connections did over
-// the last few days, newest first. Computed when read: activity rows of the
-// actor set (`liveActorSql`) joined to their items, so the item's current
-// privacy and share flag decide what shows, and deleted items never do.
-// The Path is the viewer's own today, oldest first: only ever their own
-// items, so it needs no visibility filter and ignores the share flag.
-
-/** Whole minutes focused in a stopped session, from its segments. */
 export const focusedMinutes = sql<number | null>`(
   select round(sum(extract(epoch from coalesce(${FocusSessionSegments.endedAt}, now()) - ${FocusSessionSegments.startedAt})) / 60)::int
   from ${FocusSessionSegments} where ${FocusSessionSegments.sessionId} = ${FocusSessions.id})`;
 
-/**
- * A habit's `habit_checked` row stays off Live on a day its `habit_completed`
- * row covers too: "completed a habit" already says it, and a one-tap habit
- * would otherwise show twice.
- */
 const notCoveredCheck = sql`(${Activity.kind} <> 'habit_checked' or not exists (
   select 1 from ${Activity} c
   where c.kind = 'habit_completed' and c.subject_type = 'habit'
     and c.subject_id = ${Activity.subjectId} and c.local_date = ${Activity.localDate}))`;
 
-/** One page of `viewerId`'s Live. */
 export const getLive = Effect.fn("getLive")(function* (viewerId: string, input: GetLiveInput) {
   const { days, scope, cursor } = yield* decodeInput(GetLiveInput)(input);
   const after = cursor === undefined ? undefined : decodeItemCursor(cursor);
@@ -74,7 +60,6 @@ export const getLive = Effect.fn("getLive")(function* (viewerId: string, input: 
     .where(eq(UserSettings.userId, viewerId))
     .pipe(orDieOnDbError);
   const timeZone = settings?.timeZone ?? FALLBACK_TIME_ZONE;
-  // Midnight of the window's first day in the viewer's zone.
   const from = addDays(todayIn(timeZone), -(days - 1));
   const since = sql<Date>`(${from}::date)::timestamp at time zone ${timeZone}`;
 
@@ -121,7 +106,6 @@ export const getLive = Effect.fn("getLive")(function* (viewerId: string, input: 
     .limit(LIVE_PAGE_SIZE + 1)
     .pipe(orDieOnDbError);
 
-  // Only the first page needs it, for the empty state.
   let hasConnections = true;
   if (after === undefined) {
     const [connection] = yield* db
@@ -159,7 +143,6 @@ export const getLive = Effect.fn("getLive")(function* (viewerId: string, input: 
   });
 });
 
-/** The kind-specific numbers of an activity row (goal moves, sessions, habit taps). */
 export const eventMeta = (row: {
   kind: LiveEvent["kind"];
   meta: Record<string, unknown>;
@@ -190,10 +173,8 @@ export const eventMeta = (row: {
   }
 };
 
-/** What a Path lists from the activity feed; habit taps come from `habit_checkins`. */
 const PATH_ACTIVITY = ["task_settled", "goal_progressed", "session_completed"] as const;
 
-/** `viewerId`'s Path for today in their zone: tasks settled, habits checked, goals moved, sessions completed. */
 export const getPath = Effect.fn("getPath")(function* (viewerId: string) {
   const db = yield* Database;
   const [settings] = yield* db
@@ -216,7 +197,6 @@ export const getPath = Effect.fn("getPath")(function* (viewerId: string) {
     .leftJoin(Tasks, activitySubjectJoin.task)
     .leftJoin(Goals, activitySubjectJoin.goal)
     .leftJoin(FocusSessions, activitySubjectJoin.session)
-    // Unused joins keep the shared subject columns valid.
     .leftJoin(Habits, activitySubjectJoin.habit)
     .leftJoin(Notes, activitySubjectJoin.note)
     .where(

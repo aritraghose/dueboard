@@ -7,7 +7,6 @@ import { MAIN_NAV } from "@/lib/nav";
 import { type MenuUser, UserAvatar, UserMenuContent } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
 
-/** How far a finger must travel up the nav before it counts as a swipe. */
 const SWIPE_UP_PX = 36;
 
 const item = cn(
@@ -15,11 +14,6 @@ const item = cn(
   "focus-visible:ring-3 focus-visible:ring-ring/50 data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground [&_svg]:size-5",
 );
 
-/**
- * The phone navigation: a floating, frosted bar like a native app's tab bar,
- * with Now, Inbox, Boards and your profile menu (Settings lives there).
- * Swiping up on it, or tapping its handle, opens Tibo.
- */
 export function MobileNav({ user, className }: { user: MenuUser; className?: string }) {
   const { setOpen: openTibo } = useTibo();
   const pathname = useRouterState({ select: (state) => state.location.pathname });

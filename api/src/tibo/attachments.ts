@@ -1,11 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Files in Tibo's chat (architecture.md §7.9). The bytes live in the
-// private `TiboFiles` R2 bucket, bound to the AgentWorker alone, under
-// `tibo/<user id>/<attachment id>`; what each file is lives here, in the
-// user's own `TiboAgent` SQLite. A file is reachable only through this
-// table: an id the agent didn't store for its own user doesn't exist.
-
 import type { FilePart, TextPart } from "ai";
 import {
   ORPHAN_TTL_MS,
@@ -18,6 +12,7 @@ import {
   unreadableNote,
   userPrefix,
 } from "./attachment-rules.ts";
+import { imageRef } from "./image-rules.ts";
 import type { TiboAttachment, TiboAttachmentKind, TiboSentFile } from "./protocol.ts";
 
 const SCHEMA = `
@@ -49,6 +44,14 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE INDEX IF NOT EXISTS attachments_message_idx ON attachments (message_id);
 CREATE INDEX IF NOT EXISTS attachments_created_idx ON attachments (created_at);
+-- Images Tibo made (or edited) with Muse Image, for the daily cap. Each is
+-- also an attachment, on the Tibo bubble that shows it.
+CREATE TABLE IF NOT EXISTS made_images (
+  attachment_id TEXT PRIMARY KEY,
+  edit INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS made_images_created_idx ON made_images (created_at);
 `;
 
 type Row = {
@@ -80,33 +83,26 @@ const toAttachment = (row: Row): TiboAttachment => ({
   ...(row.width !== null && row.height !== null ? { width: row.width, height: row.height } : {}),
 });
 
-/** A stored file and, for text files and documents, its text. */
 export interface StoredAttachment {
   readonly attachment: TiboAttachment;
   readonly text: string | null;
   readonly textTruncated: boolean;
 }
 
-/** Turns a document into text (Workers AI `toMarkdown`); `null` if it can't. */
 export type DocumentReader = (name: string, bytes: Uint8Array<ArrayBuffer>) => Promise<string | null>;
 
-/** What the memory jobs wrote about a file. */
 export interface FileNote {
   readonly note: string | null;
-  /** Not written yet: memory waits for it. */
   readonly pending: boolean;
-  /** Worth keeping in long-term memory. */
   readonly memorable: boolean;
 }
 
-/** Failed tries at a file's note before it's skipped (so memory never waits on it forever). */
 export const NOTE_ATTEMPTS = 2;
 
 export class AttachmentStore {
   constructor(
     private readonly sql: SqlStorage,
     private readonly bucket: R2Bucket,
-    /** The agent's own name: the user every file here belongs to. */
     private readonly userId: string,
   ) {}
 
@@ -114,7 +110,6 @@ export class AttachmentStore {
     this.sql.exec(SCHEMA);
   }
 
-  /** Bytes stored and uploads since `since` (ms). */
   usage(since: number): { bytes: number; uploads: number } {
     const row = this.sql
       .exec<{ bytes: number | null; uploads: number }>(
@@ -125,18 +120,12 @@ export class AttachmentStore {
     return { bytes: row.bytes ?? 0, uploads: row.uploads ?? 0 };
   }
 
-  /**
-   * Stores one file: sniffs what it is, reads a text file's or document's
-   * text, puts the bytes in R2, then records it. The R2 write comes first,
-   * so a row never points at nothing.
-   */
   async create(name: string, bytes: Uint8Array<ArrayBuffer>, readDocument: DocumentReader): Promise<TiboAttachment> {
     const id = crypto.randomUUID();
     const { kind, mediaType } = sniff(bytes, name);
     const size = kind === "image" ? imageSize(bytes, mediaType) : null;
     let text: { text: string; truncated: boolean } | null = null;
     if (kind === "text") text = capText(new TextDecoder().decode(bytes));
-    // A PDF's text too: the fallback when the model can't take the file itself.
     if (kind === "document" || kind === "pdf") {
       const read = await readDocument(name, bytes);
       if (read) text = capText(read);
@@ -157,7 +146,6 @@ export class AttachmentStore {
         size?.height ?? null,
         text && text.text.length > 0 ? text.text : null,
         text?.truncated ? 1 : 0,
-        // Nothing to read in an `other` file, or a document that wouldn't convert.
         kind === "other" || ((kind === "text" || kind === "document") && !text?.text) ? "skipped" : "pending",
         Date.now(),
       )
@@ -165,27 +153,55 @@ export class AttachmentStore {
     return toAttachment(row);
   }
 
+  async createMade(name: string, bytes: Uint8Array<ArrayBuffer>, prompt: string, edit: boolean): Promise<TiboAttachment> {
+    const attachment = await this.create(name, bytes, async () => null);
+    this.saveNote(attachment.id, { note: prompt, memorable: false });
+    this.sql.exec(
+      `INSERT INTO made_images (attachment_id, edit, created_at) VALUES (?, ?, ?)`,
+      attachment.id,
+      edit ? 1 : 0,
+      Date.now(),
+    );
+    return attachment;
+  }
+
+  madeSince(since: number): number {
+    return this.sql.exec<{ made: number }>(`SELECT count(*) AS made FROM made_images WHERE created_at >= ?`, since).one().made;
+  }
+
+  isMade(id: string): boolean {
+    return this.sql.exec(`SELECT 1 FROM made_images WHERE attachment_id = ?`, id).toArray().length > 0;
+  }
+
+  findImage(ref: string): StoredAttachment | null {
+    const rows = this.sql
+      .exec<Row>(
+        `SELECT * FROM attachments
+         WHERE kind = 'image' AND substr(id, 1, ?) = ?
+           AND (message_id IS NOT NULL OR id IN (SELECT attachment_id FROM made_images))
+         LIMIT 2`,
+        ref.length,
+        ref,
+      )
+      .toArray();
+    const row = rows.length === 1 ? rows[0]! : null;
+    return row ? { attachment: toAttachment(row), text: row.text, textTruncated: row.text_truncated === 1 } : null;
+  }
+
   get(id: string): StoredAttachment | null {
     const row = this.sql.exec<Row>(`SELECT * FROM attachments WHERE id = ?`, id).toArray()[0];
     return row ? { attachment: toAttachment(row), text: row.text, textTruncated: row.text_truncated === 1 } : null;
   }
 
-  /** The file's bytes from R2, as a stream, or `null` if they're gone. */
   async object(id: string): Promise<R2ObjectBody | null> {
     return await this.bucket.get(objectKey(this.userId, id));
   }
 
-  /** The file's bytes, or `null` if they're gone. */
   async bytes(id: string): Promise<Uint8Array | null> {
     const object = await this.object(id);
     return object ? new Uint8Array(await object.arrayBuffer()) : null;
   }
 
-  /**
-   * Ties uploaded files to the message they're sent with. Only files that
-   * exist here and weren't sent yet: anything else in `ids` is dropped. In
-   * the order given.
-   */
   claim(ids: readonly string[], messageId: string): TiboAttachment[] {
     const claimed: TiboAttachment[] = [];
     for (const id of new Set(ids)) {
@@ -197,7 +213,6 @@ export class AttachmentStore {
     return claimed;
   }
 
-  /** Files that exist here and weren't sent yet, from `ids`, in order. */
   unsent(ids: readonly string[]): TiboAttachment[] {
     return [...new Set(ids)].flatMap((id) => {
       const row = this.sql.exec<Row>(`SELECT * FROM attachments WHERE id = ? AND message_id IS NULL`, id).toArray()[0];
@@ -205,9 +220,6 @@ export class AttachmentStore {
     });
   }
 
-  // ─── File notes (for memory) ───────────────────────────────────────────
-
-  /** Sent files still waiting for their note, oldest first, with the message they came with. */
   pendingNotes(limit: number): (StoredAttachment & { readonly messageId: string })[] {
     return this.sql
       .exec<Row>(
@@ -223,7 +235,6 @@ export class AttachmentStore {
       }));
   }
 
-  /** Saves a file's note and judgement, or counts a failed attempt (skipped after `NOTE_ATTEMPTS`). */
   saveNote(id: string, result: { note: string; memorable: boolean } | null) {
     if (result !== null) {
       this.sql.exec(
@@ -243,7 +254,6 @@ export class AttachmentStore {
     );
   }
 
-  /** Each file's note, its judgement and whether it's still being written, by id. */
   notes(ids: readonly string[]): Map<string, FileNote> {
     const out = new Map<string, FileNote>();
     for (const id of ids) {
@@ -258,7 +268,6 @@ export class AttachmentStore {
     return out;
   }
 
-  /** Files sent in the chat, newest first (the Media tab). */
   sent(limit: number): TiboSentFile[] {
     return this.sql
       .exec<Row>(`SELECT * FROM attachments WHERE message_id IS NOT NULL ORDER BY created_at DESC LIMIT ?`, limit)
@@ -266,7 +275,6 @@ export class AttachmentStore {
       .map((row) => ({ ...toAttachment(row), messageId: row.message_id!, sentAt: row.created_at }));
   }
 
-  /** Deletes files uploaded but never sent within `ORPHAN_TTL_MS`. */
   async pruneOrphans(now: number) {
     const ids = this.sql
       .exec<{ id: string }>(`SELECT id FROM attachments WHERE message_id IS NULL AND created_at < ? LIMIT 500`, now - ORPHAN_TTL_MS)
@@ -274,14 +282,12 @@ export class AttachmentStore {
       .map((row) => row.id);
     if (ids.length === 0) return;
     await this.bucket.delete(ids.map((id) => objectKey(this.userId, id)));
-    for (const id of ids) this.sql.exec(`DELETE FROM attachments WHERE id = ?`, id);
+    for (const id of ids) {
+      this.sql.exec(`DELETE FROM attachments WHERE id = ?`, id);
+      this.sql.exec(`DELETE FROM made_images WHERE attachment_id = ?`, id);
+    }
   }
 
-  /**
-   * Account deletion: every object under the user's prefix, listed from R2
-   * itself so nothing this table lost track of is left behind. Throws on
-   * a failure, so the wipe is retried before anything else is gone.
-   */
   async deleteAll() {
     const prefix = userPrefix(this.userId);
     for (;;) {
@@ -291,16 +297,12 @@ export class AttachmentStore {
       if (!listed.truncated) break;
     }
     this.sql.exec(`DELETE FROM attachments`);
+    this.sql.exec(`DELETE FROM made_images`);
   }
 }
 
-/**
- * Whether PDFs reach the model as files (Muse Spark reads them, pictures
- * included) or as their extracted text.
- */
 export const PDF_AS_FILE = true;
 
-/** What's left of a turn's room for files: bytes of images and PDFs, characters of text. */
 export interface FileBudget {
   bytes: number;
   text: number;
@@ -308,17 +310,10 @@ export interface FileBudget {
 
 const textPart = (text: string): TextPart => ({ type: "text", text });
 
-/**
- * The model's view of these files, for a user message's content: a line
- * naming each, then the image or PDF itself, or a text file's or
- * document's text inside `<attached_file>`. What doesn't fit `budget`, or
- * can't be read, is named with a note saying so. Spends the budget.
- */
 export async function fileContent(
   store: AttachmentStore,
   attachments: readonly TiboAttachment[],
   budget: FileBudget,
-  /** PDFs as their text even when `PDF_AS_FILE` (the fallback when the model refused one). */
   pdfAsText = false,
 ): Promise<(TextPart | FilePart)[]> {
   const parts: (TextPart | FilePart)[] = [];
@@ -340,7 +335,7 @@ export async function fileContent(
         continue;
       }
       budget.bytes -= attachment.size;
-      parts.push(textPart(attachmentLine(attachment)));
+      parts.push(textPart(attachmentLine({ ...attachment, ref: imageRef(attachment.id) })));
       parts.push({ type: "file", data: bytes, mediaType: attachment.mediaType, filename: attachment.name });
       continue;
     }

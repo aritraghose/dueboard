@@ -2,15 +2,10 @@ import type { Task } from "@dueboard/api/rpc";
 import { useCallback, useState } from "react";
 import type { LocalDate } from "@/lib/dates";
 
-/** What the task dialog shows: a new task (on `date`, or unscheduled when `null`) or an existing one. */
 export type TaskDialogTarget =
   | { readonly mode: "create"; readonly date: LocalDate | null }
   | { readonly mode: "edit"; readonly task: Task };
 
-/**
- * The task dialog's target, and whether it's open. The target is kept after
- * closing so the dialog can animate out with its contents.
- */
 export function useTaskDialog() {
   const [state, setState] = useState<{ target: TaskDialogTarget | null; open: boolean; version: number }>({
     target: null,

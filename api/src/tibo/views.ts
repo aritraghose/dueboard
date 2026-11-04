@@ -1,10 +1,4 @@
-// The domain's answers (encoded JSON from the DomainWorker) cut down to what
-// the model needs: ids to act on, names, days, progress. Shared by the
-// tools (`./tools.ts`) and the today snapshot (`./snapshot.ts`). Pure.
-
 import { dayLabel, timeIn } from "./dates.ts";
-
-// ─── The encoded shapes read here (see `domain/model.ts`) ─────────────────
 
 export interface TaskJson {
   readonly id: string;
@@ -126,32 +120,20 @@ export interface DiaryPageJson {
   readonly nextCursor: string | null;
 }
 
-/**
- * Text another person wrote (a connection's task title on Live, a diary
- * entry), as the model sees it in a tool result: escaped inside
- * `<their_words>`, which the persona's tool rules call data, never
- * instructions. Turns that read it can run tools, so it's marked like
- * relayed text (`./relays.ts`).
- */
 export const theirWords = (text: string) =>
   `<their_words>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</their_words>`;
 
-// ─── Words the model and the user share ────────────────────────────────────
-
-/** Task importance as the app labels it, 1–5 stars. */
 export const IMPORTANCE = ["low", "minor", "medium", "high", "critical"] as const;
 export type Importance = (typeof IMPORTANCE)[number];
 export const importanceValue = (label: Importance) => IMPORTANCE.indexOf(label) + 1;
 export const importanceLabel = (value: number | null) => (value ? IMPORTANCE[value - 1] : undefined);
 
-/** Task status as Tibo says it. */
 export const TASK_STATUS_WORD = { idle: "todo", working: "in_progress", settled: "done" } as const;
 export type TaskStatusWord = (typeof TASK_STATUS_WORD)[keyof typeof TASK_STATUS_WORD];
 export const taskStatusOf = (word: TaskStatusWord) =>
   (Object.keys(TASK_STATUS_WORD) as (keyof typeof TASK_STATUS_WORD)[]).find((key) => TASK_STATUS_WORD[key] === word) ??
   "idle";
 
-/** Drops `undefined` and `null` fields, so answers stay short. */
 const compact = <T extends Record<string, unknown>>(value: T) =>
   Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined && field !== null)) as Partial<T>;
 
@@ -201,13 +183,11 @@ export const sessionView = (session: SessionJson, timeZone: string) =>
 
 export const noteView = (note: NoteJson) => ({ id: note.id, body: note.body, date: note.localDate });
 
-/** "Call mom · Tomorrow" or "Report · Due Fri, Nov 6". */
 export const taskReceipt = (title: string, date: string | null | undefined, deadline: string | null | undefined, today: string) =>
   [title, date ? dayLabel(date, today) : null, deadline && deadline !== date ? `Due ${dayLabel(deadline, today)}` : null]
     .filter(Boolean)
     .join(" · ");
 
-/** "25 min" or "1 h 30 min". */
 export const minutesLabel = (minutes: number) => {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;

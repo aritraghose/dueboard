@@ -19,13 +19,6 @@ import { roundPercent } from "@/lib/goals";
 import { upcomingHint } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 
-// Upcoming: what's planned for the coming days, from tomorrow, in a sheet
-// over `/now` (from the right on wide screens, from the bottom on phones).
-// Each day with something on it gets a header ("Tomorrow", "Thu, Nov 5")
-// and its tasks, habits and goals; the days in between say how many are
-// free. Items open the same task card, habit card and goal card as `/now`.
-
-/** How far ahead "Load more days" goes. */
 const MAX_DAYS_AHEAD = 365;
 
 export function UpcomingSheet({
@@ -40,7 +33,6 @@ export function UpcomingSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   today: LocalDate;
-  /** Shows that day on `/now` (the sheet closes). */
   onOpenDay: (date: LocalDate) => void;
   onOpenTask: (task: Task) => void;
   onEditHabit: (habit: Habit) => void;
@@ -93,7 +85,6 @@ function UpcomingList({
   const from = addDays(today, 1);
   const [pages, setPages] = useState(1);
   const result = useAtomValue(upcomingAtom({ from, pages }));
-  // While the next page loads, the days already shown stay.
   const last = useRef<{ from: LocalDate; days: readonly UpcomingDay[]; until: LocalDate } | null>(null);
   if (AsyncResult.isSuccess(result)) last.current = { from, ...result.value };
   const shown = last.current?.from === from ? last.current : null;
@@ -142,7 +133,6 @@ function UpcomingList({
                   <DayHeader date={day.date} today={today} onOpen={() => onOpenDay(day.date)} />
                   <div className="flex flex-col px-3 pb-3">
                     {dayTasks.length > 0 && (
-                      // Per day: a task on two days (assigned and due) is two rows, not one shared element.
                       <LayoutGroup id={day.date}>
                         <TaskList
                           tasks={dayTasks}
@@ -198,10 +188,6 @@ function UpcomingList({
   );
 }
 
-/**
- * A day's header, sticky while its items scroll under it: "Tomorrow" or
- * "Thu, Nov 5", how far off it is, and a link to that day on `/now`.
- */
 function DayHeader({ date, today, onOpen }: { date: LocalDate; today: LocalDate; onOpen: () => void }) {
   const days = daysBetween(today, date);
   return (
@@ -228,7 +214,6 @@ function DayHeader({ date, today, onOpen }: { date: LocalDate; today: LocalDate;
   );
 }
 
-/** Between two days with something on them: how many are free. */
 function FreeDays({ count }: { count: number }) {
   return (
     <p className="flex items-center gap-3 px-5 py-2 text-xs text-muted-foreground/80">
@@ -239,7 +224,6 @@ function FreeDays({ count }: { count: number }) {
   );
 }
 
-/** A habit due that day (once per period for flexible ones); it opens the habit card. */
 function HabitRow({
   entry,
   today,
@@ -268,7 +252,6 @@ function HabitRow({
   );
 }
 
-/** A goal whose target date is that day; it opens the goal card. */
 function GoalRow({ goal, color, onOpen }: { goal: Goal; color: string; onOpen: (goal: Goal) => void }) {
   return (
     <button

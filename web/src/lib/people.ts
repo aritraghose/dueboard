@@ -1,6 +1,3 @@
-// People in words: initials for avatars without a picture.
-
-/** Up to two initials from a display name ("Ada Lovelace" → "AL"), or the username's first letter. */
 export function initials(name: string, username: string): string {
   const letters = name
     .trim()

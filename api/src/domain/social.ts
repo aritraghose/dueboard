@@ -52,13 +52,6 @@ import { cancelRelaysBetween } from "./relays.ts";
 import { onRequestAccepted, onRequestSent } from "./notification-rules.ts";
 import { deleteNotificationsBetween, recordNotifications } from "./notifications.ts";
 
-// Connections, connection requests and blocks (planning.md "Connections",
-// architecture.md §4), people search and the public profile read. Pair
-// writes take a transaction-scoped advisory lock on the pair, so two users
-// requesting each other at once (or a block racing an accept) apply one
-// after the other. `areConnected` and `isBlocked` are the reads
-// `visibility.ts` builds on (step 14).
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const personColumns = {
@@ -88,7 +81,6 @@ const userNotFound = (username: string) =>
 const requestNotFound = (id: string) =>
   new ConnectionRequestNotFound({ message: "That request isn't pending any more.", id });
 
-/** An onboarded user by typed username (`@` and case don't matter), or `UserNotFound`. */
 const findUser = (tx: Executor, input: string) =>
   Effect.gen(function* () {
     const username = normalizeUsername(input);
@@ -98,13 +90,11 @@ const findUser = (tx: Executor, input: string) =>
     return row;
   });
 
-/** Serializes writes to one pair until the transaction ends. */
 const lockPair = (tx: Executor, a: string, b: string) => {
   const [low, high] = orderedPair(a, b);
   return tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`social:${low}:${high}`}))`);
 };
 
-/** Whether `viewerId` blocked `otherId`, and whether `otherId` blocked `viewerId`. */
 const blocksBetween = (tx: Executor, viewerId: string, otherId: string) =>
   Effect.gen(function* () {
     const rows = yield* tx
@@ -127,16 +117,11 @@ const connectionBetween = (a: string, b: string) => {
   return and(eq(Connections.userLow, low), eq(Connections.userHigh, high));
 };
 
-/** Adds the pair's connection; a second add is a no-op. */
 const connect = (tx: Executor, a: string, b: string, now: Date) => {
   const [userLow, userHigh] = orderedPair(a, b);
   return tx.insert(Connections).values({ userLow, userHigh, createdAt: now }).onConflictDoNothing();
 };
 
-/**
- * The viewer's status with each of `otherIds`, in a fixed number of
- * queries. Callers have already left out anyone who blocked the viewer.
- */
 const statusesFor = (tx: Executor, viewerId: string, otherIds: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const result = new Map<string, SocialStatus>();
@@ -195,9 +180,6 @@ const statusesFor = (tx: Executor, viewerId: string, otherIds: ReadonlyArray<str
     return result;
   });
 
-// ─── Reads other services use ────────────────────────────────────────────────
-
-/** Whether `a` and `b` are connected. */
 export const areConnected = Effect.fn("areConnected")(function* (a: string, b: string) {
   if (a === b) return false;
   const db = yield* Database;
@@ -209,7 +191,6 @@ export const areConnected = Effect.fn("areConnected")(function* (a: string, b: s
   return row !== undefined;
 });
 
-/** Whether either of `a` and `b` blocked the other. */
 export const isBlocked = Effect.fn("isBlocked")(function* (a: string, b: string) {
   if (a === b) return false;
   const db = yield* Database;
@@ -217,17 +198,6 @@ export const isBlocked = Effect.fn("isBlocked")(function* (a: string, b: string)
   return viewerBlocked || blockedViewer;
 });
 
-// ─── Requests ────────────────────────────────────────────────────────────────
-
-/**
- * Asks `username` to connect, and notifies them. If they already asked the
- * user, both requests are accepted, the two are connected at once, and
- * they're notified of the accept instead. Refused for yourself,
- * someone you blocked, or someone you're connected to; someone who blocked
- * you looks like no one (`UserNotFound`). Sending again while a request is
- * pending returns it. Limited to a burst per minute and
- * `CONNECTION_REQUESTS_PER_DAY` in any 24 hours.
- */
 export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function* (
   userId: string,
   input: UsernameRef,
@@ -280,7 +250,6 @@ export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function
       const now = new Date();
       const theirs = pending.find((row) => row.fromUserId === target.id);
       if (theirs) {
-        // They asked first: this request is the answer.
         yield* tx
           .update(ConnectionRequests)
           .set({ status: "accepted", respondedAt: now })
@@ -318,10 +287,6 @@ export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function
   );
 });
 
-/**
- * Accepts a pending request to the user (and their own pending one the
- * other way), and notifies the sender.
- */
 export const acceptConnectionRequest = Effect.fn("acceptConnectionRequest")(function* (
   userId: string,
   input: ConnectionRequestRef,
@@ -340,7 +305,6 @@ export const acceptConnectionRequest = Effect.fn("acceptConnectionRequest")(func
         .from(ConnectionRequests)
         .where(incoming);
       if (!found) return yield* requestNotFound(requestId);
-      // Lock the pair before re-reading, the order every pair write uses.
       yield* lockPair(tx, userId, found.fromUserId);
       const blocks = yield* blocksBetween(tx, userId, found.fromUserId);
       if (blocks.viewerBlocked || blocks.blockedViewer) return yield* requestNotFound(requestId);
@@ -372,7 +336,6 @@ export const acceptConnectionRequest = Effect.fn("acceptConnectionRequest")(func
   );
 });
 
-/** Declines a pending request to the user. The sender isn't told; they see no request. */
 export const declineConnectionRequest = Effect.fn("declineConnectionRequest")(function* (
   userId: string,
   input: ConnectionRequestRef,
@@ -395,7 +358,6 @@ export const declineConnectionRequest = Effect.fn("declineConnectionRequest")(fu
   return status("none");
 });
 
-/** Takes back a pending request the user sent. */
 export const cancelConnectionRequest = Effect.fn("cancelConnectionRequest")(function* (
   userId: string,
   input: ConnectionRequestRef,
@@ -418,9 +380,6 @@ export const cancelConnectionRequest = Effect.fn("cancelConnectionRequest")(func
   return status("none");
 });
 
-// ─── Connections and blocks ──────────────────────────────────────────────────
-
-/** Removes the connection with `username`, if there is one. */
 export const removeConnection = Effect.fn("removeConnection")(function* (
   userId: string,
   input: UsernameRef,
@@ -437,12 +396,6 @@ export const removeConnection = Effect.fn("removeConnection")(function* (
   );
 });
 
-/**
- * Blocks `username`: removes the connection, closes pending requests both
- * ways (the user's own are cancelled, theirs declined), cancels open relays
- * both ways, deletes notifications between them, and hides each from the
- * other from now on. Blocking twice is a no-op.
- */
 export const blockUser = Effect.fn("blockUser")(function* (userId: string, input: UsernameRef) {
   const { username } = yield* decodeInput(UsernameRef)(input);
   const db = yield* Database;
@@ -479,18 +432,14 @@ export const blockUser = Effect.fn("blockUser")(function* (userId: string, input
             eq(ConnectionRequests.toUserId, userId),
           ),
         );
-      // Open relays both ways close too (step 21).
       yield* cancelRelaysBetween(tx, userId, target.id);
-      // Notifications between them go both ways, for good.
       yield* deleteNotificationsBetween(tx, userId, target.id);
-      // So do the Ask page questions they asked each other (step 22).
       yield* deleteAskQuestionsBetween(tx, userId, target.id);
       return status("blocked");
     }),
   );
 });
 
-/** Lifts the user's block on `username`. Nothing else comes back: they start unconnected. */
 export const unblockUser = Effect.fn("unblockUser")(function* (userId: string, input: UsernameRef) {
   const { username } = yield* decodeInput(UsernameRef)(input);
   const db = yield* Database;
@@ -505,9 +454,6 @@ export const unblockUser = Effect.fn("unblockUser")(function* (userId: string, i
   );
 });
 
-// ─── Lists ───────────────────────────────────────────────────────────────────
-
-/** The user's connections, newest first. */
 export const listConnections = Effect.fn("listConnections")(function* (userId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -526,7 +472,6 @@ export const listConnections = Effect.fn("listConnections")(function* (userId: s
   return rows.map((row) => new Connection({ person: toPerson(row), since: row.since }));
 });
 
-/** Pending requests other users sent to the user, newest first. */
 export const listIncomingRequests = Effect.fn("listIncomingRequests")(function* (userId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -547,7 +492,6 @@ export const listIncomingRequests = Effect.fn("listIncomingRequests")(function* 
   );
 });
 
-/** Pending requests the user sent, newest first. */
 export const listOutgoingRequests = Effect.fn("listOutgoingRequests")(function* (userId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -568,7 +512,6 @@ export const listOutgoingRequests = Effect.fn("listOutgoingRequests")(function* 
   );
 });
 
-/** The people the user blocked, newest first. */
 export const listBlocked = Effect.fn("listBlocked")(function* (userId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -581,7 +524,6 @@ export const listBlocked = Effect.fn("listBlocked")(function* (userId: string) {
   return rows.map((row) => new BlockedPerson({ person: toPerson(row), since: row.since }));
 });
 
-/** Settings' Connections tab in one call. */
 export const getSocialOverview = Effect.fn("getSocialOverview")(function* (userId: string) {
   const lists = yield* Effect.all(
     {
@@ -595,15 +537,6 @@ export const getSocialOverview = Effect.fn("getSocialOverview")(function* (userI
   return new SocialOverview(lists);
 });
 
-// ─── People and profiles ─────────────────────────────────────────────────────
-
-/**
- * Finds people by username (exact, or how it starts) or by name (any part,
- * ignoring case), at least two characters; the exact username first, then
- * other username matches, then name matches, alphabetical within each; at
- * most `PEOPLE_SEARCH_LIMIT`. The user can find themselves (`self`);
- * anyone who blocked them is left out. Rate limited per user.
- */
 export const searchPeople = Effect.fn("searchPeople")(function* (
   userId: string,
   input: SearchPeopleInput,
@@ -638,7 +571,6 @@ export const searchPeople = Effect.fn("searchPeople")(function* (
         )
         .orderBy(
           desc(sql`${AuthUsers.username} = ${patterns.exact}`),
-          // Without a username pattern only names can match, so there's nothing to rank by.
           ...(usernameMatch ? [desc(usernameMatch)] : []),
           asc(AuthUsers.username),
         )
@@ -655,7 +587,6 @@ export const searchPeople = Effect.fn("searchPeople")(function* (
   );
 });
 
-/** All-time public totals for a profile. */
 const profileCounts = (tx: Executor, ownerId: string) =>
   Effect.gen(function* () {
     const [connections] = yield* tx
@@ -688,12 +619,6 @@ const profileCounts = (tx: Executor, ownerId: string) =>
     });
   });
 
-/**
- * `/@username` for any viewer, signed in (`viewerId`) or not (`null`):
- * the card, the viewer's status with them and public counts. Someone who
- * blocked the viewer, like a username nobody has, is `UserNotFound`; a
- * viewer who blocked them gets the card without counts, to unblock from.
- */
 export const getProfile = Effect.fn("getProfile")(function* (
   viewerId: string | null,
   input: UsernameRef,
@@ -723,7 +648,6 @@ export const getProfile = Effect.fn("getProfile")(function* (
         color: settings?.color ?? null,
         status: social,
         counts: social.state === "blocked" ? null : yield* profileCounts(tx, owner.id),
-        // A block either way closes the Ask page (`domain/ask.ts`); the owner can always preview theirs.
         askEnabled: social.state === "self" || (social.state !== "blocked" && (ask?.enabled ?? false)),
       });
     }),

@@ -1,9 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// What Tibo brings back from long-term memory during a turn (architecture.md
-// §7.3): the "story so far" and "what you remember" context sections, and
-// the backends of the `search_conversation`, `remember` and `forget` tools.
-
 import type { ContextSection } from "./context.ts";
 import { dayIn, startOfDayIn, addDays } from "./dates.ts";
 import { embedDocuments, embedQuery } from "./embeddings.ts";
@@ -35,10 +31,6 @@ export interface RecallContext {
   readonly today: string;
 }
 
-/**
- * Short names for memories in one turn ("m1", "m2"), so the model can point
- * at them in `remember` and `forget` without seeing ids.
- */
 export class MemoryRefs {
   private readonly byRef = new Map<string, string>();
   private readonly byId = new Map<string, string>();
@@ -58,16 +50,8 @@ export class MemoryRefs {
   }
 }
 
-// ─── Context sections ──────────────────────────────────────────────────
-
-/** The most tokens each level's summary may take in the story. */
 const STORY_SHARE: Record<SummaryLevel, number> = { year: 420, month: 380, week: 300, day: 300 };
 
-/**
- * "The story so far": the newest summary at each level (the year so far,
- * the month so far, the latest week and day), then last year's if the
- * budget still has room. `null` before the first summary exists.
- */
 export const storySection = (store: MemoryStore, today: string): ContextSection | null => {
   const latest = (level: SummaryLevel) => store.latestSummaries(level, level === "year" ? 2 : 1);
   const [thisYear, lastYear] = latest("year");
@@ -84,7 +68,6 @@ export const storySection = (store: MemoryStore, today: string): ContextSection 
     const label = `${periodLabel(level, summary.periodStart)}${inProgress && level !== "day" ? " (so far)" : ""}`;
     return { optional, text: `${label}: ${truncateToTokens(summary.text, STORY_SHARE[level])}` };
   });
-  // Last year goes first if the rest leaves no room.
   const required = lines.filter((line) => !line.optional);
   const total = lines.reduce((sum, line) => sum + estimateTokens(line.text), 0);
   const kept = total > SECTION_BUDGET_TOKENS.story ? required : lines;
@@ -97,11 +80,6 @@ export const storySection = (store: MemoryStore, today: string): ContextSection 
   };
 };
 
-/**
- * Memories for this turn: the ones closest in meaning to what the user just
- * said, then their newest important ones. Never superseded ones. An empty
- * list if the lookup fails: the turn goes on without them.
- */
 export async function recallMemories(ctx: RecallContext, text: string): Promise<MemoryRow[]> {
   const important = ctx.store.recentImportant(3, IMPORTANT_MEMORIES);
   let relevant: MemoryRow[] = [];
@@ -127,7 +105,6 @@ export async function recallMemories(ctx: RecallContext, text: string): Promise<
   return [...new Map([...relevant, ...important].map((memory) => [memory.id, memory])).values()];
 }
 
-/** "What you remember about them", within its budget (the least relevant go first). */
 export const memoriesSection = (
   memories: readonly MemoryRow[],
   refs: MemoryRefs,
@@ -147,15 +124,8 @@ export const memoriesSection = (
   return { title: "What you remember about them", body: [intro, ...lines].join("\n") };
 };
 
-// ─── search_conversation ───────────────────────────────────────────────
-
 const WHO: Record<TiboRole, string> = { user: "user", tibo: "you", system_event: "app" };
 
-/**
- * Keyword search (FTS5) and search by meaning (Vectorize, over thread
- * chunks) together, optionally between two of the user's days (inclusive).
- * Short dated excerpts, oldest first, plus any remembered facts that match.
- */
 export async function searchConversation(
   ctx: RecallContext,
   refs: MemoryRefs,
@@ -193,7 +163,6 @@ export async function searchConversation(
         .map((parsed) => parsed!.id),
     );
   } catch (error) {
-    // Keyword results alone still answer a lot.
     console.error("Searching the conversation by meaning failed", error);
   }
 
@@ -212,9 +181,6 @@ export async function searchConversation(
   };
 }
 
-// ─── remember / forget ─────────────────────────────────────────────────
-
-/** Saves what the user asked Tibo to remember (importance 3), replacing the memories in `replaces`. */
 export async function remember(
   ctx: RecallContext,
   refs: MemoryRefs,
@@ -244,7 +210,6 @@ export async function remember(
           .filter((id): id is string => id !== undefined && id !== memory.id),
       );
   } catch (error) {
-    // Stored all the same; the memory job embeds it later.
     console.error("Embedding a remembered memory failed", error);
   }
   return {
@@ -264,10 +229,6 @@ export async function remember(
   };
 }
 
-/**
- * Forgets memories by ref, or finds the ones matching `about` so the model
- * can pick (nothing is deleted on a search).
- */
 export async function forget(
   ctx: RecallContext,
   refs: MemoryRefs,
@@ -302,7 +263,6 @@ export async function forget(
   };
 }
 
-/** Deletes memories: their vectors first, so a failure leaves the rows to retry from. */
 export async function deleteMemories(env: MemoryEnv, store: MemoryStore, ids: readonly string[]) {
   if (ids.length === 0) return;
   await env.MEMORY.deleteByIds(ids.map(memoryVectorId));

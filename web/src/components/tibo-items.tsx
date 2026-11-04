@@ -35,12 +35,6 @@ import { roundPercent } from "@/lib/goals";
 import { isOverdue } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
-// What Tibo changed, as the items' own cards under its message: a task row,
-// a habit with its ring, a goal with its bar, read live, so they show the
-// item as it is now. A click opens the same dialog as on `/now`. Notes,
-// sessions and tags link to their pages; deleted items keep a struck-through
-// card with the name they had.
-
 type Openers = {
   readonly today: LocalDate | null;
   readonly openTask: (task: Task) => void;
@@ -50,7 +44,6 @@ type Openers = {
 
 const ItemsContext = React.createContext<Openers | null>(null);
 
-/** Hosts the task, habit and goal dialogs the cards open, for one thread. */
 export function TiboItemsProvider({ children }: { children: React.ReactNode }) {
   const today = useToday(useTimeZone());
   const task = useTaskDialog();
@@ -86,16 +79,10 @@ function useOpeners(): Openers {
   return openers;
 }
 
-/**
- * Receipts that aren't shown: memory and reminder lines ("Remembered: …",
- * "Forgot: …", "Reminder set: …"). Tibo says those in its own words, and
- * older messages still carry them. A failure always shows.
- */
 const QUIET_RECEIPTS = ["Remembered:", "Forgot:", "Reminder set:", "Reminder cancelled:"];
 export const shownReceipts = (receipts: readonly TiboReceipt[]) =>
   receipts.filter((receipt) => receipt.failed || !QUIET_RECEIPTS.some((prefix) => receipt.text.startsWith(prefix)));
 
-/** The receipts of one Tibo turn: item cards, and plain lines for the rest. */
 export function TiboReceipts({ receipts }: { receipts: readonly TiboReceipt[] }) {
   const cards = receipts.filter((receipt) => receipt.item && !receipt.failed);
   const lines = receipts.filter((receipt) => !receipt.item || receipt.failed);
@@ -126,7 +113,6 @@ export function TiboReceipts({ receipts }: { receipts: readonly TiboReceipt[] })
   );
 }
 
-/** The name in "Created task: Call mom · Tomorrow", for items that can't be read any more. */
 const titleOf = (receipt: TiboReceipt) =>
   receipt.item?.title ?? receipt.text.slice(receipt.text.indexOf(":") + 1).split(" · ")[0]?.trim() ?? receipt.text;
 
@@ -151,7 +137,6 @@ function ItemCard({ receipt, item }: { receipt: TiboReceipt; item: TiboItemRef }
 const shellClass =
   "relative flex w-full items-start gap-3 rounded-xl border border-sidebar-border bg-sidebar py-2 pr-3 pl-2.5 text-left text-sidebar-foreground";
 
-/** What Tibo did to the item, in the card's corner. */
 function Verb({ receipt }: { receipt: TiboReceipt }) {
   if (!receipt.verb) return null;
   return (
@@ -166,7 +151,6 @@ function Verb({ receipt }: { receipt: TiboReceipt }) {
   );
 }
 
-/** A card's title and meta, as one button that opens the item. */
 function Opener({
   onOpen,
   title,
@@ -204,7 +188,6 @@ function Opener({
   );
 }
 
-/** Still loading, or gone since: the name Tibo saw, without the live parts. */
 function Placeholder({ receipt, gone }: { receipt: TiboReceipt; gone: boolean }) {
   return (
     <div className={cn(shellClass, "items-center")}>
@@ -326,7 +309,6 @@ function GoalItem({ id, receipt }: { id: string; receipt: TiboReceipt }) {
   );
 }
 
-/** Notes, sessions and tags: the name, and a link to their page. */
 function LinkItem({ to, icon: Icon, receipt }: { to: "/notes" | "/sessions" | "/tags"; icon: LucideIcon; receipt: TiboReceipt }) {
   return (
     <Link

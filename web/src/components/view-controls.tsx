@@ -13,8 +13,6 @@ import {
 import type { ViewOptions } from "@/hooks/use-view-options";
 import { cn } from "@/lib/utils";
 
-// The row above a list that sets what it shows, its order and its grouping.
-
 const SHOW_LABEL: Record<ViewOptions["show"], string> = {
   all: "All",
   tasks: "Tasks",
@@ -26,12 +24,10 @@ const SORT_LABEL: Record<ViewOptions["sort"], string> = {
   importance: "Importance",
   minutes: "Expected time",
 };
-/** What "ascending" and "descending" mean for each sort, in words. */
 const DIRECTION_HINT: Record<Exclude<ViewOptions["sort"], "default">, Record<ViewOptions["direction"], string>> = {
   importance: { asc: "Least important first", desc: "Most important first" },
   minutes: { asc: "Shortest first", desc: "Longest first" },
 };
-/** The direction a sort starts in when picked. */
 const FIRST_DIRECTION: Record<Exclude<ViewOptions["sort"], "default">, ViewOptions["direction"]> = {
   importance: "desc",
   minutes: "asc",
@@ -48,13 +44,9 @@ export function ViewControls({
 }: {
   view: ViewOptions;
   onChange: (patch: Partial<ViewOptions>) => void;
-  /** Show the All / Tasks / Habits / Goals choice. */
   kinds?: boolean;
-  /** A filter (the tag filter) beside the Show choice. */
   filter?: ReactNode;
-  /** The grouping choices this list offers, with their labels. */
   groups: readonly { readonly value: ViewOptions["group"]; readonly label: string }[];
-  /** More controls right after Sort and Group (`/tasks`' Manage tags on phones). */
   extra?: ReactNode;
   className?: string;
 }) {
@@ -117,7 +109,6 @@ export function ViewControls({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm">
                 <LayersIcon />
-                {/* The first choice is the list's own grouping, so the button just says "Group". */}
                 {group === groups[0] ? "Group" : group.value === "none" ? "Ungrouped" : `By ${group.label.toLowerCase()}`}
               </Button>
             </DropdownMenuTrigger>

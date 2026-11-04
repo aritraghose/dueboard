@@ -5,13 +5,6 @@ import { useUnseenNotifications } from "@/hooks/use-notifications";
 import { unseenLabel } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 
-/**
- * The bell that opens `/notifications`, in the top row: top right on
- * phones, left of the Tibo button on wide screens (pages that draw their
- * own header, `/inbox` and `/live`, put it there). It carries Tibo's blue
- * unread dot while anything is unseen; the page marks them seen as it
- * opens, so there's no dot while it's on screen.
- */
 export function NotificationsButton({ className }: { className?: string }) {
   const unseen = useUnseenNotifications();
   const here = useRouterState({ select: (state) => state.location.pathname.startsWith("/notifications") });

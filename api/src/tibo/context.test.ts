@@ -126,3 +126,35 @@ describe("buildTurnContext's budget", () => {
     expect(context.sizes.recentMessages).toBe(MIN_RECENT_MESSAGES);
   });
 });
+
+describe("pictures in the context", () => {
+  const picture = (id: string) => ({ id, name: "tibo-a-red-fox.jpg", mediaType: "image/jpeg", kind: "image" as const, size: 2048 });
+
+  test("a picture Tibo made is an app note after its words, with its ref and prompt", () => {
+    const messages = toModelMessages(
+      [
+        message({ id: "u1", role: "user", body: "draw me a fox" }),
+        message({ id: "t1", turnId: "turn", role: "tibo", body: "Fox incoming!" }),
+        message({ id: "t2", turnId: "turn", role: "tibo", body: "", attachments: [picture("3f2a9c1b-7d4e-4b1a-9c2d-0e1f2a3b4c5d")] }),
+        message({ id: "u2", role: "user", body: "make it blue" }),
+      ],
+      () => "a red fox in snow",
+    );
+    expect(messages).toEqual([
+      { role: "user", content: "draw me a fox" },
+      { role: "assistant", content: "Fox incoming!" },
+      {
+        role: "user",
+        content:
+          '[App event, not written by the user] You sent a picture you made (ref 3f2a9c1b), from the prompt: "a red fox in snow".\n\nmake it blue',
+      },
+    ]);
+  });
+
+  test("a photo the user sent is named with its ref", () => {
+    const [sent] = toModelMessages([
+      message({ id: "u1", role: "user", body: "make this a painting", attachments: [{ ...picture("ab12cd34-0000-4000-8000-000000000000"), name: "me.jpg" }] }),
+    ]);
+    expect(sent).toEqual({ role: "user", content: 'make this a painting\n[Attached image: "me.jpg", 2 KB, ref ab12cd34]' });
+  });
+});

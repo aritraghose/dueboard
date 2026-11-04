@@ -15,10 +15,6 @@ import { TiboContext, useTibo, useTiboThread } from "@/hooks/use-tibo";
 import { createTiboStore, type TiboStore } from "@/lib/tibo-store";
 import { cn } from "@/lib/utils";
 
-// Tibo's floating panel and the app's one connection to Tibo. One panel per
-// app, opened by the Tibo button at the top right, or on phones by swiping
-// up on the bottom nav; `/inbox` shows the same thread full-page.
-
 export function TiboProvider({ userId, children }: { userId: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [store] = useState(createTiboStore);
@@ -26,7 +22,6 @@ export function TiboProvider({ userId, children }: { userId: string; children: R
   return (
     <TiboContext.Provider value={value}>
       {children}
-      {/* The WebSocket lives in the browser only, for as long as the app is open. */}
       <ClientOnly>
         <TiboConnection userId={userId} store={store} />
       </ClientOnly>
@@ -35,12 +30,6 @@ export function TiboProvider({ userId, children }: { userId: string; children: R
   );
 }
 
-/**
- * Connects to the user's `TiboAgent` and feeds the store. The web stack's
- * `/agents/*` proxy pins the instance to the signed-in user whatever name is
- * sent; this one just matches it. `useAgent` reconnects by itself, and the
- * agent sends the latest history on every connect.
- */
 function TiboConnection({ userId, store }: { userId: string; store: TiboStore }) {
   const socket = useRef<{ send: (data: string) => void } | null>(null);
   const agent = useAgent({
@@ -52,8 +41,6 @@ function TiboConnection({ userId, store }: { userId: string; store: TiboStore })
   });
   socket.current = agent;
 
-  // A fresh load learns from the usage RPC whether the month is used up;
-  // a charged turn refreshes that RPC, so Settings agrees.
   const { usage, refresh } = useAiUsage();
   useEffect(() => {
     if (usage) store.syncUsage(usage.remaining, usage.limit);
@@ -62,8 +49,6 @@ function TiboConnection({ userId, store }: { userId: string; store: TiboStore })
     store.onCharged(refresh);
     return () => store.onCharged(undefined);
   }, [store, refresh]);
-  // Tibo changed tasks, habits…: the lists on screen (and the next ones
-  // opened) load again.
   const run = useRun();
   useEffect(() => {
     store.onChanged((keys) => void run(Reactivity.invalidate([...keys])));
@@ -72,7 +57,6 @@ function TiboConnection({ userId, store }: { userId: string; store: TiboStore })
   return null;
 }
 
-/** Tibo said something you haven't seen (`--tibo-unread`). */
 function UnreadDot({ className }: { className?: string }) {
   return (
     <span
@@ -85,7 +69,6 @@ function UnreadDot({ className }: { className?: string }) {
 export function TiboButton() {
   const { open, setOpen } = useTibo();
   const { unread } = useTiboThread();
-  // Each click turns Tibo's rings at once.
   const [spins, setSpins] = useState(0);
   return (
     <Button
@@ -107,10 +90,6 @@ export function TiboButton() {
 
 export { UnreadDot };
 
-/**
- * A main nav item's icon. Inbox (Tibo's thread) carries the same unread
- * dot as the Tibo button, in the sidebar and the phone tab bar.
- */
 export function NavIcon({ to, icon: Icon }: { to: string; icon: LucideIcon }) {
   if (to !== "/inbox") return <Icon />;
   return <InboxIcon icon={Icon} />;
@@ -131,11 +110,6 @@ function InboxIcon({ icon: Icon }: { icon: LucideIcon }) {
   );
 }
 
-/**
- * Floats off the screen edge with rounded corners. On wide screens it grows
- * out of the Tibo button at the top right (`[data-tibo-panel]` in
- * styles.css); on phones it rises from the bottom.
- */
 function TiboSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const isMobile = useIsMobile();
   return (

@@ -1,21 +1,10 @@
 import type { LiveEvent, PathEvent } from "@dueboard/api/rpc";
 
-// Live's wording: each event is "<username> <what they did>[: <title>]"
-// (focus sessions never show their title: `liveTitle`).
-// Redacted events (someone else's private item) come without a title. Path
-// steps are the viewer's own, so they start with the verb: "Settled a task".
-
-/**
- * The title shown after the action, if any. Focus sessions show none: a
- * session's name is for its owner, and "started a 25-minute focus session"
- * says enough.
- */
 export const liveTitle = ({ kind, title }: Pick<LiveEvent, "kind" | "title">): string | null =>
   kind.startsWith("session_") ? null : title;
 
 const minutes = (count: number) => `${count} minute${count === 1 ? "" : "s"}`;
 
-/** What the actor did, after their name: "settled a task", "reached 40% on a goal". */
 export const liveAction = ({ kind, meta }: LiveEvent): string => {
   switch (kind) {
     case "task_settled":
@@ -43,7 +32,6 @@ export const liveAction = ({ kind, meta }: LiveEvent): string => {
   }
 };
 
-/** A Path step: "Settled a task", "Checked a habit 3 times", "Reached 40% on a goal". */
 export const pathAction = ({ kind, meta }: PathEvent): string => {
   switch (kind) {
     case "task_settled":
@@ -60,7 +48,6 @@ export const pathAction = ({ kind, meta }: PathEvent): string => {
 
 const relative = new Intl.RelativeTimeFormat("en-US", { numeric: "auto", style: "short" });
 
-/** "just now", "12 min ago", "3 hr. ago": for events earlier today. */
 export const liveRelativeTime = (instant: Date, now: Date): string => {
   const seconds = Math.max(0, Math.round((now.getTime() - instant.getTime()) / 1000));
   if (seconds < 45) return "just now";

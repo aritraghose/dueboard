@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { reminderInstant, reminderWhen } from "./reminders.ts";
 
 const DHAKA = "Asia/Dhaka";
-// 10:30 on Nov 4 in Dhaka (UTC+6).
 const now = Date.parse("2026-11-04T04:30:00Z");
 const today = "2026-11-04";
 

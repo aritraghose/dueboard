@@ -56,18 +56,6 @@ import {
   type GoalProgressSource,
 } from "./model.ts";
 
-// The user's goals (planning.md "Goals", architecture.md §4). Progress is a
-// slider percent or a count toward a target; `goal-rules.ts` derives the
-// percent and decides completion. Count goals can link habits and tasks:
-// each tap or settle adds the link's amount, and an undo or un-settle takes
-// it back (never more than it added), inside the habit's or task's own
-// transaction.
-//
-// Every change writes a `goal_progress_events` row. Live gets at most one
-// `goal_progressed` row per goal and day (updated in place, and dropped when
-// the day's changes cancel out), plus a `goal_completed` row while the goal
-// is completed.
-
 export const toGoal = (row: GoalRow): Goal =>
   new Goal({
     id: row.id,
@@ -110,7 +98,6 @@ const toEvent = (row: GoalProgressEventRow): GoalProgressEvent =>
 
 const notFound = (id: string) => new GoalNotFound({ message: "That goal no longer exists.", id });
 
-/** One of the user's goals, locked for the rest of the transaction when `lock` is set. */
 const findGoal = (tx: Executor, userId: string, id: string, lock = false) =>
   Effect.gen(function* () {
     const query = tx
@@ -122,7 +109,6 @@ const findGoal = (tx: Executor, userId: string, id: string, lock = false) =>
     return row;
   });
 
-/** The user's settings the goal writes need. */
 const userSettings = (tx: Executor, userId: string) =>
   Effect.gen(function* () {
     const [settings] = yield* tx
@@ -133,23 +119,14 @@ const userSettings = (tx: Executor, userId: string) =>
       })
       .from(UserSettings)
       .where(eq(UserSettings.userId, userId));
-    // `Bootstrap` creates the row on every app load, so a missing one is a bug.
     if (!settings) return yield* Effect.die(new Error(`User ${userId} has no settings`));
     return settings;
   });
 
 const invalid = (message: string) => Effect.fail(new InvalidInput({ message }));
 
-/** Percent points can have decimals; keep the two `numeric` stores. */
 const twoDecimals = (value: number) => Math.round(value * 100) / 100;
 
-// ─── Progress ────────────────────────────────────────────────────────────────
-
-/**
- * Saves `next` (the goal's progress columns, and `patch`'s other fields) on
- * the locked `goal`, completing or reopening it as the rules say. Completing
- * records `goal_completed`; reopening deletes it.
- */
 const saveProgress = (
   tx: Executor,
   userId: string,
@@ -188,11 +165,6 @@ const saveProgress = (
     return row!;
   });
 
-/**
- * Keeps the goal's one `goal_progressed` row for today (in the user's zone):
- * adds it on the day's first change, then moves its `valueAfter` and
- * `occurred_at`, and deletes it when the day ends where it began.
- */
 const recordDayProgress = (
   tx: Executor,
   userId: string,
@@ -247,11 +219,6 @@ interface ProgressSource {
 
 const manual: ProgressSource = { source: "manual", sourceId: null, sourceDate: null };
 
-/**
- * Moves the locked `goal` to `value` (clamped to its range) and records the
- * change: a progress event, today's `goal_progressed` row, and completion.
- * Returns the goal as it is now; a change clamped to nothing writes nothing.
- */
 const changeProgress = (
   tx: Executor,
   userId: string,
@@ -280,15 +247,6 @@ const changeProgress = (
     return row;
   });
 
-// ─── Hooks (called by tasks.ts and habits.ts) ────────────────────────────────
-
-/**
- * Moves every goal linked to the item by its link's amount: forward
- * (`direction` 1) or back (-1). A step back takes back no more than the
- * item added to that goal (for habits, on that check-in day), from the
- * progress events. Paused and completed goals move too: progress tracks
- * the work done, and every undo must find what its tap added.
- */
 const applyLinked = (
   tx: Executor,
   userId: string,
@@ -303,7 +261,6 @@ const applyLinked = (
       .from(GoalLinks)
       .where(and(eq(GoalLinks.userId, userId), eq(GoalLinks.itemType, itemType), eq(GoalLinks.itemId, itemId)));
     if (links.length === 0) return;
-    // Locked in id order, so two transactions touching the same goals can't deadlock.
     const goals = yield* tx
       .select()
       .from(Goals)
@@ -313,7 +270,6 @@ const applyLinked = (
     const { timeZone } = yield* userSettings(tx, userId);
     const now = new Date();
     for (const goal of goals) {
-      // Slider goals can't be linked; a guard in case one ever is.
       if (goal.progressMode !== "count") continue;
       const link = links.find((l) => l.goalId === goal.id)!;
       let added = 0;
@@ -345,15 +301,12 @@ const applyLinked = (
     }
   });
 
-/** A linked task was settled: its goals gain the link's amount. */
 export const onTaskSettled = (tx: Executor, userId: string, task: { readonly id: string }) =>
   applyLinked(tx, userId, "task", task.id, 1, null);
 
-/** A linked task stopped being settled (or is being deleted while settled): its goals lose what it added. */
 export const onTaskUnsettled = (tx: Executor, userId: string, task: { readonly id: string }) =>
   applyLinked(tx, userId, "task", task.id, -1, null);
 
-/** A tap (`delta` 1) or undo (-1) on `date` for a linked habit. */
 export const onHabitCheckIn = (
   tx: Executor,
   habit: { readonly id: string; readonly userId: string },
@@ -361,16 +314,10 @@ export const onHabitCheckIn = (
   date: LocalDate,
 ) => applyLinked(tx, habit.userId, "habit", habit.id, delta, date);
 
-/**
- * Removes a deleted habit's or task's links. The progress it added stays:
- * the work was done (a settled task is un-settled first by `deleteTask`).
- */
 export const deleteLinksFor = (tx: Executor, userId: string, itemType: GoalLinkItem, itemId: string) =>
   tx
     .delete(GoalLinks)
     .where(and(eq(GoalLinks.userId, userId), eq(GoalLinks.itemType, itemType), eq(GoalLinks.itemId, itemId)));
-
-// ─── Writes ──────────────────────────────────────────────────────────────────
 
 export const createGoal = Effect.fn("createGoal")(function* (userId: string, input: CreateGoalInput) {
   const values = yield* decodeInput(CreateGoalInput)(input);
@@ -431,11 +378,6 @@ export const createGoal = Effect.fn("createGoal")(function* (userId: string, inp
   );
 });
 
-/**
- * Changes the fields `input` names. Switching the mode carries the progress
- * over and needs a goal with no links; a new target can complete or reopen
- * the goal. Neither writes a progress event: the work done didn't change.
- */
 export const updateGoal = Effect.fn("updateGoal")(function* (userId: string, input: UpdateGoalInput) {
   const { id, progressMode, targetCount, ...patch } = yield* decodeInput(UpdateGoalInput)(input);
   const db = yield* Database;
@@ -473,7 +415,6 @@ export const updateGoal = Effect.fn("updateGoal")(function* (userId: string, inp
   );
 });
 
-/** Sets the progress: a percent for a slider goal, a whole count (past the target too) for a count goal. */
 export const setProgress = Effect.fn("setGoalProgress")(function* (userId: string, input: SetGoalProgressInput) {
   const { id, value } = yield* decodeInput(SetGoalProgressInput)(input);
   const db = yield* Database;
@@ -488,7 +429,6 @@ export const setProgress = Effect.fn("setGoalProgress")(function* (userId: strin
   );
 });
 
-/** Moves the progress by `delta`, clamped to the goal's range (0–100%, or 0 and up). */
 export const adjustProgress = Effect.fn("adjustGoalProgress")(function* (
   userId: string,
   input: AdjustGoalProgressInput,
@@ -508,7 +448,6 @@ export const adjustProgress = Effect.fn("adjustGoalProgress")(function* (
   );
 });
 
-/** Sets the status of the locked goal from `from` to `to`, or returns it as it is. */
 const moveStatus = (
   userId: string,
   id: string,
@@ -535,7 +474,6 @@ const moveStatus = (
     );
   });
 
-/** Hides an active goal from `/now`. Linked habits and tasks still move it. */
 export const pauseGoal = Effect.fn("pauseGoal")(function* (userId: string, id: string) {
   return yield* moveStatus(userId, id, "active", "paused", {
     status: "completed",
@@ -547,16 +485,10 @@ export const resumeGoal = Effect.fn("resumeGoal")(function* (userId: string, id:
   return yield* moveStatus(userId, id, "paused", "active");
 });
 
-/**
- * Makes a completed goal active again, keeping its progress, and deletes its
- * `goal_completed` row. It completes again once it drops below the target
- * and reaches it, or after a higher target is reached.
- */
 export const reopenGoal = Effect.fn("reopenGoal")(function* (userId: string, id: string) {
   return yield* moveStatus(userId, id, "completed", "active");
 });
 
-/** Deletes a goal with its links, progress events (both cascade) and activity. Returns the id. */
 export const deleteGoal = Effect.fn("deleteGoal")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -570,7 +502,6 @@ export const deleteGoal = Effect.fn("deleteGoal")(function* (userId: string, id:
   );
 });
 
-/** The title of the user's habit or task, failing when it isn't theirs. */
 const findItemTitle = (tx: Executor, userId: string, itemType: GoalLinkItem, itemId: string) =>
   Effect.gen(function* () {
     if (itemType === "task") {
@@ -589,11 +520,6 @@ const findItemTitle = (tx: Executor, userId: string, itemType: GoalLinkItem, ite
     return habit.title;
   });
 
-/**
- * Links one of the user's habits or tasks to a count goal, or changes the
- * amount of an existing link. Past taps and settles aren't counted: the link
- * moves the goal from now on.
- */
 export const linkItem = Effect.fn("linkGoalItem")(function* (userId: string, input: LinkGoalItemInput) {
   const { goalId, itemType, itemId, amount = 1 } = yield* decodeInput(LinkGoalItemInput)(input);
   const db = yield* Database;
@@ -625,7 +551,6 @@ export const linkItem = Effect.fn("linkGoalItem")(function* (userId: string, inp
   );
 });
 
-/** Unlinks a habit or task; the progress it added stays. Unlinking what isn't linked does nothing. */
 export const unlinkItem = Effect.fn("unlinkGoalItem")(function* (userId: string, input: UnlinkGoalItemInput) {
   const { goalId, itemType, itemId } = yield* decodeInput(UnlinkGoalItemInput)(input);
   const db = yield* Database;
@@ -646,9 +571,6 @@ export const unlinkItem = Effect.fn("unlinkGoalItem")(function* (userId: string,
   );
 });
 
-// ─── Reads ───────────────────────────────────────────────────────────────────
-
-/** Links per goal id, oldest first, with their items' titles. */
 const loadLinks = (tx: Executor, userId: string, goalIds: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const byGoal = new Map<string, Array<GoalLink>>();
@@ -668,7 +590,6 @@ const loadLinks = (tx: Executor, userId: string, goalIds: ReadonlyArray<string>)
     return byGoal;
   });
 
-/** The latest `limit` progress events per goal id, newest first. */
 const loadEvents = (tx: Executor, userId: string, goalIds: ReadonlyArray<string>, limit: number) =>
   Effect.gen(function* () {
     const byGoal = new Map<string, Array<GoalProgressEvent>>();
@@ -691,8 +612,6 @@ const loadEvents = (tx: Executor, userId: string, goalIds: ReadonlyArray<string>
       .from(GoalProgressEvents)
       .where(and(eq(GoalProgressEvents.userId, userId), inArray(GoalProgressEvents.goalId, [...goalIds])))
       .as("ranked");
-    // The subquery's columns go by name: this drizzle-orm build renders
-    // `ranked.rank` and friends as empty in `where` and `order by`.
     const rows = yield* tx
       .select()
       .from(ranked)
@@ -731,11 +650,6 @@ export const getGoal = Effect.fn("getGoal")(function* (userId: string, id: strin
   }).pipe(orDieOnDbError);
 });
 
-/**
- * `/now`'s goals on `date`: active goals created on or before it, and the
- * goals completed that day (both in the user's zone), oldest first. Paused
- * goals are left out.
- */
 export const listGoalsForDay = Effect.fn("listGoalsForDay")(function* (userId: string, date: LocalDate) {
   const day = yield* decodeInput(LocalDate)(date);
   const db = yield* Database;
@@ -763,7 +677,6 @@ export const listGoalsForDay = Effect.fn("listGoalsForDay")(function* (userId: s
   }).pipe(orDieOnDbError);
 });
 
-/** Upcoming's goals: active ones whose target date is in `[from, last]`, by target date. */
 export const listGoalsDueBetween = (userId: string, from: LocalDate, last: LocalDate) =>
   Effect.gen(function* () {
     const db = yield* Database;
@@ -783,7 +696,6 @@ export const listGoalsDueBetween = (userId: string, from: LocalDate, last: Local
     return rows.map(toGoal);
   });
 
-/** `/goals`: the user's goals, oldest first, each with its links and latest progress events. */
 export const listGoals = Effect.fn("listGoals")(function* (userId: string, input: ListGoalsInput) {
   const { status } = yield* decodeInput(ListGoalsInput)(input);
   const db = yield* Database;
@@ -797,7 +709,6 @@ export const listGoals = Effect.fn("listGoals")(function* (userId: string, input
   }).pipe(orDieOnDbError);
 });
 
-/** The goals a habit or task is linked to, oldest link first. */
 export const listItemGoals = Effect.fn("listItemGoals")(function* (userId: string, input: GoalItemRef) {
   const { itemType, itemId } = yield* decodeInput(GoalItemRef)(input);
   const db = yield* Database;

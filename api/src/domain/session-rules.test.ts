@@ -49,7 +49,6 @@ describe("remaining and computeEndsAt", () => {
   });
 
   test("pause then resume pushes ends_at back by the pause", () => {
-    // Ran 10:00–10:10, paused until 10:30, resumed: 15 minutes left.
     const resumed = [seg("10:00:00", "10:10:00"), seg("10:30:00", null)];
     expect(remaining(25, resumed, at("10:30:00"))).toBe(15 * MIN);
     expect(computeEndsAt(25, resumed, at("10:30:00"))).toEqual(at("10:45:00"));

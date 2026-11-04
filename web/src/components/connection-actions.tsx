@@ -36,12 +36,6 @@ import { useSocialActions } from "@/hooks/use-social";
 
 type Confirm = "remove" | "block" | null;
 
-/**
- * What the viewer can do with someone, by where they stand: Connect,
- * Requested ▾ (cancel), Accept / Decline, Connected ▾ (remove), Unblock.
- * Blocking sits in a menu everywhere and asks first, as does removing.
- * `signedIn: false` offers sign-in instead. `compact` fits list rows.
- */
 export function ConnectionActions({
   username,
   status,

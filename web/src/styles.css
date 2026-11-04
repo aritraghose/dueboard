@@ -4,20 +4,10 @@
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
-/*
- * A Tibo message row (`data-tibo-entry`) being hovered, on any screen.
- * Tailwind's `group-hover` only applies on `(hover: hover)` screens, so the
- * hover Reply button never showed on phones.
- */
 @custom-variant entry-hover (&:is([data-tibo-entry]:hover *));
 
-/* Streamdown renders the agent's markdown replies with Tailwind classes. */
 @source "../node_modules/streamdown/dist/*.js";
 
-/*
- * Scrollbar utilities the Message Scroller (components/ui/message-scroller.tsx)
- * uses. Newer `shadcn/tailwind.css` releases ship them; this version doesn't.
- */
 @utility scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb, var(--color-border)) var(--scrollbar-track, transparent);
@@ -32,10 +22,6 @@
   --scrollbar-track: transparent;
 }
 
-/*
- * "Writing a reply…": three dots that fill in one at a time after what Tibo
- * is doing (the inbox's Tibo section). With reduced motion they just sit there.
- */
 @utility tibo-ellipsis {
   &::after {
     content: "...";
@@ -56,12 +42,6 @@
 }
 
 :root {
-  /*
-   * Dueboard's light palette: cream washing into teal (the page and cards
-   * are gradients, `--page-gradient` and `--card-gradient`), deep-teal ink
-   * and actions; Tibo is black and white, like the logo. Dark mode (`.dark`
-   * below) is neutral black instead. See notes/planning.md (Decision log, step 2).
-   */
   --background: oklch(0.972 0.016 110);
   --foreground: oklch(0.26 0.04 200);
   --card: oklch(0.988 0.02 90);
@@ -87,96 +67,54 @@
   --chart-5: var(--tag-pink);
   --radius: 0.625rem;
 
-  /* Done states ("All habits checked"), and Live's dot. */
   --success: oklch(0.52 0.13 155);
-  /* Success text on a near-white fill (a picked tab), kept as strong as on the tinted list. */
   --success-ink: oklch(0.42 0.12 155);
 
-  /*
-   * Tasks: importance stars, and the "Due today" badge. Built from the tag
-   * palette, so they follow it in dark mode.
-   */
   --importance: var(--tag-amber);
   --importance-soft: var(--tag-amber-soft);
   --importance-ink: var(--tag-amber-ink);
   --due: var(--tag-orange-soft);
   --due-foreground: var(--tag-orange-ink);
 
-  /*
-   * Notes: the composer's fill line toward 60 characters, and the warning
-   * for the last 10 (meter and countdown). From the tag palette, so they
-   * follow it in dark mode.
-   */
   --note-meter: var(--tag-teal);
   --note-limit: var(--tag-orange);
   --note-limit-ink: var(--tag-orange-ink);
 
-  /*
-   * Focus sessions: the countdown's draining bar, the running dot and the
-   * header timer. Indigo from the tag palette, so it follows it in dark
-   * mode and keeps sessions apart from tasks' teal.
-   */
   --focus: var(--tag-indigo);
   --focus-soft: var(--tag-indigo-soft);
   --focus-ink: var(--tag-indigo-ink);
-  /* The top bar's running-session pill: "Start a session"'s cream, a step darker. */
   --session-pill: oklch(from var(--cream) calc(l - 0.06) c h);
   --session-pill-foreground: var(--cream-foreground);
   --session-pill-dot: var(--cream-foreground);
 
-  /* Cream: the "Start a session" pill. */
   --cream: oklch(0.95 0.05 86);
   --cream-foreground: oklch(0.36 0.06 70);
 
-  /* Your chat bubble, in deep teal. */
   --bubble-me: oklch(0.43 0.085 192);
   --bubble-me-foreground: oklch(0.985 0.012 95);
-  /*
-   * Tibo's bubbles: a light cream with a hairline teal edge, so they sit on
-   * the panel's cream-to-teal wash without competing with yours.
-   */
   --bubble-tibo: oklch(0.985 0.02 90 / 94%);
   --bubble-tibo-foreground: var(--foreground);
   --bubble-tibo-border: oklch(0.88 0.035 185);
-  /* Your message's double tick once Tibo has read it: bright on your teal bubble. */
   --tick-seen: oklch(0.86 0.11 190);
-  /* The dot on the Tibo button when it said something you haven't seen: a clear notification blue. */
   --tibo-unread: oklch(0.6 0.2 255);
-  /* Goal cards' "Move Goal" tab: the card's own color, a little darker. */
   --goal-move: oklch(from var(--sidebar) calc(l - 0.07) c h);
   --goal-move-foreground: var(--sidebar-foreground);
-  /* The message box's edge: a cream leaning toward the teal around it. */
   --composer-border: oklch(0.77 0.09 95);
-  /* The message box's fill: a light teal, a shade under the nav's. */
   --composer: oklch(0.955 0.03 183);
-  /*
-   * The inbox's Tibo section, beside the thread, is a raised surface (`bg-card`,
-   * the cream-to-teal card gradient), past a divider in the bubbles' hairline
-   * teal. Its "now" card is cream a shade deeper, so it reads as the focus.
-   */
   --tibo-side-border: var(--bubble-tibo-border);
   --tibo-now: oklch(0.965 0.035 92);
-  /* A step that's running: Tibo's teal, bright enough to catch the eye. */
   --tibo-live: oklch(0.58 0.11 190);
 
-  /* The glow under `/now`'s two cards: teal into marigold, soft. */
   --card-glow: linear-gradient(120deg, oklch(0.7 0.13 190 / 85%), oklch(0.8 0.15 75 / 80%));
 
-  /* Cards: a border plus a very slight shadow, to sit apart from the page. */
   --card-shadow: 0 1px 2px oklch(0.3 0.04 200 / 6%), 0 4px 12px -4px oklch(0.3 0.04 200 / 8%);
 
-  /* The page wash: cream at the top, deepening to teal at the bottom. */
   --page-gradient: linear-gradient(
     180deg,
     oklch(0.975 0.022 90) 0%,
     oklch(0.96 0.03 140) 45%,
     oklch(0.925 0.05 188) 100%
   );
-  /*
-   * Every raised surface (cards, menus, panels: anything `bg-card` or
-   * `bg-popover`, see the base layer) follows the same direction a shade
-   * lighter, so it lifts off the page: cream at the top, pale teal below.
-   */
   --card-gradient: linear-gradient(
     180deg,
     oklch(0.988 0.028 88) 0%,
@@ -184,7 +122,6 @@
     oklch(0.965 0.03 185) 100%
   );
 
-  /* The nav (sidebar and phone tab bar): a light, airy teal. */
   --sidebar: oklch(0.945 0.03 182);
   --sidebar-foreground: oklch(0.26 0.05 200);
   --sidebar-primary: oklch(0.43 0.085 192);
@@ -194,14 +131,6 @@
   --sidebar-border: oklch(0.89 0.04 180);
   --sidebar-ring: oklch(0.6 0.1 190);
 
-  /*
-   * Tibo, from its avatar (`components/tibo-mark.tsx`): two of the
-   * black-and-white logo's strokes closed into rings on a disc. `--tibo` is
-   * Tibo's surfaces (the Tibo button, the "today" mark), a teal a step
-   * darker than the nav's, and `--tibo-disc` the avatar's light-teal disc,
-   * so it shows on the button. The rings are the logo's grays, darker
-   * outside, and `--tibo-glow` its bright dot.
-   */
   --tibo: oklch(0.85 0.06 185);
   --tibo-foreground: oklch(0.24 0.05 200);
   --tibo-soft: oklch(0.93 0.035 182);
@@ -210,32 +139,16 @@
   --tibo-ring-inner: #6e6e6e;
   --tibo-glow: #ffffff;
 
-  /* The phone top row, over scrolling content. */
   --chrome: oklch(0.96 0.03 170 / 70%);
 
-  /*
-   * Settings' Tibo usage meter: the share of this month's requests used, a
-   * deep-teal bar and knob filling a darker-cream track, turning orange from
-   * 80% and red once used up.
-   */
   --usage: oklch(0.37 0.075 195);
   --usage-track: oklch(0.89 0.055 85);
   --usage-low: var(--tag-orange);
   --usage-empty: var(--destructive);
 
-  /*
-   * Settings' check-in day: when Tibo may write first, as marks on a strip
-   * of the waking day. The usage meter's colors, so the Tibo tab reads as
-   * one set.
-   */
   --check-in-track: var(--usage-track);
   --check-in-mark: var(--usage);
 
-  /*
-   * Tag palette. Keys match `TAG_COLOR` in api/src/domain/model.ts.
-   * `--tag-<key>` is the solid (dots, bars), `-soft` a chip background,
-   * `-ink` text on that background. Use them through `data-tag` (below).
-   */
   --tag-gray: oklch(0.62 0.012 260);
   --tag-gray-soft: oklch(0.95 0.010 260);
   --tag-gray-ink: oklch(0.43 0.010 260);
@@ -271,16 +184,9 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;
-  /* Type scale (Geist only): quiet, with one title size for page headings. */
   --text-title: 1.625rem;
   --text-title--line-height: 1.15;
   --text-title--letter-spacing: -0.03em;
-  /*
-   * Tibo's rings turn every few seconds, the outer clockwise and the inner
-   * counter-clockwise: one eased turn, then a rest. Calling Tibo restarts
-   * the cycle, so they turn at once (`TiboMark`'s `spin`). The
-   * reduced-motion rule below stops it.
-   */
   --animate-tibo-spin: tibo-spin 6s infinite;
   --animate-tibo-spin-reverse: tibo-spin-reverse 6s infinite;
   @keyframes tibo-spin {
@@ -303,10 +209,6 @@
       transform: rotate(-360deg);
     }
   }
-  /*
-   * Tibo's typing dots: each rises and brightens in turn (staggered with
-   * `animation-delay`). Under reduced motion they hold still, half lit.
-   */
   --animate-tibo-typing: tibo-typing 1.2s ease-in-out infinite;
   @keyframes tibo-typing {
     0%,
@@ -320,7 +222,6 @@
       opacity: 1;
     }
   }
-  /* A picked importance star pops once. */
   --animate-star-pop: star-pop 320ms cubic-bezier(0.3, 1.6, 0.5, 1);
   @keyframes star-pop {
     0% {
@@ -330,7 +231,6 @@
       transform: scale(1.25);
     }
   }
-  /* A habit's ring pops on each tap (it re-mounts its key to replay). */
   --animate-ring-pop: ring-pop 300ms cubic-bezier(0.3, 1.5, 0.5, 1);
   @keyframes ring-pop {
     0% {
@@ -340,11 +240,6 @@
       transform: scale(1.08);
     }
   }
-  /*
-   * "All habits checked": the one celebration. Rings in the habit tag's
-   * color spread out from the check once; the reduced-motion rule (and
-   * `useReducedMotion` in `habit-section.tsx`) skips it.
-   */
   --animate-habit-burst: habit-burst 900ms cubic-bezier(0.15, 0.8, 0.3, 1) both;
   @keyframes habit-burst {
     0% {
@@ -356,11 +251,6 @@
       opacity: 0;
     }
   }
-  /*
-   * A goal reaching its target: a band of light crosses its full bar once,
-   * while the check bursts (`habit-burst`). The reduced-motion rule (and
-   * `useJustCompleted` in `hooks/use-goals.ts`) skips it.
-   */
   --animate-goal-sweep: goal-sweep 1100ms cubic-bezier(0.3, 0.7, 0.3, 1) both;
   @keyframes goal-sweep {
     0% {
@@ -375,10 +265,6 @@
       opacity: 0;
     }
   }
-  /*
-   * A running session's dot breathes slowly (the header timer and the
-   * widget). The reduced-motion rule below stops it.
-   */
   --animate-focus-breathe: focus-breathe 2.4s ease-in-out infinite;
   @keyframes focus-breathe {
     0%, 100% {
@@ -478,13 +364,6 @@
 }
 
 .dark {
-  /*
-   * Dark mode is neutral black, after T3 Code: page and cards the same deep
-   * black, cards set apart by a border and a slight shadow, hairlines from
-   * #141414 to #292929,
-   * #f5f5f5 text and #a1a1a1 for quiet text. Tibo stays black and white,
-   * like the logo.
-   */
   --background: #080808;
   --foreground: #f5f5f5;
   --card: #080808;
@@ -503,14 +382,9 @@
   --border: #1f1f1f;
   --input: #292929;
   --ring: #737373;
-  /*
-   * The page and the cards are the same deep black, with the faintest wash
-   * from the top; a card's border and shadow are what set it apart.
-   */
   --page-gradient: linear-gradient(180deg, #0c0c0c 0%, #060606 100%);
   --card-gradient: var(--page-gradient);
   --card-shadow: 0 1px 2px rgb(0 0 0 / 70%), 0 6px 16px -6px rgb(0 0 0 / 80%), inset 0 1px 0 rgb(255 255 255 / 3%);
-  /* In dark mode "Start a session" keeps the quiet secondary gray. */
   --cream: #1f1f1f;
   --cream-foreground: #f5f5f5;
   --bubble-me: #2a2a2a;
@@ -520,14 +394,12 @@
   --bubble-tibo-border: #262626;
   --tick-seen: oklch(0.78 0.12 230);
   --composer-border: var(--input);
-  /* Dark keeps the input's usual faint fill. */
   --composer: color-mix(in oklab, var(--input) 30%, transparent);
   --tibo-now: #1f1f1f;
   --tibo-live: oklch(0.78 0.11 190);
   --card-glow: linear-gradient(120deg, oklch(0.55 0.11 190 / 55%), oklch(0.65 0.13 75 / 45%));
   --success: oklch(0.8 0.15 155);
   --success-ink: var(--success);
-  /* The nav: matte black, a step up from the page's pure black. */
   --sidebar: #121212;
   --sidebar-foreground: #f5f5f5;
   --sidebar-primary: #f5f5f5;
@@ -537,24 +409,19 @@
   --sidebar-border: #1c1c1c;
   --sidebar-ring: #737373;
 
-  /* Tibo's disc a step up from the page's black, so it stays a circle. */
   --tibo: #1c1c1c;
   --tibo-foreground: #f5f5f5;
   --tibo-soft: #1f1f1f;
   --tibo-disc: #1c1c1c;
-  /* A step lighter, to stand out on black. */
   --tibo-unread: oklch(0.68 0.18 255);
-  /* Dark mode keeps the session pill in the focus colors. */
   --session-pill: var(--focus-soft);
   --session-pill-foreground: var(--focus-ink);
   --session-pill-dot: var(--focus);
-  /* Dark mode keeps the goal violet. */
   --goal-move: var(--tag-violet);
   --goal-move-foreground: var(--primary-foreground);
   --tibo-ring-outer: #777777;
   --tibo-ring-inner: #bbbbbb;
 
-  /* The usage meter: a white bar and knob on the nav's matte black. */
   --usage: #f5f5f5;
   --usage-track: var(--sidebar);
 
@@ -602,7 +469,6 @@
     background-attachment: fixed;
   }
 
-  /* The cream-to-teal wash on every raised surface (none in dark mode). */
   .bg-card,
   .bg-popover {
     background-image: var(--card-gradient);
@@ -610,16 +476,31 @@
   html {
     @apply font-sans;
   }
-  /* Native controls (date pickers, number spinners) follow the theme. */
   .dark {
     color-scheme: dark;
   }
 
-  /*
-   * `data-tag="<key>"` points the `tag`, `tag-soft` and `tag-ink` colors at
-   * one palette entry, so a chip is `bg-tag-soft text-tag-ink` whatever its
-   * color. The same keys color usernames (`Settings.color`).
-   */
+  :is(
+      a[href],
+      button,
+      summary,
+      select,
+      label[for],
+      input:is([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="submit"], [type="button"], [type="reset"]),
+      [role="button"],
+      [role="link"],
+      [role="tab"],
+      [role="menuitem"],
+      [role="menuitemcheckbox"],
+      [role="menuitemradio"],
+      [role="option"],
+      [role="switch"],
+      [role="checkbox"],
+      [role="radio"]
+    ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
+    cursor: pointer;
+  }
+
   [data-tag="gray"] {
     --tag-solid: var(--tag-gray);
     --tag-soft: var(--tag-gray-soft);
@@ -683,23 +564,11 @@
   }
 }
 
-/*
- * Keyboard focus. Controls draw a soft `ring-ring/50` halo, which is below
- * the 3:1 contrast a focus indicator needs; a solid 1px edge in `--ring`
- * (3.2:1 or more on every surface, light and dark) sits inside it. Unlayered,
- * so it outlasts `outline-none` on custom controls. Text fields keep their
- * own focus styling, and menu items and options their highlight.
- */
 :is(button, a[href], summary, [role="button"], [role="tab"], [role="checkbox"], [role="switch"], [role="radio"], [role="slider"], [role="tabpanel"]):focus-visible {
   outline: 1px solid var(--ring);
   outline-offset: 0;
 }
 
-/*
- * On wide screens the Tibo panel grows out of the Tibo button at the top
- * right and shrinks back into it. Unlayered, so it replaces the sheet's
- * slide-in; the reduced-motion rule above still cuts it short.
- */
 [data-tibo-panel][data-side="right"] {
   transform-origin: top right;
 }
@@ -723,12 +592,6 @@
   }
 }
 
-/*
- * The band across the top of a profile card (`/@username`), in the owner's
- * user color (`data-tag` on the card): the soft shade deepening toward the
- * avatar, ruled with fine vertical lines of the solid one, like days on a
- * calendar strip. Works in both themes since both shades come from the palette.
- */
 .profile-band {
   background:
     repeating-linear-gradient(
@@ -739,12 +602,6 @@
     linear-gradient(to top, color-mix(in oklch, var(--tag-solid) 30%, var(--tag-soft)), var(--tag-soft));
 }
 
-/*
- * A contribution graph's squares (`/@username`), in the owner's user color
- * (`data-tag` on the graph): an empty day is the muted surface, then four
- * steps from the soft shade to the solid one. Both themes work, since the
- * dark palette's soft shade is the dark end.
- */
 .contribution-cell {
   background: var(--muted);
 }

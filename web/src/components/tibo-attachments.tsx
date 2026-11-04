@@ -22,18 +22,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { FILE_KIND_TAG, fileKindLabel, formatBytes, uploadErrorText, uploadTiboFile } from "@/lib/tibo-files";
 import { cn } from "@/lib/utils";
 
-// Files in Tibo's chat: the files waiting in the message box, and the files
-// in a sent message. Everything is served by the user's own agent through
-// the website's proxy (`tiboFileUrl`), never from anywhere else.
-
-// ─── Files waiting to be sent ────────────────────────────────────────────────
-
-/** A file in the message box: uploading, ready to send, or failed. */
 export type DraftFile = {
   readonly key: string;
   readonly name: string;
   readonly size: number;
-  /** A local preview of an image, until it's sent. */
   readonly preview: string | null;
 } & (
   | { readonly status: "uploading" }
@@ -43,10 +35,6 @@ export type DraftFile = {
 
 const isImageType = (type: string) => /^image\/(png|jpeg|gif|webp)$/.test(type);
 
-/**
- * The files in the message box. Each starts uploading as soon as it's
- * added; `add` takes at most `TIBO_MAX_ATTACHMENTS` in all.
- */
 export function useDraftFiles() {
   const [files, setFiles] = React.useState<readonly DraftFile[]>([]);
   const uploads = React.useRef(new Map<string, AbortController>());
@@ -91,7 +79,6 @@ export function useDraftFiles() {
     setNotice(null);
   }, []);
 
-  /** Empties the box after sending. Previews are kept a moment for the sent bubble's first paint. */
   const clear = React.useCallback(() => {
     const previews = current.current.flatMap((file) => (file.preview ? [file.preview] : []));
     setTimeout(() => previews.forEach((url) => URL.revokeObjectURL(url)), 60_000);
@@ -125,10 +112,8 @@ const KIND_ICON: Record<TiboAttachment["kind"], LucideIcon> = {
 const iconFor = (attachment: Pick<TiboAttachment, "kind" | "name">): LucideIcon =>
   fileKindLabel(attachment) === "Spreadsheet" ? FileSpreadsheetIcon : KIND_ICON[attachment.kind];
 
-/** The + at the left of the message box, with its hidden file picker. */
 export function AttachButton({ drafts, disabled, className }: { drafts: DraftFiles; disabled: boolean; className?: string }) {
   const input = React.useRef<HTMLInputElement>(null);
-  // `aria-disabled`, not `disabled`: the input group fades whole when it holds a disabled control.
   const off = disabled || drafts.full;
   return (
     <>
@@ -164,7 +149,6 @@ export function AttachButton({ drafts, disabled, className }: { drafts: DraftFil
   );
 }
 
-/** The files in the message box, above the text. */
 export function DraftTray({ drafts }: { drafts: DraftFiles }) {
   if (drafts.files.length === 0 && !drafts.notice) return null;
   return (
@@ -232,7 +216,6 @@ function DraftTile({ file, onRemove }: { file: DraftFile; onRemove: () => void }
   );
 }
 
-/** "Drop files to send to Tibo", over the thread while files are dragged in. */
 export function useFileDrop(onFiles: (files: FileList) => void, enabled: boolean) {
   const [over, setOver] = React.useState(false);
   const depth = React.useRef(0);
@@ -281,19 +264,12 @@ export function DropOverlay() {
   );
 }
 
-// ─── Files in a sent message ─────────────────────────────────────────────────
-
-/**
- * A message's files, at the top of its bubble: photos first (one at its
- * own shape, several in a grid), then a card for each other file.
- */
 export function MessageAttachments({
   attachments,
   hasText,
   mine,
 }: {
   attachments: readonly TiboAttachment[];
-  /** Text follows: the photos square off at the bottom. */
   hasText: boolean;
   mine: boolean;
 }) {
@@ -323,8 +299,6 @@ function PhotoGrid({
   const single = photos.length === 1;
   return (
     <div
-      // A set width (never the picture's own, which would stretch the bubble
-      // past it), clipped by the bubble's corners.
       className={cn(
         "grid gap-1 overflow-hidden rounded-[inherit]",
         single ? "w-72 max-w-full" : "w-80 max-w-full grid-cols-2",
@@ -366,7 +340,6 @@ function PhotoGrid({
 
 export function FileCard({ file, mine }: { file: TiboAttachment; mine: boolean }) {
   const Icon = iconFor(file);
-  // PDFs open in a new tab; anything else is saved.
   const opens = file.kind === "pdf";
   return (
     <a
@@ -393,7 +366,6 @@ export function FileCard({ file, mine }: { file: TiboAttachment; mine: boolean }
   );
 }
 
-/** A photo, full size, with its name and Save. */
 export function PhotoViewer({ photo, onClose }: { photo: TiboAttachment | null; onClose: () => void }) {
   return (
     <Dialog open={photo !== null} onOpenChange={(open) => !open && onClose()}>

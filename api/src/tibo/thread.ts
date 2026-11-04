@@ -1,13 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Tibo's thread in the Durable Object's SQLite (architecture.md §7.2). One
-// thread per user, kept forever: a user message is one row, and each of
-// Tibo's bubbles is its own row sharing the turn's `turn_id`.
-//
-// `messages_fts` is an FTS5 index over `body`, kept in sync by triggers, for
-// `search_conversation` (`./recall.ts`). `seq` orders the thread and is the FTS
-// rowid; `id` is the stable public id.
-
 import {
   TIBO_QUOTE_LENGTH,
   type TiboAttachment,
@@ -45,7 +37,6 @@ CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE OF body ON message
 END;
 `;
 
-/** Free-form facts about a row, stored as JSON (`clientId`; later the model, a relay id…). */
 export type MessageMeta = {
   readonly clientId?: string;
   readonly reaction?: string;
@@ -89,7 +80,6 @@ const toMessage = (row: Row): TiboMessage => {
 export class Thread {
   constructor(private readonly sql: SqlStorage) {}
 
-  /** Creates the tables if they're missing. Safe to run on every start. */
   migrate() {
     this.sql.exec(SCHEMA);
   }
@@ -100,7 +90,6 @@ export class Thread {
     turnId?: string;
     meta?: MessageMeta;
     id?: string;
-    /** When it was said (ms); now unless seeding a dev thread. */
     createdAt?: number;
   }): TiboMessage {
     const id = input.id ?? crypto.randomUUID();
@@ -119,7 +108,6 @@ export class Thread {
     return toMessage(row);
   }
 
-  /** The newest `limit` messages, oldest first, and whether older ones exist. */
   latest(limit: number) {
     return this.page(
       this.sql.exec<Row>(`SELECT * FROM messages ORDER BY seq DESC LIMIT ?`, limit + 1).toArray(),
@@ -127,7 +115,6 @@ export class Thread {
     );
   }
 
-  /** Up to `limit` messages before `beforeId`, oldest first. Unknown ids give an empty page. */
   before(beforeId: string, limit: number) {
     return this.page(
       this.sql
@@ -148,20 +135,14 @@ export class Thread {
     return row ? toMessage(row) : null;
   }
 
-  /** A message as a reply quotes it (the start of its text). */
   quote(id: string): TiboQuote | null {
     const message = this.get(id);
     if (!message || message.role === "system_event") return null;
-    // A message of only files quotes their names.
     const text = message.body || (message.attachments ?? []).map((attachment) => `📎 ${attachment.name}`).join(", ");
     const body = text.length > TIBO_QUOTE_LENGTH ? `${text.slice(0, TIBO_QUOTE_LENGTH - 1)}…` : text;
     return { id: message.id, role: message.role, body };
   }
 
-  /**
-   * Sets the reaction on a message of `role` (replacing any earlier one;
-   * `null` removes it). `null` if there's no such message.
-   */
   react(id: string, role: TiboRole, emoji: string | null): TiboMessage | null {
     const row = this.sql
       .exec<Row>(
@@ -176,7 +157,6 @@ export class Thread {
     return row ? toMessage(row) : null;
   }
 
-  /** Sets one meta key on a message (JSON value); `null` if there's no such message. */
   setMeta(id: string, key: "receipts" | "confirm" | "relay", value: unknown): TiboMessage | null {
     const row = this.sql
       .exec<Row>(
@@ -190,19 +170,16 @@ export class Thread {
     return row ? toMessage(row) : null;
   }
 
-  /** The order of the newest row (0 for an empty thread). */
   lastSeq(): number {
     return this.sql.exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM messages`).one().seq ?? 0;
   }
 
-  /** The order of the newest message the user wrote (0 if none). */
   lastUserSeq(): number {
     return (
       this.sql.exec<{ seq: number | null }>(`SELECT max(seq) AS seq FROM messages WHERE role = 'user'`).one().seq ?? 0
     );
   }
 
-  /** Marks every unread user message as seen; returns their ids. */
   markSeen(): string[] {
     return this.sql
       .exec<{ id: string }>(
@@ -214,7 +191,6 @@ export class Thread {
       .map((row) => row.id);
   }
 
-  /** When the user or Tibo last said something (ms), `null` for an empty thread. App events don't count. */
   lastMessageAt(): number | null {
     return (
       this.sql
@@ -223,19 +199,16 @@ export class Thread {
     );
   }
 
-  /** Whether Tibo wrote after the order `afterSeq` (the unread dot). */
   tiboAfter(afterSeq: number): boolean {
     return (
       this.sql.exec(`SELECT 1 FROM messages WHERE role = 'tibo' AND seq > ? LIMIT 1`, afterSeq).toArray().length > 0
     );
   }
 
-  /** Deletes one row (a check-in's app event when its turn showed nothing). */
   remove(id: string) {
     this.sql.exec(`DELETE FROM messages WHERE id = ?`, id);
   }
 
-  /** Whether the user wrote after Tibo's last bubble: a turn is owed. */
   awaitingReply(): boolean {
     const last = this.sql
       .exec<{ role: TiboRole }>(`SELECT role FROM messages WHERE role != 'system_event' ORDER BY seq DESC LIMIT 1`)
@@ -243,10 +216,6 @@ export class Thread {
     return last?.role === "user";
   }
 
-  /**
-   * Up to `limit` messages after the order `afterSeq`, oldest first, with
-   * their order: what the memory jobs haven't read yet.
-   */
   after(afterSeq: number, limit: number): (TiboMessage & { readonly seq: number })[] {
     return this.sql
       .exec<Row>(`SELECT * FROM messages WHERE seq > ? ORDER BY seq LIMIT ?`, afterSeq, limit)
@@ -254,17 +223,10 @@ export class Thread {
       .map((row) => ({ ...toMessage(row), seq: row.seq }));
   }
 
-  /** How many messages come after the order `afterSeq`. */
   countAfter(afterSeq: number): number {
     return this.sql.exec<{ n: number }>(`SELECT count(*) AS n FROM messages WHERE seq > ?`, afterSeq).one().n;
   }
 
-  /**
-   * Keyword search over every message (an FTS5 query, `ftsQuery` in
-   * `./memory-rules.ts`), best matches first, optionally between two
-   * instants (ms, `to` exclusive). Each hit is a short snippet around the
-   * matched words.
-   */
   search(
     match: string,
     options: { from?: number; to?: number; limit: number },
@@ -284,7 +246,6 @@ export class Thread {
       .map((row) => ({ id: row.id, role: row.role, createdAt: row.created_at, snippet: row.snippet }));
   }
 
-  /** Development only: empties the thread (the dev seed starts from nothing). */
   clear() {
     this.sql.exec(`DELETE FROM messages`);
   }

@@ -39,14 +39,12 @@ describe("slots", () => {
   });
 
   test("the next slot is today while it's ahead, otherwise tomorrow, in the user's zone", () => {
-    // 7:00 in New York (EST, UTC-5) on Nov 4.
     const now = at("2026-11-04T12:00:00Z");
     expect(nextSlot("morning_plan", NY, "08:00", now)).toEqual({
       kind: "morning_plan",
       day: "2026-11-04",
       at: at("2026-11-04T13:00:00Z"),
     });
-    // 9:00 there: tomorrow.
     expect(nextSlot("morning_plan", NY, "08:00", at("2026-11-04T14:00:00Z")).day).toBe("2026-11-05");
   });
 
@@ -57,7 +55,6 @@ describe("slots", () => {
   });
 
   test("DST keeps the local time, not the instant", () => {
-    // Clocks went back on Nov 1, 2026 in New York: 8:00 is 12:00Z before, 13:00Z after.
     expect(instantIn(NY, "2026-10-31", "08:00")).toBe(at("2026-10-31T12:00:00Z"));
     expect(nextSlot("morning_plan", NY, "08:00", at("2026-10-31T13:00:00Z"))).toMatchObject({
       day: "2026-11-01",

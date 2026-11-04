@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import type { LocalDate } from "./dates.ts";
 import { periodStart } from "./points-rules.ts";
 
-// Tuesday, November 3, 2026.
 const today = "2026-11-03" as LocalDate;
 
 describe("periodStart", () => {

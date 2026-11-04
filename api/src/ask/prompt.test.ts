@@ -16,7 +16,6 @@ describe("askSystemPrompt", () => {
     expect(prompt).toContain("<owner_context>\nI do product design. Office hours: Tuesdays.\n</owner_context>");
     expect(prompt).toContain(dontKnowLine("bea"));
     expect(prompt).toContain("never guess");
-    // Shown as Tibo, but with nothing of Tibo's: no persona, tools or memory.
     expect(prompt).toContain('"answering for @bea"');
     expect(prompt).not.toMatch(/tool|memor/i);
   });

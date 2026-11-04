@@ -15,16 +15,8 @@ export const MEMORY_KIND: Record<TiboMemoryKind, { label: string; icon: LucideIc
   plan: { label: "Plan", icon: CalendarClock },
 };
 
-/** Memories shown before "Show all". */
 const MEMORIES_SHOWN = 20;
 
-/**
- * What Tibo remembers about you: the lasting facts it picked up from your
- * chats (or was asked to keep), newest first, each with its kind and when
- * it was learned. Deleting one takes it out of Tibo's memory at once.
- * Settings → Tibo and the inbox's Memory tab both show it; `compact` stacks
- * the date under the text, for narrow places.
- */
 export function TiboMemoryList({ labelledBy, compact = false }: { labelledBy?: string; compact?: boolean }) {
   const { state, remove } = useTiboMemories();
   const [showAll, setShowAll] = useState(false);

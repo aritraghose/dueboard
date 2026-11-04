@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
-/** The title block every `_app` list page starts with. */
 export function PageHeader({
   title,
   description,
@@ -21,11 +20,9 @@ export function PageHeader({
   title: string;
   description?: string;
   children?: ReactNode;
-  /** A smaller title for list-dense pages (Discover, Connections, Notifications, Leaderboard). */
   compact?: boolean;
 }) {
   return (
-    // Phones keep the top right corner free for the floating bell (`TopBar`).
     <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 max-md:pr-11">
       <div className="flex min-w-0 flex-col gap-1.5">
         <h1 className={cn("font-semibold", compact ? "text-xl" : "text-title")}>{title}</h1>
@@ -38,11 +35,6 @@ export function PageHeader({
   );
 }
 
-/**
- * The empty state of a page whose contents arrive in a later build step:
- * what the page will hold, in the user's words. It fills the page, with no
- * card behind it.
- */
 export function PageEmpty({
   icon: Icon,
   title,
@@ -70,19 +62,10 @@ export function PageEmpty({
   );
 }
 
-/**
- * A list page: header plus content, filling the whole space. The app's
- * margins are thin (so cards reach the edges); pages pad their own text.
- */
 export function Page({ children }: { children: ReactNode }) {
   return <main className="flex w-full flex-1 flex-col gap-6 px-3 pt-3 md:px-6 md:pt-4">{children}</main>;
 }
 
-/**
- * A page's "New …" button. From `md` up it sits in the header with its
- * label; on phones it floats as a round "+" on the right, just above
- * Tibo's default spot.
- */
 export function CreateButton({
   label,
   onClick,

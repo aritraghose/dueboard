@@ -12,11 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMarkNotificationsSeen, useNotifications } from "@/hooks/use-notifications";
 import { notificationAction, notificationTime } from "@/lib/notifications";
 
-/**
- * Who asked to connect and who accepted your requests, newest first.
- * Requests still waiting can be answered here (or on Discover). Opening the
- * page marks everything seen; what was new stays under "New" until you leave.
- */
 export const Route = createFileRoute("/_app/notifications")({
   head: () => ({ meta: [{ title: "Notifications · Dueboard" }] }),
   component: Notifications,
@@ -26,7 +21,6 @@ function Notifications() {
   const { items, failed, reload } = useNotifications();
   const markSeen = useMarkNotificationsSeen();
 
-  // Unseen when first listed on this visit: they stay "New" after they're marked seen.
   const fresh = useRef(new Set<string>());
   for (const item of items ?? []) if (!item.seen) fresh.current.add(item.id);
   const anyUnseen = items?.some((item) => !item.seen) ?? false;
@@ -34,7 +28,6 @@ function Notifications() {
     if (anyUnseen) void markSeen();
   }, [anyUnseen, markSeen]);
 
-  // Times are relative, so they're drawn in the browser only and kept current.
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
@@ -48,7 +41,6 @@ function Notifications() {
   return (
     <Page>
       <PageHeader compact title="Notifications">
-        {/* Phones have the top row's bell instead, and the empty state's button. */}
         <Button asChild variant="outline" className="max-md:hidden">
           <Link to="/discover">
             <SearchIcon />
@@ -105,7 +97,6 @@ function Notifications() {
   );
 }
 
-/** `PeopleSection`'s card, for the loading and failed states (which have no title). */
 const CARD = "rounded-xl border bg-card px-4 py-1 shadow-(--card-shadow)";
 
 function NotificationList({ items, now }: { items: readonly NotificationItem[]; now: Date | null }) {
@@ -118,11 +109,6 @@ function NotificationList({ items, now }: { items: readonly NotificationItem[]; 
   );
 }
 
-/**
- * The person, what they did and when, linking to their profile; then
- * Accept / Decline while their request waits, or how it was answered.
- * On phones the buttons drop under the words.
- */
 function NotificationRow({ item, now }: { item: NotificationItem; now: Date | null }) {
   const { person } = item;
   const KindIcon = item.kind === "connection_request" ? UserPlusIcon : UserCheckIcon;

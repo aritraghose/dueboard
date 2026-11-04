@@ -11,21 +11,13 @@ import { ApiClient } from "../rpc-client.ts";
 import { habitsForDayAtom } from "./use-day.ts";
 import { failureMessage, useRun, useTags } from "./use-tasks.ts";
 
-// Habits for the UI. Every habit query carries the `habits` reactivity key
-// and every habit write invalidates it (and `goals`, which a tap can move),
-// so `/now`, `/habits` and `/goals` refetch after any change.
-
 const HABITS = ["habits"];
-/** A habit write can move (or unlink) a linked goal, so it refreshes goals too. */
 const HABIT_WRITES = [...HABITS, "goals"];
 
-/** `/habits`: every habit, with streak, progress and the last 12 weeks. */
 export const habitListAtom = ApiClient.query("ListHabits", undefined, { reactivityKeys: HABITS });
 
-/** One habit with its streak, progress and the last 12 weeks. */
 export const habitAtom = (id: string) => ApiClient.query("GetHabit", { id }, { reactivityKeys: HABITS });
 
-/** Habit writes, each its own call (see `useRun`). Each returns its `Exit`. */
 export function useHabitActions() {
   const run = useRun();
   return useMemo(() => {
@@ -41,13 +33,11 @@ export function useHabitActions() {
         call(ApiClient.use((client) => client("CheckInHabit", { id, date }))),
       undo: (id: string, date: LocalDate) =>
         call(ApiClient.use((client) => client("UndoCheckInHabit", { id, date }))),
-      /** Refetches every habit query on screen, failed ones included ("Try again"). */
       reload: () => run(Reactivity.invalidate(HABITS)),
     };
   }, [run]);
 }
 
-/** A habit on a day with the user's unanswered taps applied. */
 export type ShownHabit = {
   readonly entry: HabitOnDay;
   readonly done: number;
@@ -56,31 +46,20 @@ export type ShownHabit = {
 };
 
 type Tracked = {
-  /** Taps (+1) and undos (-1) sent and not answered yet. */
   readonly pending: number;
-  /** The newest answer, newer than the list until the list agrees with it. */
   readonly answer: HabitOnDay | null;
 };
 
-/**
- * Check-ins shown right away. A habit's taps go to the API one after
- * another (so 5 quick taps land as 5, in order), and `shown` adds the
- * unanswered ones to the newest copy: the last answer until the refetched
- * list agrees with it, so a stale refetch never takes a tap back. A failed
- * tap drops out with a toast.
- */
 export function useHabitTaps(entries: readonly HabitOnDay[], date: LocalDate) {
   const actions = useHabitActions();
   const [tracked, setTracked] = useState<ReadonlyMap<string, Tracked>>(new Map());
   const queues = useRef(new Map<string, Promise<unknown>>());
 
-  // Another day is another set of counts.
   useEffect(() => {
     setTracked(new Map());
     queues.current = new Map();
   }, [date]);
 
-  // Drop answers the list has caught up with.
   useEffect(() => {
     const stale = [...tracked].filter(([id, t]) => {
       if (t.pending !== 0 || !t.answer) return false;
@@ -143,20 +122,12 @@ export function useHabitTaps(entries: readonly HabitOnDay[], date: LocalDate) {
   return { shown, tap };
 }
 
-/** The `habit` tag's color, which every habit wears (green until tags load). */
 export function useHabitColor(): TagColor {
   return useTags()?.find((tag) => tag.systemKind === "habit")?.color ?? "green";
 }
 
-/** How long a just-completed card lingers, full, before it moves to Settled. */
 const COMPLETE_LINGER_MS = 650;
 
-/**
- * `/now`'s habits for `date`, with taps shown at once: `due` (with
- * just-completed cards lingering a moment), `settled`, and whether all are
- * checked. `celebrate` turns true when the user's own tap checks the last
- * one, so the celebration plays once and not on every load.
- */
 export function useDayHabits(date: LocalDate) {
   const result = useAtomValue(habitsForDayAtom(date));
   const day = AsyncResult.isSuccess(result) ? result.value : undefined;
@@ -214,7 +185,6 @@ export function useDayHabits(date: LocalDate) {
     settled,
     allChecked,
     celebrate,
-    /** Whether the user tapped this habit here, so its ring pops on later changes. */
     touched,
     tap,
   };

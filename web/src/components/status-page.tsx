@@ -4,11 +4,6 @@ import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/**
- * The page behind the error and not-found screens: the logo, what happened,
- * and what to do next. At the root there's no layout around it, so it fills
- * the window; inside a layout (the app shell) it fills the page area.
- */
 export function StatusPage({
   title,
   description,
@@ -17,9 +12,7 @@ export function StatusPage({
 }: {
   title: string;
   description: string;
-  /** Extra detail below the description, such as the error in development. */
   detail?: ReactNode;
-  /** The actions, usually from `StatusActions`. */
   children: ReactNode;
 }) {
   const isRoot = useIsRootMatch();
@@ -41,10 +34,6 @@ export function StatusPage({
   );
 }
 
-/**
- * "Go back" when there's a page to go back to inside Dueboard, otherwise a
- * link to the landing page (which sends signed-in users on to the app).
- */
 export function BackOrHomeButton({ variant = "outline" }: { variant?: "outline" | "default" }) {
   const router = useRouter();
   const canGoBack = useCanGoBack();
@@ -62,8 +51,6 @@ export function BackOrHomeButton({ variant = "outline" }: { variant?: "outline" 
   );
 }
 
-/** Whether this screen replaced the root route, so no layout surrounds it. */
 export function useIsRootMatch() {
-  // `match.id` adds the path to the route id (`__root__/`), so compare `routeId`.
   return useMatch({ strict: false, select: (match) => match.routeId === rootRouteId });
 }

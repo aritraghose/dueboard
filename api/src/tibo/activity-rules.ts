@@ -1,11 +1,5 @@
-// What Tibo is doing, in words the user reads (architecture.md §7.10): the
-// labels for its tools and threads, and picking the one activity to show as
-// "now". Pure, so it's tested.
-
-// `currentActivity` lives in `./protocol.ts`, so the app uses the same rule.
 export { currentActivity } from "./protocol.ts";
 
-/** Each tool, as a step the user reads. */
 const TOOL_LABELS: Record<string, string> = {
   list_tasks: "Looking at your tasks",
   create_task: "Adding a task",
@@ -46,16 +40,28 @@ const TOOL_LABELS: Record<string, string> = {
   list_reminders: "Looking at your reminders",
   cancel_reminder: "Cancelling a reminder",
   confirm_action: "Doing what you confirmed",
+  make_image: "Making a picture",
 };
 
-/** A tool call as a step: "Looking at your tasks". */
 export const toolLabel = (name: string) => TOOL_LABELS[name] ?? "Working on it";
 
-/** Activity threads kept: older ones go. */
+export const THINKING_DETAIL_MAX = 200;
+
+export function thinkingDetail(summary: string): string {
+  const text = summary
+    .replace(/^\s*\*\*[^*\n]+\*\*\s*/, "")
+    .replace(/\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= THINKING_DETAIL_MAX) return text;
+  const cut = text.slice(0, THINKING_DETAIL_MAX);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > THINKING_DETAIL_MAX * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.-]+$/, "")}…`;
+}
+
 export const ACTIVITY_KEEP_DAYS = 60;
 export const ACTIVITY_KEEP_THREADS = 3000;
 
-/** "Learned 2 memories, noted 1 file": what a memory run did, or `null` if nothing worth saying. */
 export function memoryRunDetail(change: { memories: number; files: number; summaries: number }): string | null {
   const parts = [
     change.memories > 0 ? `learned ${change.memories} ${change.memories === 1 ? "memory" : "memories"}` : null,

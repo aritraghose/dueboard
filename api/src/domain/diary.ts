@@ -25,27 +25,11 @@ import {
   privacyVisibleSql,
 } from "./visibility.ts";
 
-// The diary and the contribution graph (architecture.md §5). The diary is
-// the owner's activity grouped by their local day, filtered by `canSeeItem`
-// for the viewer whatever the share flag says (`/diary` is the owner
-// reading their own). The graph counts completions per day, private ones
-// included, and returns nothing but the counts.
-//
-// The graph reads `activity` through `activity_user_local_date_idx`
-// (user, local_date): a year of one user's rows is a few thousand at most,
-// so no rollup table is kept. If it gets slow, a per-user, per-day table
-// written in the same transactions can replace it behind the same RPC.
-
-/**
- * A goal's `goal_progressed` row stays out of the diary on a day its
- * `goal_completed` row covers: "Completed a goal" already says it reached 100%.
- */
 const notCoveredMove = sql`(${Activity.kind} <> 'goal_progressed' or not exists (
   select 1 from ${Activity} c
   where c.kind = 'goal_completed' and c.subject_type = 'goal'
     and c.subject_id = ${Activity.subjectId} and c.local_date = ${Activity.localDate}))`;
 
-/** One page of `username`'s diary for `viewerId` (`null` when logged out). Someone who blocked the viewer is `UserNotFound`. */
 export const getDiary = Effect.fn("getDiary")(function* (viewerId: string | null, input: GetDiaryInput) {
   const { username, cursor, from } = yield* decodeInput(GetDiaryInput)(input);
   const owner = yield* profileOwner(viewerId, username);
@@ -64,7 +48,6 @@ export const getDiary = Effect.fn("getDiary")(function* (viewerId: string | null
       dates ? inArray(Activity.localDate, dates) : undefined,
     );
 
-  // The newest days with something the viewer may see, with their sizes.
   const dayCounts = yield* db
     .select({ date: Activity.localDate, count: count() })
     .from(Activity)
@@ -123,7 +106,6 @@ export const getDiary = Effect.fn("getDiary")(function* (viewerId: string | null
   });
 });
 
-/** `username`'s contribution graph: completions per local day, private ones counted but never described. */
 export const getContributionGraph = Effect.fn("getContributionGraph")(function* (
   viewerId: string | null,
   input: GetContributionGraphInput,
@@ -141,7 +123,6 @@ export const getContributionGraph = Effect.fn("getContributionGraph")(function* 
   if (!range) return yield* new InvalidInput({ message: "Pick a range of at most 53 weeks." });
   if (owner.hidden) return new ContributionGraph({ ...range, today, days: [], total: 0 });
 
-  // Counts only: no subject join, so privacy never matters here.
   const rows = yield* db
     .select({ date: Activity.localDate, count: count() })
     .from(Activity)

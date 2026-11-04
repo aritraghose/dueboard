@@ -23,11 +23,6 @@ import {
   type TagColor,
 } from "./model.ts";
 
-// The user's tags. Every user has three system tags (`default`, `habit`,
-// `goal`), seeded by `ensureUserSetup`: they can be recolored but never
-// renamed or deleted. Names are unique per user, ignoring case.
-
-/** The system tags, as `ensureUserSetup` seeds them. */
 export const SYSTEM_TAGS: ReadonlyArray<{
   readonly kind: SystemTagKind;
   readonly name: string;
@@ -50,7 +45,6 @@ export const toTag = (row: TagRow): Tag =>
 const nameTaken = (name: string) =>
   new TagNameTaken({ message: `You already have a tag named "${name}".`, name });
 
-/** One of the user's tags, or `TagNotFound` (also for another user's tag). */
 export const findTag = (tx: Executor, userId: string, id: string) =>
   Effect.gen(function* () {
     const [row] = yield* tx
@@ -61,22 +55,16 @@ export const findTag = (tx: Executor, userId: string, id: string) =>
     return row;
   });
 
-/** The user's `default` tag, which new items get and deleted tags' items move to. */
 export const findDefaultTag = (tx: Executor, userId: string) =>
   Effect.gen(function* () {
     const [row] = yield* tx
       .select()
       .from(Tags)
       .where(and(eq(Tags.userId, userId), eq(Tags.systemKind, "default")));
-    // `ensureUserSetup` always seeds it, so this is a broken invariant.
     if (!row) return yield* Effect.die(new Error(`User ${userId} has no default tag`));
     return row;
   });
 
-/**
- * Serializes a user's tag writes by locking their settings row, so two
- * concurrent creates can't both pass the per-user limit.
- */
 const lockUser = (tx: Executor, userId: string) =>
   tx
     .select({ userId: UserSettings.userId })
@@ -84,7 +72,6 @@ const lockUser = (tx: Executor, userId: string) =>
     .where(eq(UserSettings.userId, userId))
     .for("update");
 
-/** The user's tags, oldest first (the system tags lead). */
 export const listTags = Effect.fn("listTags")(function* (userId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -112,7 +99,6 @@ export const createTag = Effect.fn("createTag")(function* (userId: string, input
           limit: MAX_TAGS_PER_USER,
         });
       }
-      // A clash with the unique `(user_id, lower(name))` index inserts nothing.
       const [row] = yield* tx
         .insert(Tags)
         .values({ id: newId(), userId, name, color })
@@ -124,7 +110,6 @@ export const createTag = Effect.fn("createTag")(function* (userId: string, input
   );
 });
 
-/** Renames and/or recolors a tag. A system tag can only be recolored. */
 export const updateTag = Effect.fn("updateTag")(function* (userId: string, input: UpdateTagInput) {
   const { id, name, color } = yield* decodeInput(UpdateTagInput)(input);
   const db = yield* Database;
@@ -152,18 +137,12 @@ export const updateTag = Effect.fn("updateTag")(function* (userId: string, input
   );
 });
 
-/**
- * Moves everything tagged `fromTagId` onto the user's `default` tag, before
- * that tag is deleted. Every later table with a `tag_id` gets reassigned
- * here too.
- */
 const reassignTagItems = (tx: Executor, userId: string, fromTagId: string, toTagId: string) =>
   tx
     .update(Tasks)
     .set({ tagId: toTagId })
     .where(and(eq(Tasks.userId, userId), eq(Tasks.tagId, fromTagId)));
 
-/** Deletes one of the user's own tags; its items move to `default`. Returns the id. */
 export const deleteTag = Effect.fn("deleteTag")(function* (userId: string, id: string) {
   const db = yield* Database;
   return yield* transaction(db, (tx) =>

@@ -13,15 +13,6 @@ import {
 import { HIDDEN_REQUEST_STATUSES, notificationState, type NotificationDraft } from "./notification-rules.ts";
 import { notBlockedSql } from "./visibility.ts";
 
-// In-app notifications: someone asked the user to connect, or accepted
-// their request. `social.ts` writes them in the request's or the accept's
-// own transaction (which events notify whom is `notification-rules.ts`);
-// `/notifications` lists them and the nav shows a dot while any is unseen.
-// A block deletes them both ways, and reads leave out anyone blocked too.
-
-// ─── Writes, in the caller's transaction ─────────────────────────────────────
-
-/** Writes `drafts`; one per request and kind, so writing one again is a no-op. */
 export const recordNotifications = (tx: Executor, drafts: readonly NotificationDraft[]) => {
   if (drafts.length === 0) return Effect.void;
   const now = new Date();
@@ -32,7 +23,6 @@ export const recordNotifications = (tx: Executor, drafts: readonly NotificationD
     .pipe(Effect.asVoid);
 };
 
-/** Deletes every notification between `a` and `b`, both ways (a block). */
 export const deleteNotificationsBetween = (tx: Executor, a: string, b: string) =>
   tx
     .delete(Notifications)
@@ -44,14 +34,6 @@ export const deleteNotificationsBetween = (tx: Executor, a: string, b: string) =
     )
     .pipe(Effect.asVoid);
 
-// ─── Reads ───────────────────────────────────────────────────────────────────
-
-/**
- * The user's notifications that still show: from someone with a username
- * whom neither side blocked, leaving out requests the sender took back.
- * Queries using it join `AuthUsers` on the actor and `ConnectionRequests`
- * on the request.
- */
 const shownTo = (userId: string) =>
   and(
     eq(Notifications.userId, userId),
@@ -65,7 +47,6 @@ const shownTo = (userId: string) =>
     ),
   );
 
-/** `/notifications`: the newest `NOTIFICATIONS_LIST_LIMIT`, newest first. */
 export const listNotifications = Effect.fn("listNotifications")(function* (userId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -104,7 +85,6 @@ export const listNotifications = Effect.fn("listNotifications")(function* (userI
   });
 });
 
-/** How many shown notifications the user hasn't seen, up to `NOTIFICATIONS_UNSEEN_CAP`. */
 export const countUnseenNotifications = Effect.fn("countUnseenNotifications")(function* (userId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -118,7 +98,6 @@ export const countUnseenNotifications = Effect.fn("countUnseenNotifications")(fu
   return new NotificationsUnseen({ count: rows.length });
 });
 
-/** Marks all the user's notifications seen (opening `/notifications`). */
 export const markNotificationsSeen = Effect.fn("markNotificationsSeen")(function* (userId: string) {
   const db = yield* Database;
   yield* db

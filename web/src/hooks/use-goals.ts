@@ -24,20 +24,12 @@ import { ApiClient } from "../rpc-client.ts";
 import { goalsForDayAtom } from "./use-day.ts";
 import { failureMessage, useRun, useTags } from "./use-tasks.ts";
 
-// Goals for the UI. Every goal query carries the `goals` reactivity key.
-// Goal writes invalidate it, and so do habit and task writes (a tap or a
-// settle can move a linked goal), so `/now` and `/goals` refetch after any
-// change that could move a goal.
-
 export const GOALS = ["goals"];
 
-/** `/goals`: every goal, with its links and last 10 progress events. */
 export const goalListAtom = ApiClient.query("ListGoals", {}, { reactivityKeys: GOALS });
 
-/** A goal with its links and last 50 progress events. */
 export const goalAtom = (id: string) => ApiClient.query("GetGoal", { id }, { reactivityKeys: GOALS });
 
-/** Open tasks to link, by title (`ListTasks` keeps `tasks` as its key). */
 export const linkableTasksAtom = (query: string) =>
   ApiClient.query(
     "ListTasks",
@@ -45,13 +37,11 @@ export const linkableTasksAtom = (query: string) =>
     { reactivityKeys: ["tasks"] },
   );
 
-/** The goals a habit or task moves, for its card. */
 export const itemGoalsAtom = (itemType: GoalLinkItem, itemId: string) =>
   ApiClient.query("ListItemGoals", { itemType, itemId }, { reactivityKeys: GOALS });
 
 const noItemGoalsAtom = Atom.make(AsyncResult.initial());
 
-/** Goal writes, each its own call (see `useRun`). Each returns its `Exit`. */
 export function useGoalActions() {
   const run = useRun();
   return useMemo(() => {
@@ -70,39 +60,25 @@ export function useGoalActions() {
       remove: (id: string) => call(ApiClient.use((client) => client("DeleteGoal", { id }))),
       link: (payload: LinkGoalItemInput) => call(ApiClient.use((client) => client("LinkGoalItem", payload))),
       unlink: (payload: UnlinkGoalItemInput) => call(ApiClient.use((client) => client("UnlinkGoalItem", payload))),
-      /** Refetches every goal query on screen, failed ones included ("Try again"). */
       reload: () => run(Reactivity.invalidate(GOALS)),
     };
   }, [run]);
 }
 
-/** The `goal` tag's color, which every goal wears (violet until tags load). */
 export function useGoalColor(): TagColor {
   return useTags()?.find((tag) => tag.systemKind === "goal")?.color ?? "violet";
 }
 
 type Tracked = {
-  /** +1s sent and not answered yet (count goals). */
   readonly pending: number;
-  /** A slider value not saved yet, with a token for the latest move. */
   readonly slider: { readonly value: number; readonly token: number } | null;
-  /** The newest answer, newer than the list until the list catches up. */
   readonly answer: Goal | null;
 };
 
 const EMPTY: Tracked = { pending: 0, slider: null, answer: null };
-/** How long a slider rests before its value is saved. */
 const SLIDER_SAVE_MS = 450;
-/** How long a just-completed goal celebrates. */
 const CELEBRATION_MS = 1600;
 
-/**
- * Progress changes shown right away. A count goal's "Move Goal" taps go to the API one
- * after another; a slider's moves save once it rests (debounced). `shown`
- * applies what's unanswered to the newest copy: the last answer until the
- * refetched list is as new, so a stale refetch never takes a change back.
- * A failed change drops out with a toast.
- */
 export function useGoalProgress() {
   const actions = useGoalActions();
   const [tracked, setTracked] = useState<ReadonlyMap<string, Tracked>>(new Map());
@@ -163,7 +139,6 @@ export function useGoalProgress() {
           const exit = await actions.setProgress(id, value);
           patch(id, (was) => ({
             ...was,
-            // A newer move keeps its own value until its own save answers.
             slider: was.slider?.token === token ? null : was.slider,
             answer: Exit.isSuccess(exit) ? exit.value : was.answer,
           }));
@@ -177,16 +152,11 @@ export function useGoalProgress() {
   return { shown, increment, slide };
 }
 
-/**
- * Goals that reached their target while on screen, for a moment, so their
- * celebration plays once and never on load. Empty with reduced motion.
- */
 export function useJustCompleted(goals: readonly Goal[]): ReadonlySet<string> {
   const reduced = useReducedMotion();
   const seen = useRef<Map<string, GoalStatus> | null>(null);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
-  // Compared by value: the list is a new array on every render.
   const statuses = goals.map((goal) => `${goal.id}:${goal.status}`).join(",");
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
@@ -214,7 +184,6 @@ export function useJustCompleted(goals: readonly Goal[]): ReadonlySet<string> {
   return fresh;
 }
 
-/** `/now`'s goals for `date`: active and completed that day, with unsaved progress applied. */
 export function useDayGoals(date: LocalDate) {
   const result = useAtomValue(goalsForDayAtom(date));
   const day = AsyncResult.isSuccess(result) ? result.value : undefined;
@@ -235,12 +204,6 @@ export function useDayGoals(date: LocalDate) {
 
 export type DayGoals = ReturnType<typeof useDayGoals>;
 
-/**
- * Saves a habit's or task's goals: from `before` (what's saved) to `after`
- * (the card's drafts). Unlinks what's gone, creates the new count goals,
- * and links (or changes the amount of) the rest. Resolves to the first
- * failure's message, or `null` when everything saved.
- */
 export function useItemGoalSync() {
   const actions = useGoalActions();
   return useCallback(
@@ -278,22 +241,13 @@ export function useItemGoalSync() {
   );
 }
 
-/** Compares drafts by what the API stores: which goal (by name for new ones) and the amount. */
 const draftsSignature = (drafts: readonly ItemGoalDraft[]): string =>
   drafts
     .map((draft) => `${draft.name}:${draft.amount}`)
     .sort()
     .join("|");
 
-/**
- * A habit's or task's goals for its card: `saved` (what the API has, `[]`
- * for a new item) and the card's `drafts`, both `undefined` while loading.
- * `edit` replaces the drafts. `settle(true)` says they were saved: they
- * stay on screen until the refetched list agrees, so it never flickers
- * back; `settle(false)` drops them (a failed save).
- */
 export function useItemGoalDrafts(itemType: GoalLinkItem, itemId: string | null) {
-  // A new item has nothing to ask the API about.
   const result = useAtomValue(
     itemId ? itemGoalsAtom(itemType, itemId) : (noItemGoalsAtom as unknown as ReturnType<typeof itemGoalsAtom>),
   );

@@ -30,14 +30,6 @@ import { readSidebarOpen } from "@/lib/sidebar-state";
 import { canonical, seo } from "@/lib/seo";
 import { getSessionUser } from "../session.ts";
 
-/**
- * A profile, `/@username` (the literal `@` prefix before the param). Anyone
- * may read it, signed in or not, so it sits outside `_app`'s guard; signed-in
- * viewers who finished onboarding get the app's chrome around it. What the
- * viewer may see is decided by `GetProfile` on the server. Overview holds
- * the activity graph and, below it, the diary; `day` is the graph day the
- * diary starts from.
- */
 const TABS = [
   { value: "overview", label: "Overview" },
   { value: "tasks", label: "Tasks" },
@@ -49,7 +41,6 @@ type ProfileTab = (typeof TABS)[number]["value"];
 type ProfileSearch = { tab?: Exclude<ProfileTab, "overview"> | undefined; day?: LocalDate | undefined };
 
 export const Route = createFileRoute("/@{$username}")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): ProfileSearch => ({
     tab: TABS.some(({ value }) => value !== "overview" && value === search.tab)
       ? (search.tab as ProfileSearch["tab"])
@@ -59,7 +50,6 @@ export const Route = createFileRoute("/@{$username}")({
   beforeLoad: async ({ cause }): Promise<{ user: OnboardedUser | null; sidebarOpen: boolean }> => {
     const checked = lastCheckedUser();
     if (cause === "stay" && checked) return { user: checked, sidebarOpen: readSidebarOpen() };
-    // The session only picks the chrome, so a failed lookup shows the public page.
     const session = await getSessionUser().catch(() => null);
     const user = session?.username ? { ...session, username: session.username } : null;
     if (user) rememberCheckedUser(user);
@@ -73,7 +63,6 @@ export const Route = createFileRoute("/@{$username}")({
         title: `@${username} · Dueboard`,
         description: `See what @${username} gets done on Dueboard: their activity graph, diary, and the tasks, habits, goals and focus sessions they share.`,
         path,
-        // People's diaries stay out of search results; shared links still preview.
         noindex: true,
       }),
       links: [canonical(path)],
@@ -182,12 +171,10 @@ function ProfileTabs({ profile }: { profile: Profile }) {
   );
 }
 
-/** The numbers that show how much they get done, the activity graph, then the diary. */
 function Overview({ profile }: { profile: Profile }) {
   const { day } = Route.useSearch();
   const navigate = Route.useNavigate();
   const counts = profile.counts;
-  // The viewer's today, for the diary's day names; the graph brings the owner's.
   const [today] = useState(() => todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"));
   const showDay = (date: LocalDate | undefined) =>
     void navigate({ search: (search) => ({ ...search, day: date }), replace: true, resetScroll: false });
@@ -245,7 +232,6 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
       aria-label={`${person.name}'s profile`}
       className="overflow-hidden rounded-xl border bg-card shadow-(--card-shadow)"
     >
-      {/* Only the band wears the owner's user color (also used by Live and the graph). */}
       <div aria-hidden="true" className="profile-band h-24 sm:h-28" />
       <div className="flex flex-col gap-4 px-5 pb-5">
         <div className="-mt-11 flex flex-wrap items-end justify-between gap-3">

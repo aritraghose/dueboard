@@ -14,8 +14,6 @@ export function ThemeSwitcher({ className }: Readonly<{ className?: string }>) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
-  // The saved theme is only known in the browser, so render nothing on the
-  // server and during hydration to avoid a mismatch.
   useEffect(() => {
     setMounted(true);
   }, []);

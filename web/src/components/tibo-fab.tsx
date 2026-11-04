@@ -6,12 +6,9 @@ import { useTibo, useTiboThread } from "@/hooks/use-tibo";
 import { cn } from "@/lib/utils";
 
 const POSITION_KEY = "dueboard-tibo-fab";
-/** How far a press must travel before it's a drag, not a tap. */
 const DRAG_THRESHOLD_PX = 6;
-/** Kept clear of the screen edges. */
 const EDGE_PX = 8;
 
-/** Distance from the bottom-right corner, in px. */
 type Position = { right: number; bottom: number };
 
 function readPosition(): Position | null {
@@ -23,24 +20,16 @@ function readPosition(): Position | null {
   }
 }
 
-/**
- * Tibo on phones: a round button floating just above the nav bar. Tap it to
- * open Tibo; drag it anywhere on screen, and it stays where you left it
- * (per viewer, in localStorage). Hidden where the page turns Tibo off
- * (`/inbox`).
- */
 export function TiboFab({ className }: { className?: string }) {
   const { setOpen } = useTibo();
   const { unread } = useTiboThread();
   const slots = useTopBarSlots();
   const [position, setPosition] = useState<Position | null>(null);
-  // Each tap turns Tibo's rings at once.
   const [spins, setSpins] = useState(0);
   const button = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ x: number; y: number; from: Position; moved: boolean } | null>(null);
   const justDragged = useRef(false);
 
-  // The saved spot is only known in the browser; until then the CSS default holds.
   useEffect(() => setPosition(readPosition()), []);
 
   if (slots?.tibo === false) return null;
@@ -78,14 +67,12 @@ export function TiboFab({ className }: { className?: string }) {
     const current = drag.current;
     drag.current = null;
     if (!current?.moved) return;
-    // The click that follows a drag isn't a tap.
     justDragged.current = true;
     setPosition((settled) => {
       if (settled) {
         try {
           localStorage.setItem(POSITION_KEY, JSON.stringify(settled));
         } catch {
-          // Not remembered this time; it still moved.
         }
       }
       return settled;
@@ -111,9 +98,7 @@ export function TiboFab({ className }: { className?: string }) {
       }}
       style={position ? { right: position.right, bottom: position.bottom } : undefined}
       className={cn(
-        // No fill of its own: Tibo's avatar is the button, with a shadow to float.
         "fixed z-40 grid size-12 touch-none place-items-center rounded-full shadow-lg outline-none select-none focus-visible:ring-4 focus-visible:ring-ring/60",
-        // Default spot: the right edge, just above the floating nav.
         !position && "right-4 bottom-[calc(6.5rem+env(safe-area-inset-bottom))]",
         className,
       )}

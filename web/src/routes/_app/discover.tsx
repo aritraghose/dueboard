@@ -8,7 +8,6 @@ import { PeopleSearch } from "@/components/people-search";
 import { Button } from "@/components/ui/button";
 import { socialOverviewAtom, useSocialActions } from "@/hooks/use-social";
 
-/** Find people, answer connection requests and see the ones you sent. */
 export const Route = createFileRoute("/_app/discover")({
   head: () => ({ meta: [{ title: "Discover · Dueboard" }] }),
   component: Discover,

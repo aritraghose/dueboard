@@ -12,10 +12,6 @@ import { PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
-// The small pills that pick who sees an item and whether it goes to Live,
-// shared by the note composer and the focus session form.
-
-/** Who can see it: a pill that opens the three choices with their hints. */
 export function PrivacyPill({ value, onChange }: { value: Privacy; onChange: (value: Privacy) => void }) {
   const Icon = PRIVACY_ICON[value];
   return (
@@ -53,7 +49,6 @@ export function PrivacyPill({ value, onChange }: { value: Privacy; onChange: (va
   );
 }
 
-/** "On Live" / "Off Live": whether it shows on Live. */
 export function LiveToggle({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) {
   return (
     <Button

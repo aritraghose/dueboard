@@ -1,7 +1,5 @@
 import type { Privacy } from "@dueboard/api/rpc";
 
-// Privacy in words, for every item's card (tasks, habits, …).
-
 export const PRIVACY_LABEL: Record<Privacy, string> = {
   public: "Public",
   connections: "Connections",

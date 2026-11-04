@@ -1,10 +1,3 @@
-// A synthetic thread for testing Tibo's long-term memory (development only:
-// `POST /agents/tibo-agent/me/dev/seed`, which `TiboAgent` serves only under
-// `alchemy dev`, run by `api/scripts/seed-tibo-thread.ts`). Two and a half
-// years of short chats with facts that later questions should find: early
-// ones (an allergy, a sister), dated ones (Portuguese in 2025), and changes
-// that must supersede older memories (New York → Boston, one job → another).
-
 import type { TiboRole } from "./protocol.ts";
 
 export interface SeedMessage {
@@ -14,11 +7,6 @@ export interface SeedMessage {
   readonly turnId: string;
 }
 
-/**
- * One day of chat: the user's lines and Tibo's replies alternate, starting
- * with the user. A reply's bubbles are split by " | ". Times start at 13:00
- * UTC, which is the same calendar day from UTC−11 to UTC+11.
- */
 type SeedDay = readonly [day: string, lines: readonly string[]];
 
 const DAYS: readonly SeedDay[] = [
@@ -163,7 +151,6 @@ const DAYS: readonly SeedDay[] = [
   ],
 ];
 
-/** The synthetic thread, oldest first, with ids for each turn. */
 export const devSeedThread = (): SeedMessage[] =>
   DAYS.flatMap(([day, lines]) => {
     const start = Date.parse(`${day}T13:00:00Z`);

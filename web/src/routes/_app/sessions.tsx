@@ -30,7 +30,6 @@ import { type LocalDate, formatDay, formatDayLong, relativeDay } from "@/lib/dat
 import { formatFocused, formatMinutes, sessionName } from "@/lib/sessions";
 
 type SessionsSearch = {
-  /** Only completed or only stopped sessions. Absent means all. */
   status?: "completed" | "stopped" | undefined;
 };
 
@@ -43,7 +42,6 @@ const FILTERS = [
 ] as const;
 
 export const Route = createFileRoute("/_app/sessions")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): SessionsSearch => ({
     status: search.status === "completed" || search.status === "stopped" ? search.status : undefined,
   }),
@@ -78,11 +76,6 @@ function Sessions() {
   );
 }
 
-/**
- * The history, newest day first. `ListSessions` has no status filter, so
- * Completed and Stopped filter the loaded pages in the browser, like the
- * Unscheduled view on `/tasks`.
- */
 function History({ status, today }: { status: SessionsSearch["status"]; today: LocalDate }) {
   const [pages, setPages] = useState(1);
   const result = useAtomValue(sessionListAtom({ pages, limit: PAGE_SIZE }));
@@ -90,7 +83,6 @@ function History({ status, today }: { status: SessionsSearch["status"]; today: L
   const isRemoved = useIsSessionRemoved();
   const [deleting, setDeleting] = useState<FocusSession | null>(null);
 
-  // Keep showing the pages already loaded while the next one arrives.
   const last = useRef<{ days: { date: LocalDate; focusedMinutes: number; sessions: FocusSession[] }[]; nextCursor: string | null } | undefined>(undefined);
   if (AsyncResult.isSuccess(result)) last.current = result.value;
   const data = last.current;
@@ -187,7 +179,6 @@ function History({ status, today }: { status: SessionsSearch["status"]; today: L
   );
 }
 
-/** "Today  Tue, Nov 3 ........ 1 h 15 min focused". The total counts every session that day. */
 function DayHeading({ date, today, focusedMinutes }: { date: LocalDate; today: LocalDate; focusedMinutes: number }) {
   const relative = relativeDay(date, today);
   const named = relative === "Today" || relative === "Yesterday";

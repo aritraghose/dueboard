@@ -10,15 +10,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTiboThread } from "@/hooks/use-tibo";
 
-// What Tibo is doing and has done (the inbox's side section). Older
-// activity and the files sent come from the user's own agent over HTTP,
-// through the website's `/agents/*` proxy (which pins it to the signed-in
-// user); what happens while the app is open arrives live on the socket
-// (`activities` in `lib/tibo-store.ts`) and is merged in.
-
 const agentUrl = (path: string) => `/agents/${TIBO_AGENT}/me/${path}`;
 
-/** What Tibo is doing now, the thread it belongs to (with its steps so far), or `null` when it's free. */
 export function useCurrentActivity(): { current: TiboActivity | null; thread: TiboActivityThread | null } {
   const { activities } = useTiboThread();
   return useMemo(() => {
@@ -32,7 +25,6 @@ export function useCurrentActivity(): { current: TiboActivity | null; thread: Ti
   }, [activities]);
 }
 
-/** The newest thread that finished, from what arrived live (for "Last active"). */
 export function useLastActivity(): TiboActivity | null {
   const { activities } = useTiboThread();
   return useMemo(
@@ -46,10 +38,6 @@ export function useLastActivity(): TiboActivity | null {
 
 type Pages = { threads: readonly TiboActivityThread[]; hasMore: boolean };
 
-/**
- * Every thread of activity, newest first, each with its steps: pages
- * loaded from the agent, with what arrived live laid over them.
- */
 export function useActivityLog() {
   const { activities, connected } = useTiboThread();
   const [pages, setPages] = useState<Pages | null>(null);
@@ -74,8 +62,6 @@ export function useActivityLog() {
     }
   }, []);
 
-  // The first page at once (it's plain HTTP), and again after a reconnect
-  // (things may have happened meanwhile).
   useEffect(() => {
     void load();
   }, [connected, load]);
@@ -115,14 +101,11 @@ export function useActivityLog() {
   return { threads, status, hasMore: pages?.hasMore ?? false, loadOlder, retry };
 }
 
-/** The files sent in the chat, newest first; loaded again when a message with files arrives. */
 export function useSentFiles() {
   const { messages, connected } = useTiboThread();
   const [files, setFiles] = useState<readonly TiboSentFile[] | null>(null);
   const [failed, setFailed] = useState(false);
-  // Bumped by `retry`, to load again.
   const [attempt, setAttempt] = useState(0);
-  // Changes when a message with files is added (or the thread reloads).
   const sent = useMemo(
     () => messages.reduce((count, message) => count + (message.attachments?.length ?? 0), 0),
     [messages],

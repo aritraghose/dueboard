@@ -1,11 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// What Tibo is doing and has done (architecture.md §7.10), in the user's
-// own `TiboAgent` SQLite: threads (a reply, a check-in, a reminder, memory
-// upkeep…) and their steps (reading, thinking, each tool, writing). Every
-// change is broadcast as an `activity` frame, so the inbox's side section
-// shows the current one live and the Activity tab grows as it happens.
-
 import { ACTIVITY_KEEP_DAYS, ACTIVITY_KEEP_THREADS } from "./activity-rules.ts";
 import type {
   TiboActivity,
@@ -52,14 +46,12 @@ const toActivity = (row: Row): TiboActivity => ({
   ...(row.ended_at !== null ? { endedAt: row.ended_at } : {}),
 });
 
-/** The longest label or detail kept. */
 const TEXT_MAX = 300;
 const clip = (text: string) => (text.length > TEXT_MAX ? `${text.slice(0, TEXT_MAX - 1)}…` : text);
 
 export class ActivityLog {
   constructor(
     private readonly sql: SqlStorage,
-    /** Tells every open tab. */
     private readonly emit: (activity: TiboActivity) => void,
   ) {}
 
@@ -67,7 +59,6 @@ export class ActivityLog {
     this.sql.exec(SCHEMA);
   }
 
-  /** Starts a thread (no `parentId`) or a step. */
   start(input: { kind: TiboActivityKind; label: string; detail?: string; parentId?: string }): Activity {
     const row = this.sql
       .exec<Row>(
@@ -85,7 +76,6 @@ export class ActivityLog {
     return new Activity(this, row.id);
   }
 
-  /** Changes a running activity's detail (and label). */
   update(id: string, patch: { label?: string; detail?: string }) {
     const row = this.sql
       .exec<Row>(
@@ -99,7 +89,6 @@ export class ActivityLog {
     if (row) this.emit(toActivity(row));
   }
 
-  /** Ends an activity, once (and any of its steps still running, the same way). */
   finish(id: string, status: Exclude<TiboActivityStatus, "running">, detail?: string) {
     const now = Date.now();
     const steps = this.sql
@@ -124,7 +113,6 @@ export class ActivityLog {
     if (row) this.emit(toActivity(row));
   }
 
-  /** Everything running now (threads and steps). */
   running(): TiboActivity[] {
     return this.sql
       .exec<Row>(`SELECT * FROM activity_log WHERE status = 'running' ORDER BY started_at`)
@@ -132,10 +120,6 @@ export class ActivityLog {
       .map(toActivity);
   }
 
-  /**
-   * After a restart: whatever was running died with the old instance (its
-   * turn state lived in memory), so it ends as failed.
-   */
   interruptRunning() {
     this.sql.exec(
       `UPDATE activity_log SET status = 'failed', ended_at = ?, detail = coalesce(detail, 'Interrupted')
@@ -144,7 +128,6 @@ export class ActivityLog {
     );
   }
 
-  /** Threads that started before `before` (ms), newest first, with their steps. */
   page(before: number, limit: number): { threads: TiboActivityThread[]; hasMore: boolean } {
     const rows = this.sql
       .exec<Row>(
@@ -171,7 +154,6 @@ export class ActivityLog {
     };
   }
 
-  /** Drops threads (with their steps) past `ACTIVITY_KEEP_DAYS` or the newest `ACTIVITY_KEEP_THREADS`. */
   prune(now: number) {
     const cutoff = now - ACTIVITY_KEEP_DAYS * 24 * 60 * 60 * 1000;
     const nth = this.sql
@@ -192,14 +174,12 @@ export class ActivityLog {
   }
 }
 
-/** One running thread or step. */
 export class Activity {
   constructor(
     private readonly log: ActivityLog,
     readonly id: string,
   ) {}
 
-  /** A step of this thread. */
   step(kind: TiboActivityKind, label: string, detail?: string): Activity {
     return this.log.start({ kind, label, parentId: this.id, ...(detail ? { detail } : {}) });
   }

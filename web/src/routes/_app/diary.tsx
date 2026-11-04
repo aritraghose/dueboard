@@ -11,9 +11,7 @@ import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
 import { type LocalDate, WEEK_STARTS_ON, isLocalDate, todayIn } from "@/lib/dates";
 
-/** `/diary`: the user's own days, everything included. `day` jumps to a date. */
 export const Route = createFileRoute("/_app/diary")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): { day?: LocalDate | undefined } => ({
     day: typeof search.day === "string" && isLocalDate(search.day) ? search.day : undefined,
   }),

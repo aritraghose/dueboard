@@ -7,11 +7,6 @@ import {
   type TiboUpload,
 } from "@dueboard/api/tibo";
 
-// Files for Tibo's chat (architecture.md §7.9). Each is uploaded on its own
-// to the user's agent through the website's `/agents/*` proxy (which pins
-// the agent to the signed-in user), and sent with a message by id.
-
-/** Uploads one file; never throws. */
 export async function uploadTiboFile(file: File, signal?: AbortSignal): Promise<TiboUpload> {
   if (file.size === 0) return { ok: false, error: "empty" };
   if (file.size > TIBO_FILE_MAX_BYTES) return { ok: false, error: "too_large" };
@@ -39,17 +34,14 @@ const UPLOAD_ERROR: Record<Exclude<TiboUpload, { ok: true }>["error"], string> =
   failed: "Couldn't upload. Try again.",
 };
 
-/** What went wrong with an upload, for the person. */
 export const uploadErrorText = (error: keyof typeof UPLOAD_ERROR) => UPLOAD_ERROR[error];
 
-/** "2.4 MB" */
 export function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
-/** The tag color a file's icon tile takes (`data-tag`, styles.css). */
 export const FILE_KIND_TAG: Record<TiboAttachmentKind, string> = {
   image: "teal",
   pdf: "red",
@@ -58,7 +50,6 @@ export const FILE_KIND_TAG: Record<TiboAttachmentKind, string> = {
   other: "violet",
 };
 
-/** "PDF", "Text", "Spreadsheet"… from the file's kind and extension. */
 export function fileKindLabel(attachment: Pick<TiboAttachment, "kind" | "name">): string {
   const extension = attachment.name.includes(".") ? attachment.name.split(".").pop()!.toLowerCase() : "";
   switch (attachment.kind) {
@@ -75,6 +66,5 @@ export function fileKindLabel(attachment: Pick<TiboAttachment, "kind" | "name">)
   }
 }
 
-/** Names of a message's files, for a quote of a message with no text. */
 export const fileNames = (attachments: readonly Pick<TiboAttachment, "name">[] = []) =>
   attachments.map((attachment) => `📎 ${attachment.name}`).join(", ");

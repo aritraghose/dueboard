@@ -7,13 +7,6 @@ import { Settings, SettingsPatch, TIBO_PROACTIVE_KEYS, USER_COLOR, decodeInput, 
 import { SYSTEM_TAGS, listTags } from "./tags.ts";
 import { queueTiboEvent } from "./tibo.ts";
 
-// Per-user settings: time zone, privacy defaults, relay policy and Tibo's
-// check-ins. A change to the check-ins or the zone tells the user's
-// `TiboAgent` (a `settings_changed` event), which re-plans its alarms. The row
-// and the system tags are created lazily by `ensureUserSetup`, which
-// `Bootstrap` runs on every app load, so accounts made before this table
-// existed are backfilled the next time they open the app.
-
 const toSettings = (row: UserSettingsRow): Settings =>
   new Settings({
     timeZone: row.timeZone,
@@ -29,21 +22,12 @@ const toSettings = (row: UserSettingsRow): Settings =>
     tiboEveningTime: row.tiboEveningTime,
   });
 
-// `Bootstrap` creates the row on every app load, so a missing one is a bug.
 const missingSettings = (userId: string) =>
   Effect.die(new Error(`User ${userId} has no settings; run ensureUserSetup first`));
 
-/** A uniformly random user color. */
 export const randomUserColor = (): UserColor =>
   USER_COLOR[crypto.getRandomValues(new Uint32Array(1))[0]! % USER_COLOR.length]!;
 
-/**
- * Creates the user's settings row and three system tags if they're missing.
- * Idempotent and safe to run concurrently (two tabs loading at once): both
- * inserts skip rows that already exist. `timeZone` is used only for a new
- * row, and falls back to UTC when invalid. A new row also gets a random
- * color, which never changes afterwards.
- */
 export const ensureUserSetup = Effect.fn("ensureUserSetup")(function* (
   userId: string,
   timeZone: string,
@@ -59,7 +43,6 @@ export const ensureUserSetup = Effect.fn("ensureUserSetup")(function* (
           color: randomUserColor(),
         })
         .onConflictDoNothing();
-      // Conflicts on either unique index (name, or one tag per system kind).
       yield* tx
         .insert(Tags)
         .values(
@@ -87,7 +70,6 @@ export const getSettings = Effect.fn("getSettings")(function* (userId: string) {
   return toSettings(row);
 });
 
-/** Changes the fields `patch` names. The time zone follows the browser (`syncTimeZone`). */
 export const updateSettings = Effect.fn("updateSettings")(function* (
   userId: string,
   patch: SettingsPatch,
@@ -111,15 +93,9 @@ export const updateSettings = Effect.fn("updateSettings")(function* (
   return toSettings(row);
 });
 
-/**
- * Saves the browser's time zone when it's valid and differs from the stored
- * one, so a travelling user's "today" follows them. An invalid zone is
- * ignored. Returns the settings either way.
- */
 export const syncTimeZone = Effect.fn("syncTimeZone")(function* (userId: string, timeZone: string) {
   if (!isValidTimeZone(timeZone)) return yield* getSettings(userId);
   const db = yield* Database;
-  // Tibo's check-ins follow the zone, so a change re-plans them.
   const row = yield* transaction(db, (tx) =>
     Effect.gen(function* () {
       const [updated] = yield* tx
@@ -134,7 +110,6 @@ export const syncTimeZone = Effect.fn("syncTimeZone")(function* (userId: string,
   return row ? toSettings(row) : yield* getSettings(userId);
 });
 
-/** Everything the app needs on load: sets the user up, syncs the zone, returns settings and tags. */
 export const bootstrap = Effect.fn("bootstrap")(function* (userId: string, timeZone: string) {
   yield* ensureUserSetup(userId, timeZone);
   const settings = yield* syncTimeZone(userId, timeZone);

@@ -13,20 +13,17 @@ import {
 
 const OWNER = "owner";
 
-/** Every kind of viewer, as (viewer id, relationship to `OWNER`). */
 const VIEWERS: Record<string, { viewerId: string | null; relationship: Relationship; relation: ViewerRelation }> = {
   "logged out": { viewerId: null, relationship: { connected: false, blocked: false }, relation: "other" },
   self: { viewerId: OWNER, relationship: { connected: false, blocked: false }, relation: "self" },
   connection: { viewerId: "friend", relationship: { connected: true, blocked: false }, relation: "connected" },
   stranger: { viewerId: "stranger", relationship: { connected: false, blocked: false }, relation: "other" },
   blocked: { viewerId: "foe", relationship: { connected: false, blocked: true }, relation: "blocked" },
-  // A block removes the connection, but if both were ever true the block wins.
   "blocked connection": { viewerId: "foe", relationship: { connected: true, blocked: true }, relation: "blocked" },
 };
 
 type Viewer = keyof typeof VIEWERS;
 
-/** `canSeeItem` for each viewer: public, connections, private. */
 const CAN_SEE: Record<Viewer, Record<Privacy, boolean>> = {
   "logged out": { public: true, connections: false, private: false },
   self: { public: true, connections: true, private: true },
@@ -36,7 +33,6 @@ const CAN_SEE: Record<Viewer, Record<Privacy, boolean>> = {
   "blocked connection": { public: false, connections: false, private: false },
 };
 
-/** What Live shows each viewer, by privacy, for an item shared to Live (`null`: nothing). */
 const LIVE: Record<Viewer, Record<Privacy, LiveDisplay | null>> = {
   "logged out": { public: null, connections: null, private: null },
   self: { public: "full", connections: "full", private: "full" },

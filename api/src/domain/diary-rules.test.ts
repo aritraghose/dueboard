@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import type { LocalDate } from "./dates.ts";
 import { DIARY_PAGE_DAYS, GRAPH_KINDS, graphRange, pickDiaryDays } from "./diary-rules.ts";
 
-// Tuesday, November 3, 2026.
 const today = "2026-11-03" as LocalDate;
 const d = (value: string) => value as LocalDate;
 

@@ -46,12 +46,10 @@ const STATUS_LABEL: Record<GoalStatus, string> = { active: "Active", paused: "Pa
 const STATUSES: readonly GoalStatus[] = ["active", "paused", "completed"];
 
 type GoalsSearch = {
-  /** Absent means `active`. */
   status?: Exclude<GoalStatus, "active"> | undefined;
 };
 
 export const Route = createFileRoute("/_app/goals")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): GoalsSearch => ({
     status: search.status === "paused" || search.status === "completed" ? search.status : undefined,
   }),
@@ -81,7 +79,6 @@ function Goals() {
     for (const summary of all ?? []) byStatus[summary.goal.status] += 1;
     return byStatus;
   }, [all]);
-  // A goal completed here stays in Active for its celebration.
   const shown = (all ?? []).filter(
     (summary) => summary.goal.status === status || (status === "active" && celebrating.has(summary.goal.id)),
   );
@@ -262,11 +259,6 @@ function GoalRow({
 const LINE_WIDTH = 208;
 const LINE_HEIGHT = 44;
 
-/**
- * Progress over time, from the goal's latest progress events: a stepped
- * line (the value holds until the next change) running to now, over a soft
- * fill, scaled to the target (or 100%). Plain SVG.
- */
 function ProgressLine({ summary, today, timeZone }: { summary: GoalSummary; today: LocalDate; timeZone: string }) {
   const { goal, events } = summary;
   const points = useMemo(() => {
@@ -342,7 +334,6 @@ function ProgressLine({ summary, today, timeZone }: { summary: GoalSummary; toda
   );
 }
 
-/** Edit, pause or resume, reopen, and delete (after a confirmation). */
 function GoalActions({ goal, onEdit }: { goal: Goal; onEdit: () => void }) {
   const actions = useGoalActions();
   const [confirming, setConfirming] = useState(false);

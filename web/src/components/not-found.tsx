@@ -1,6 +1,5 @@
 import { BackOrHomeButton, StatusPage } from "@/components/status-page";
 
-/** The screen for an address that matches no page, or a `notFound()` throw. */
 export function NotFound() {
   return (
     <StatusPage

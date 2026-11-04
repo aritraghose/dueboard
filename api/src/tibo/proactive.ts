@@ -1,10 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Tibo's check-ins in the Durable Object's SQLite (step 20): a log of every
-// check-in it considered, which keeps one alarm (or a retried one) from
-// sending twice, plus a few facts the
-// agent keeps between wakes. The rules are in `./proactive-rules.ts`.
-
 import type { ProactiveKind, SkipReason } from "./proactive-rules.ts";
 
 const SCHEMA = `
@@ -24,13 +19,10 @@ CREATE TABLE IF NOT EXISTS agent_state (
 );
 `;
 
-/** How long the log keeps a row. */
 const LOG_DAYS = 30;
 
-/** `sending` while the turn runs, then `sent` or why not. */
 export type CheckInOutcome = "sending" | "sent" | SkipReason;
 
-/** The agent's own facts: the plan's fingerprint, when the app was last open, what's been read. */
 export type AgentStateKey = "proactive_plan" | "last_seen_at" | "read_seq";
 
 export interface CheckInRow {
@@ -50,11 +42,6 @@ export class ProactiveStore {
     this.sql.exec(SCHEMA);
   }
 
-  /**
-   * Takes a check-in (`morning_plan:2026-11-04`) for
-   * this run: `false` if it was already considered, so an alarm that fires
-   * twice or a delivery retried never sends twice.
-   */
   claim(id: string, kind: ProactiveKind, day: string, now: number): boolean {
     const cursor = this.sql.exec(
       `INSERT INTO proactive_log (id, kind, day, outcome, created_at, updated_at)
@@ -78,7 +65,6 @@ export class ProactiveStore {
     );
   }
 
-  /** Check-ins sent (or being sent) on a day (dev route). */
   sentOn(day: string): number {
     return this.sql
       .exec<{ n: number }>(
@@ -88,7 +74,6 @@ export class ProactiveStore {
       .one().n;
   }
 
-  /** The newest rows, for the dev route. */
   recent(limit: number): CheckInRow[] {
     return this.sql
       .exec<{
@@ -112,7 +97,6 @@ export class ProactiveStore {
       }));
   }
 
-  /** Drops rows older than the log keeps; a stuck `sending` row from a restart mid-turn ends as `failed`. */
   prune(now: number) {
     this.sql.exec(`DELETE FROM proactive_log WHERE created_at < ?`, now - LOG_DAYS * 24 * 60 * 60_000);
     this.sql.exec(
@@ -122,7 +106,6 @@ export class ProactiveStore {
     );
   }
 
-  /** Development only: forget a check-in, so "fire now" can run it again. */
   forget(id: string) {
     this.sql.exec(`DELETE FROM proactive_log WHERE id = ?`, id);
   }

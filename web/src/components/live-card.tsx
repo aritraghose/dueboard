@@ -19,12 +19,6 @@ import { liveAction, liveRelativeTime, liveTitle, pathAction } from "@/lib/live"
 import { noteCount } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 
-// Live: the feed of what you and your connections get done (it was called
-// the timeline before). A card on `/now` (the last 2 days) and the whole of
-// `/live` (the last 7), with tabs: All, Connections, Me, and Path (your own
-// today as one thread). Both read like a chat: newest at the bottom by the
-// note box, opening there, older events loading as you scroll up.
-
 type LiveTab = LiveScope | "path";
 
 const TABS: readonly { readonly value: LiveTab; readonly label: string }[] = [
@@ -36,25 +30,16 @@ const TABS: readonly { readonly value: LiveTab; readonly label: string }[] = [
 
 const TAB_KEY = "dueboard-live-tab";
 
-/** Event text, a little under the body size so more fits. */
 const EVENT_TEXT = "text-[0.8125rem] leading-snug";
 
-/**
- * The Live card: the tabs, the feed, and a note box under it. `onCollapse`
- * adds the collapse button at the top left (on `/now`, wide screens only);
- * there, phones already show "Live" on the tab that opens the card, so the
- * card's own header is left out.
- */
 export function LiveCard({
   days = 2,
   onCollapse,
   headerEnd,
   className,
 }: {
-  /** How far back the feed reaches, today included. */
   days?: number;
   onCollapse?: () => void;
-  /** The header's right corner (`/live` puts Tibo there). */
   headerEnd?: ReactNode;
   className?: string;
 }) {
@@ -64,8 +49,6 @@ export function LiveCard({
   const [tab, setTab] = useLiveTab();
   useLivePolling();
   return (
-    // A compact top: the title row and the tabs share the header, with less
-    // padding than other cards, so the feed gets the height.
     <Card aria-labelledby={headingId} role="region" className={cn("gap-2.5! pt-2.5!", className)}>
       <CardHeader className="flex flex-col items-stretch! gap-1.5 border-b pb-2.5!">
         <div className={cn("grid grid-cols-[1fr_auto_1fr] items-center", onCollapse && "max-md:hidden")}>
@@ -106,11 +89,6 @@ export function LiveCard({
   );
 }
 
-/**
- * Opens at the bottom, stays there as items arrive while the viewer is at
- * the bottom (a hidden tab on phones or a resize too), and keeps the view
- * still when older items are added above (`first` changes).
- */
 function useStickToBottom(scroller: RefObject<HTMLDivElement | null>, items: unknown, first: string | undefined) {
   const pinned = useRef(true);
   const fromBottom = useRef(0);
@@ -159,8 +137,6 @@ function LiveFeed({
   const shown = events && events.length > 0 ? events : undefined;
   const onScroll = useStickToBottom(scroller, shown, shown?.at(-1)?.id);
 
-  // Older events load when the top scrolls into view. Observing again after each change asks once more
-  // while it's still in view.
   const { hasOlder, loadingOlder, loadOlder } = feed;
   const count = events?.length ?? 0;
   useEffect(() => {
@@ -203,7 +179,6 @@ function LiveFeed({
     );
   }
 
-  // Oldest to newest, top to bottom.
   const groups = groupByDay([...events].reverse(), timeZone);
   const end = (
     <div ref={sentinel} className="flex min-h-6 items-center justify-center text-xs text-muted-foreground">
@@ -226,12 +201,10 @@ function LiveFeed({
       onScroll={onScroll}
       className="-mx-(--card-spacing) min-h-0 flex-1 overflow-y-auto px-(--card-spacing) [overflow-anchor:none]"
     >
-      {/* A short feed sits at the bottom, by the note box. */}
       <div className="flex min-h-full flex-col justify-end">
         {end}
         {groups.map((group) => (
           <section key={group.date} aria-label={formatDay(group.date, today)} className="flex flex-col">
-            {/* No fill in light mode: on the card's gradient a flat band shows (dark mode keeps it). */}
             <h3 className="sticky top-0 z-10 py-1.5 text-center text-xs font-medium text-muted-foreground dark:bg-card/90 dark:backdrop-blur-sm">
               {dayLabel(group.date, today)}
             </h3>
@@ -247,13 +220,11 @@ function LiveFeed({
   );
 }
 
-/** "Today", "Yesterday", then "Sun, Nov 1". */
 const dayLabel = (date: LocalDate, today: LocalDate) => {
   const relative = relativeDay(date, today);
   return relative === "Today" || relative === "Yesterday" ? relative : formatDay(date, today);
 };
 
-/** Events by day in the viewer's zone, in the order given. */
 const groupByDay = (events: readonly LiveEvent[], timeZone: string) => {
   const groups: { date: LocalDate; events: LiveEvent[] }[] = [];
   for (const event of events) {
@@ -308,10 +279,6 @@ function LiveRow({
   );
 }
 
-/**
- * The Path: what the viewer got done today, oldest first, as one thread of
- * steps on a line in their user color, each with its time.
- */
 function PathThread({ timeZone }: { timeZone: string }) {
   const path = usePath();
   const color = useBootstrap()?.settings.color ?? "gray";
@@ -352,7 +319,6 @@ function PathStep({ event, timeZone }: { event: PathEvent; timeZone: string }) {
       >
         {formatTime(event.occurredAt, timeZone)}
       </time>
-      {/* The line runs from the first dot to the last; each step's dot sits on it. */}
       <span
         aria-hidden="true"
         className="relative before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-tag/40 group-first:before:top-2.5 group-last:before:bottom-auto group-last:before:h-2.5"
@@ -400,7 +366,6 @@ function FeedMessage({ children }: { children: ReactNode }) {
   );
 }
 
-/** The selected tab, remembered per viewer in localStorage. Read after mount, so hydration agrees. */
 function useLiveTab() {
   const [tab, setTab] = useState<LiveTab>("all");
   useEffect(() => {
@@ -408,7 +373,6 @@ function useLiveTab() {
       const saved = localStorage.getItem(TAB_KEY);
       if (saved === "path" || (LIVE_SCOPE as readonly string[]).includes(saved ?? "")) setTab(saved as LiveTab);
     } catch {
-      // Storage blocked: start on All.
     }
   }, []);
   const update = (next: LiveTab) => {
@@ -416,13 +380,11 @@ function useLiveTab() {
     try {
       localStorage.setItem(TAB_KEY, next);
     } catch {
-      // Not remembered this time.
     }
   };
   return [tab, update] as const;
 }
 
-/** Today's notes count under the note box, once there is one; it opens `/notes`. */
 function TodayNotes({ today }: { today: LocalDate }) {
   const result = useAtomValue(notesCountAtom(today));
   const count = AsyncResult.isSuccess(result) ? result.value : 0;

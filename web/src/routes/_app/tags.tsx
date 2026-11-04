@@ -10,7 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
 import { useTags } from "@/hooks/use-tasks";
 
-/** The user's tags: create, rename and recolor (built-in tags only recolor). */
 export const Route = createFileRoute("/_app/tags")({
   head: () => ({ meta: [{ title: "Tags · Dueboard" }] }),
   component: Tags,

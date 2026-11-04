@@ -7,21 +7,10 @@ import { Database, newId, orDieOnDbError, transaction, type Executor } from "./d
 import { AI_UNITS_PER_CHARGE_MAX, type AiUsageReason } from "./model.ts";
 import { fits, limitFor, periodOf, toAiUsage } from "./usage-rules.ts";
 
-// The AI usage quota ledger (architecture.md §8). Every AI feature checks
-// `canSpend` before a model call and calls `recordUsage` (or `chargeSplit`
-// for a relay) after it succeeds. The month is the user's, so it resets at
-// their local midnight on the 1st. Recording never refuses: the check
-// before the call is the gate, so a race can only overshoot by one turn.
-//
-// The AgentWorker reaches these through the DomainWorker
-// (`../DomainWorker.ts`).
-
-/** The monthly quota in messages (`AI_MONTHLY_MESSAGE_QUOTA`), provided by `../api.ts` and `../DomainWorker.ts`. */
 export class AiQuota extends Context.Service<AiQuota, { readonly monthlyMessages: number }>()(
   "api/AiQuota",
 ) {}
 
-/** The user's zone and override. A user with no settings row yet gets UTC and the default. */
 const accountOf = Effect.fn("usage.accountOf")(function* (db: Executor, userId: string) {
   const [row] = yield* db
     .select({ timeZone: UserSettings.timeZone, override: UserSettings.aiQuotaOverride })
@@ -48,7 +37,6 @@ const usedUnits = Effect.fn("usage.usedUnits")(function* (
   return row?.units ?? 0;
 });
 
-/** The user's usage this month, in messages. */
 export const getUsage = Effect.fn("getUsage")(function* (userId: string) {
   const db = yield* Database;
   const now = new Date();
@@ -57,12 +45,10 @@ export const getUsage = Effect.fn("getUsage")(function* (userId: string) {
   return toAiUsage(used, limit, now, timeZone);
 });
 
-/** The user's zone (UTC with no settings row yet), for counting their months. */
 export const timeZoneOf = Effect.fn("usage.timeZoneOf")(function* (db: Executor, userId: string) {
   return (yield* accountOf(db, userId)).timeZone;
 });
 
-/** Whether `units` more fit in the user's quota this month. */
 export const canSpend = Effect.fn("canSpend")(function* (userId: string, units: number) {
   const db = yield* Database;
   const { timeZone, limit } = yield* accountOf(db, userId);
@@ -75,11 +61,6 @@ const checkUnits = (units: number) =>
     ? Effect.void
     : Effect.die(new Error(`Invalid AI usage charge: ${units} units`));
 
-/**
- * Adds `units` to the user's month and logs the charge, in `tx`. Exported
- * for services that charge inside their own transaction (`./ask.ts`); check
- * `canSpend` first.
- */
 export const charge = Effect.fn("usage.charge")(function* (
   tx: Executor,
   userId: string,
@@ -100,10 +81,6 @@ export const charge = Effect.fn("usage.charge")(function* (
   yield* tx.insert(AiUsageEvents).values({ id: newId(), userId, units, reason, ref });
 });
 
-/**
- * Records a charge after a successful model call: one atomic upsert of the
- * month's total plus an event row. Returns the usage after it.
- */
 export const recordUsage = Effect.fn("recordUsage")(function* (
   userId: string,
   units: number,
@@ -115,10 +92,6 @@ export const recordUsage = Effect.fn("recordUsage")(function* (
   return yield* getUsage(userId);
 });
 
-/**
- * Charges `unitsEach` to both users of a relay turn (1 unit = half a
- * message each), in one transaction. Check both with `canSpend` first.
- */
 export const chargeSplit = Effect.fn("chargeSplit")(function* (
   userA: string,
   userB: string,

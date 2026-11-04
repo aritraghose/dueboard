@@ -59,7 +59,6 @@ type NotesSearch = { q?: string | undefined };
 const PAGE_SIZE = 50;
 
 export const Route = createFileRoute("/_app/notes")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): NotesSearch => ({
     q: typeof search.q === "string" && search.q.trim() ? search.q.slice(0, NOTE_BODY_MAX_LENGTH) : undefined,
   }),
@@ -72,7 +71,6 @@ function Notes() {
   const navigate = Route.useNavigate();
   const today = useToday(useTimeZone());
   const { user } = Route.useRouteContext();
-  // Notes posted from the composer, shown in today's group until the list has them.
   const [pending, setPending] = useState<readonly PendingNote[]>([]);
 
   const setQuery = (q: string) =>
@@ -109,7 +107,6 @@ function Notes() {
   );
 }
 
-/** Body search, sent to the URL a moment after typing stops. */
 function SearchField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [text, setText] = useState(value);
   const latest = useRef(onChange);
@@ -171,7 +168,6 @@ function Results({
   const { reload } = useNoteActions();
   const isRemoved = useIsRemoved();
 
-  // Keep showing the pages already loaded while the next one arrives.
   const last = useRef<{ days: { date: LocalDate; notes: Note[] }[]; nextCursor: string | null } | undefined>(undefined);
   if (AsyncResult.isSuccess(result)) last.current = result.value;
   const data = last.current;
@@ -193,7 +189,6 @@ function Results({
     return <ListSkeleton />;
   }
 
-  // Today's pending notes lead today's group (newest first), creating it if needed.
   const waiting = pending.filter((note) => !note.id || !listedIds.has(note.id)).toReversed();
   const days = data.days
     .map((day) => ({ ...day, notes: day.notes.filter((note) => !isRemoved(note.id)).map(apply) }))
@@ -275,10 +270,6 @@ function DaySection({
   );
 }
 
-/**
- * One note in the feed, like a post: avatar, name and handle, the time,
- * the body, and who can see it. Shared by saved and pending notes.
- */
 function CardFrame({
   user,
   meta,
@@ -337,7 +328,6 @@ function PendingCard({ note, user }: { note: PendingNote; user: MenuUser }) {
   );
 }
 
-/** Who can see the note, and whether it's on Live, as two quiet pills. */
 function NoteMarks({ privacy, shareToLive }: { privacy: Privacy; shareToLive: boolean }) {
   const Icon = PRIVACY_ICON[privacy];
   const LiveIcon = shareToLive ? RadioIcon : EyeOffIcon;
@@ -360,7 +350,6 @@ function NoteMarks({ privacy, shareToLive }: { privacy: Privacy; shareToLive: bo
   );
 }
 
-/** `body` with every case-insensitive match of `query` marked. */
 function Highlighted({ body, query }: { body: string; query: string | undefined }) {
   const needle = query?.trim().toLowerCase();
   if (!needle) return <>{body}</>;
@@ -444,7 +433,6 @@ function NoteCard({
   );
 }
 
-/** Inline edit: Enter saves, Escape cancels. */
 function NoteEditor({
   initial,
   onSave,

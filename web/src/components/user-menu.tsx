@@ -45,7 +45,6 @@ const THEMES = [
   { value: "dark", label: "Dark", icon: MoonIcon },
 ] satisfies { value: Theme; label: string; icon: LucideIcon }[];
 
-/** The avatar menu: profile, connections, settings, theme and sign out. */
 export function UserMenuContent({
   user,
   ...props
@@ -56,7 +55,6 @@ export function UserMenuContent({
   const signOut = async () => {
     setSigningOut(true);
     await authClient.signOut();
-    // A full page load also drops every cached query atom of this user.
     window.location.assign("/");
   };
 

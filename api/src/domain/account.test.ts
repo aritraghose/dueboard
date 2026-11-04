@@ -3,11 +3,7 @@ import { getTableName, isTable } from "drizzle-orm";
 import * as schema from "../schema.ts";
 import { USER_OWNED_TABLES } from "./account.ts";
 
-// Tables that hold no user's rows directly: they cascade from a parent the
-// deletion covers.
 const CASCADED = new Set(["habit_pauses", "focus_session_segments"]);
-// Tables deletion fills rather than empties: the queue of Tibo threads to
-// wipe once the account is gone (`onAccountDeleted`).
 const KEPT = new Set(["tibo_wipes"]);
 
 describe("account deletion", () => {

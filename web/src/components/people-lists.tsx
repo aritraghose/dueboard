@@ -7,14 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-// The pieces `/discover`, `/connections` and Settings share to list people:
-// a titled section in a card, and a list of people with their actions.
-
-/**
- * A titled list of people in a card: the title (with a count when there
- * are any) on the left and `action` on the right of one row, then the card.
- * `bare` drops the card, for content that draws its own (the search).
- */
 export function PeopleSection({
   title,
   description,
@@ -55,7 +47,6 @@ export function PeopleSection({
   );
 }
 
-/** Placeholder rows while people load. */
 export function PeopleSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <ul aria-hidden="true" className="divide-y">
@@ -73,7 +64,6 @@ export function PeopleSkeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
-/** People with the viewer's status toward each, as `ConnectionActions` rows. */
 export function PeopleList({
   people,
   empty,
@@ -105,7 +95,6 @@ export function PeopleList({
   );
 }
 
-/** "Couldn't load …" with a retry, inside a section. */
 export function PeopleLoadFailed({ what, onRetry }: { what: string; onRetry: () => void }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 py-3">

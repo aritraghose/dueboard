@@ -1,5 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-	<!-- The tab icon: logo.svg with its background circle as a solid disc, so it shows on light and dark tab bars, and filter regions wide enough not to clip the shadows. -->
 	<defs>
 		<linearGradient id="tier3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
 			<stop offset="0%" stop-color="#FFFFFF" />

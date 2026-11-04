@@ -18,9 +18,9 @@ import {
 
 describe("summary periods", () => {
   test("weeks start on Monday", () => {
-    expect(periodStart("week", "2026-11-04")).toBe("2026-11-02"); // a Wednesday
+    expect(periodStart("week", "2026-11-04")).toBe("2026-11-02");
     expect(periodStart("week", "2026-11-02")).toBe("2026-11-02");
-    expect(periodStart("week", "2026-11-01")).toBe("2026-10-26"); // a Sunday
+    expect(periodStart("week", "2026-11-01")).toBe("2026-10-26");
   });
 
   test("months and years", () => {

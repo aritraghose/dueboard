@@ -17,9 +17,6 @@ import { profileItemsAtom, useSocialActions } from "@/hooks/use-social";
 import { PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_LABEL } from "@/lib/privacy";
 
-// A profile tab's list: the owner's completed items the viewer may see,
-// newest first, grouped by day. The diary has its own view (`diary-view.tsx`).
-
 const KIND: Partial<Record<ActivityKind, { icon: LucideIcon; verb: string; fallback: string }>> = {
   task_settled: { icon: ListChecksIcon, verb: "Settled a task", fallback: "A task" },
   habit_completed: { icon: RepeatIcon, verb: "Met a habit goal", fallback: "A habit" },
@@ -37,14 +34,12 @@ const EMPTY: Record<Feed, { icon: LucideIcon; self: string; other: string }> = {
 const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
-/** "Tue, Nov 3, 2026" for a local date, read as that calendar day. */
 const formatLocalDay = (date: LocalDate) => dayFormat.format(new Date(`${date}T12:00:00`));
 
 export function ProfileFeed({ username, feed, self }: { username: string; feed: Feed; self: boolean }) {
   const [pages, setPages] = useState(1);
   const result = useAtomValue(profileItemsAtom({ username, feed, pages }));
   const { reload } = useSocialActions();
-  // Keep showing the pages already loaded while the next one arrives.
   const last = useRef<{ items: readonly ProfileItem[]; nextCursor: string | null } | undefined>(undefined);
   if (AsyncResult.isSuccess(result)) last.current = result.value;
   const data = last.current;
@@ -130,7 +125,6 @@ function FeedRow({ item, self }: { item: ProfileItem; self: boolean }) {
           <span>{kind.verb}</span>
           {item.plannedMinutes !== null && <span>{item.plannedMinutes} min</span>}
           <time dateTime={item.occurredAt.toISOString()}>{timeFormat.format(item.occurredAt)}</time>
-          {/* Only the owner sees who else can see it; others only get what they may see. */}
           {self && item.privacy !== "public" && (
             <span className="inline-flex items-center gap-1" title={`Who can see it: ${PRIVACY_LABEL[item.privacy]}`}>
               <PrivacyIcon className="size-3.5" />

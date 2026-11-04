@@ -7,7 +7,6 @@ import { PeopleList, PeopleLoadFailed, PeopleSection, statusOf } from "@/compone
 import { Button } from "@/components/ui/button";
 import { socialOverviewAtom, useSocialActions } from "@/hooks/use-social";
 
-/** The user's connections, newest first, each with Remove and Block. Opened from their profile. */
 export const Route = createFileRoute("/_app/connections")({
   head: () => ({ meta: [{ title: "Connections · Dueboard" }] }),
   component: Connections,

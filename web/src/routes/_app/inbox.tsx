@@ -8,24 +8,14 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-/**
- * Tibo, full-page: the same thread as the side panel. It fills the whole
- * space with no card behind it, and the top row is off: the notifications
- * bell sits in the thread's own header. Beside the thread, past a divider,
- * the Tibo section shows what Tibo is doing (`TiboSide`); Tibo's avatar and
- * the chevron right of the bell open and close it (closed by default). On phones it's a side
- * panel instead.
- */
 export const Route = createFileRoute("/_app/inbox")({
   head: () => ({ meta: [{ title: "Inbox · Dueboard" }] }),
   staticData: { topBar: { tibo: false, notifications: false } },
   component: Inbox,
 });
 
-/** Where the desktop section's open state is kept, in this browser only. */
 const SIDE_KEY = "dueboard:tibo-side";
 
-/** Whether the Tibo section is open on desktop: closed unless you left it open. */
 function useSideOpen(): [boolean, (open: boolean) => void] {
   const [open, setOpen] = React.useState(() => {
     try {
@@ -39,21 +29,17 @@ function useSideOpen(): [boolean, (open: boolean) => void] {
     try {
       window.localStorage.setItem(SIDE_KEY, next ? "open" : "closed");
     } catch {
-      // Private mode or blocked storage: it just isn't remembered.
     }
   }, []);
   return [open, set];
 }
 
 function Inbox() {
-  // The whole screen, less the thin top margin and the page's bottom padding
-  // (on phones, the floating nav's room).
   const height = "h-[calc(100dvh-6.375rem-env(safe-area-inset-bottom))] md:h-[calc(100dvh-0.75rem)]";
 
   return (
     <main className="flex flex-1 flex-col pt-1.5">
       <h1 className="sr-only">Inbox</h1>
-      {/* The thread comes over Tibo's WebSocket, so it renders in the browser only. */}
       <ClientOnly fallback={<div className={height} />}>
         <InboxSplit className={height} />
       </ClientOnly>
@@ -76,7 +62,6 @@ function InboxSplit({ className }: { className: string }) {
         className="h-full min-w-0 flex-1 text-foreground"
         headerEnd={[
           <NotificationsButton key="notifications" />,
-          // Right of the bell, on a disc of its own.
           <button
             key="tibo-side"
             type="button"
@@ -95,7 +80,6 @@ function InboxSplit({ className }: { className: string }) {
       />
       {!isMobile && open && (
         <>
-          {/* The divider. */}
           <div aria-hidden="true" className="w-px shrink-0 bg-tibo-side-border" />
           <aside
             id="tibo-side"

@@ -10,7 +10,7 @@ import {
   ASK_VISITOR_IDLE_MS,
 } from "../domain/ask-constants.ts";
 import type { AskPort } from "../domain-client.ts";
-import { museSpark } from "../muse.ts";
+import { logMuseUsage, museOptions, museSpark } from "../muse.ts";
 import { askMessages, askSystemPrompt } from "./prompt.ts";
 import {
   ASK_QUESTION_PATH,
@@ -25,13 +25,6 @@ import {
 } from "./protocol.ts";
 import { verifyTurnstile } from "./turnstile.ts";
 
-/**
- * Everything the Ask agent can reach (architecture.md §7.6). The AgentWorker
- * builds it from its own env (`askEnv` in `../agent.ts`) and hands the agent
- * only this: the model, its rate limit, Turnstile's keys and `ASK`, the two
- * domain calls about one owner's Ask page. No `DOMAIN` binding, no Tibo, no
- * memory index, no other agents. `./walls.test.ts` keeps it that way.
- */
 export interface AskEnv {
   readonly AI: Ai;
   readonly AI_GATEWAY_ID: string;
@@ -39,30 +32,13 @@ export interface AskEnv {
   readonly ASK_RATE_LIMIT: RateLimit;
   readonly TURNSTILE_SITE_KEY: string;
   readonly TURNSTILE_SECRET: string;
-  /** Hostnames a Turnstile token must come from; empty only under `alchemy dev`. */
   readonly TURNSTILE_HOSTNAMES: readonly string[];
 }
 
-/** The longest a model call may take before the visitor sees "unavailable right now". */
 const MODEL_TIMEOUT_MS = 60_000;
 
-/**
- * One visitor's exchange with one owner's Ask page: a Durable Object per
- * (owner, visitor), named by the website's proxy (`askInstanceName`), never
- * by the client. It holds that visitor's questions and answers, whether
- * they passed Turnstile, and their hourly count, all wiped after
- * `ASK_VISITOR_IDLE_MS` without a visit. HTTP only: no WebSocket, no state
- * sync, no tools. Each question is a single model turn over the owner's
- * instructions and shared context, fetched fresh through `ASK.prepare`,
- * which also gates it (on, no block; then the signed-in visitor's own AI
- * quota, or the owner's Ask pool for a logged-out visitor).
- *
- * The exported class is the subclass in `../agent.ts`, which narrows the
- * Worker's env to `AskEnv` before this constructor runs.
- */
 export class AskAgentBase extends Agent<AskEnv> {
   private migrated = false;
-  /** A question is being answered; another one from this visitor waits its turn (in memory, like Tibo's). */
   private answering = false;
 
   private get db() {
@@ -81,22 +57,18 @@ export class AskAgentBase extends Agent<AskEnv> {
     return sql;
   }
 
-  /** Who this instance is for, from its own name. */
   private get pair(): { readonly username: string; readonly visitor: AskVisitor } | null {
     return parseAskInstanceName(this.name);
   }
 
-  /** No WebSockets: the page talks over HTTP. */
   onConnect(connection: Connection) {
     connection.close(4004, "Not supported");
   }
 
-  /** No Agent state; browsers may not write any. */
   validateStateChange() {
     throw new Error("Read-only");
   }
 
-  /** `/agents/ask-agent/<name>/thread` (GET) and `…/ask` (POST). */
   async onRequest(request: Request): Promise<Response> {
     const pair = this.pair;
     if (!pair) return new Response("Not found", { status: 404 });
@@ -120,13 +92,6 @@ export class AskAgentBase extends Agent<AskEnv> {
     return new Response("Not found", { status: 404 });
   }
 
-  /**
-   * Answers one question, checking in order: the question itself, one at a
-   * time, the visitor's burst and hourly limits, Turnstile (first question
-   * of the session), then the owner's page (on, no block, and who pays has
-   * room). Only then the model, once. The answer is charged and logged
-   * after it shows.
-   */
   private async ask(
     pair: { readonly username: string; readonly visitor: AskVisitor },
     body: Partial<AskRequest> | null,
@@ -161,12 +126,15 @@ export class AskAgentBase extends Agent<AskEnv> {
 
       let answer: string;
       try {
-        const { text, finishReason } = await generateText({
+        const started = Date.now();
+        const { text, finishReason, usage } = await generateText({
           model: museSpark(this.env, `ask:${pair.username}`, "ask"),
           system: askSystemPrompt(prepared.owner),
           messages: askMessages(this.exchanges(), question),
+          providerOptions: museOptions("ask"),
           abortSignal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
         });
+        logMuseUsage("ask", usage, Date.now() - started);
         answer = text.trim().slice(0, ASK_ANSWER_MAX_LENGTH);
         if (answer.length === 0) console.error("Ask answer was empty", finishReason);
       } catch (error) {
@@ -187,7 +155,6 @@ export class AskAgentBase extends Agent<AskEnv> {
         `DELETE FROM ask_exchanges WHERE id NOT IN (SELECT id FROM ask_exchanges ORDER BY created_at DESC LIMIT ?)`,
         ASK_THREAD_MAX,
       );
-      // Charged once it's shown. A failure here is logged, not the visitor's problem.
       await this.env.ASK.record(pair.username, visitorUserId, question, answer).catch((error: unknown) =>
         console.error("Ask record failed", error),
       );
@@ -197,11 +164,6 @@ export class AskAgentBase extends Agent<AskEnv> {
     }
   }
 
-  /**
-   * The visitor's burst limit (`LIMITS.ask`, by visitor, and by IP when
-   * logged out so a fresh cookie doesn't reset it) and their hourly count
-   * on this owner's page.
-   */
   private async withinLimits(visitor: AskVisitor, ip: string | null) {
     const hourAgo = Date.now() - 60 * 60_000;
     this.db.exec(`DELETE FROM ask_attempts WHERE at < ?`, hourAgo);
@@ -218,7 +180,6 @@ export class AskAgentBase extends Agent<AskEnv> {
     return true;
   }
 
-  /** One question that reached the model, for the hourly count. */
   private countAttempt() {
     this.db.exec(`INSERT INTO ask_attempts (at) VALUES (?)`, Date.now());
   }
@@ -249,9 +210,6 @@ export class AskAgentBase extends Agent<AskEnv> {
     );
   }
 
-  // ─── Expiry: wiped after an hour without a visit ──────────────────────────
-
-  /** Marks a visit, and arms the expiry check if it isn't already. */
   private async touch() {
     this.setMeta("last_active", String(Date.now()));
     if (this.meta("expiry_armed") !== "1") {
@@ -260,11 +218,6 @@ export class AskAgentBase extends Agent<AskEnv> {
     }
   }
 
-  /**
-   * The expiry alarm: idle long enough, everything this instance stored
-   * goes (its exchange, Turnstile pass, counts and schedules); otherwise
-   * it checks again when the visitor's hour would be up.
-   */
   async expire() {
     const lastActive = Number(this.meta("last_active") ?? 0);
     const idleFor = Date.now() - lastActive;
@@ -276,7 +229,6 @@ export class AskAgentBase extends Agent<AskEnv> {
   }
 }
 
-/** Visitor text, trimmed, without control characters other than newlines and tabs. */
 const clean = (text: string) => text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim();
 
 const refusalStatus = (error: AskRefusal) =>

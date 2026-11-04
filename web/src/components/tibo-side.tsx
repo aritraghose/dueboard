@@ -39,10 +39,6 @@ import { useTiboThread } from "@/hooks/use-tibo";
 import { useActivityLog, useCurrentActivity, useLastActivity, useSentFiles } from "@/hooks/use-tibo-activity";
 import { cn } from "@/lib/utils";
 
-// The inbox's Tibo section, beside the thread (a side panel on phones):
-// what Tibo is doing right now, the files shared in the chat, what it
-// remembers, and everything it has done.
-
 export type TiboSideTab = "overview" | "media" | "memory" | "activity";
 
 const TABS: readonly { value: TiboSideTab; label: string; icon: LucideIcon }[] = [
@@ -52,11 +48,6 @@ const TABS: readonly { value: TiboSideTab; label: string; icon: LucideIcon }[] =
   { value: "activity", label: "Activity", icon: HistoryIcon },
 ];
 
-/**
- * The section: Tibo itself at the top (avatar, name, whether it's around
- * and what it's doing), then the tabs. `trailing` sits at the end of
- * Tibo's row (the phone panel's close chevron).
- */
 export function TiboSide({ className, trailing }: { className?: string; trailing?: React.ReactNode }) {
   const [tab, setTab] = React.useState<TiboSideTab>("overview");
   const index = TABS.findIndex((entry) => entry.value === tab);
@@ -65,7 +56,6 @@ export function TiboSide({ className, trailing }: { className?: string; trailing
       <div className="shrink-0 border-b border-tibo-side-border">
         <TiboProfile trailing={trailing} />
         <div className="px-4 pb-3">
-          {/* A cream pill slides to the open tab. */}
           <TabsList className="relative grid h-auto w-full grid-cols-4 gap-0 rounded-2xl group-data-horizontal/tabs:h-auto border border-bubble-tibo-border/70 bg-tibo-soft/80 p-1 shadow-inner dark:border-white/8 dark:bg-white/4">
             <span
               aria-hidden="true"
@@ -103,11 +93,6 @@ export function TiboSide({ className, trailing }: { className?: string; trailing
   );
 }
 
-/**
- * Tibo at the top of the section: its avatar on its cream disc with a
- * status dot (teal and pulsing while it works, green when it's around, gray
- * while the app is offline), its name, and what it's up to.
- */
 function TiboProfile({ trailing }: { trailing?: React.ReactNode }) {
   const { connected } = useTiboThread();
   const { current } = useCurrentActivity();
@@ -144,12 +129,10 @@ function TiboProfile({ trailing }: { trailing?: React.ReactNode }) {
   );
 }
 
-/** A placeholder shape while something loads, in Tibo's soft teal. */
 function Bone({ className }: { className?: string }) {
   return <Skeleton className={cn("bg-tibo-soft", className)} />;
 }
 
-/** "Couldn't load …", with a way to try again. */
 function LoadFailed({ what, retry }: { what: string; retry: () => void }) {
   return (
     <div className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-bubble-tibo-border p-4 text-sm">
@@ -160,8 +143,6 @@ function LoadFailed({ what, retry }: { what: string; retry: () => void }) {
     </div>
   );
 }
-
-// ─── Words and icons ─────────────────────────────────────────────────────────
 
 const KIND_ICON: Record<TiboActivityKind, LucideIcon> = {
   reply: MessageCircleIcon,
@@ -179,7 +160,6 @@ const KIND_ICON: Record<TiboActivityKind, LucideIcon> = {
   step: CircleIcon,
 };
 
-/** "<1s", "4s", "1m 20s" */
 function formatDuration(ms: number): string {
   if (ms < 1000) return "<1s";
   const seconds = Math.round(ms / 1000);
@@ -190,7 +170,6 @@ function formatDuration(ms: number): string {
 
 const timeLabel = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
-/** "just now", "4 min ago", "2 h ago", or the date. */
 function ago(at: number, now: number): string {
   const minutes = Math.floor((now - at) / 60_000);
   if (minutes < 1) return "just now";
@@ -200,7 +179,6 @@ function ago(at: number, now: number): string {
   return new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-/** Re-renders every `ms` while `on`, for ticking clocks. */
 function useNow(on: boolean, ms = 1000) {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -231,13 +209,6 @@ function StatusIcon({ activity, className }: { activity: TiboActivity; className
   );
 }
 
-// ─── Overview ────────────────────────────────────────────────────────────────
-
-/**
- * The "now" card's icon: what the current step is (a pen while writing, a
- * wrench for a tool…) on Tibo's teal, softly pulsing; a coffee cup while it
- * has nothing to do.
- */
 function NowIcon({ current }: { current: TiboActivity | null }) {
   const Icon = current ? KIND_ICON[current.kind] : CoffeeIcon;
   return (
@@ -255,18 +226,12 @@ function NowIcon({ current }: { current: TiboActivity | null }) {
   );
 }
 
-/**
- * What Tibo is doing right now, large: the step, the thread it's part of,
- * how long it's been at it, and the steps so far. When it's free, when it
- * was last busy. Then the last few things it did.
- */
 function Overview({ showActivity }: { showActivity: () => void }) {
   const { current, thread } = useCurrentActivity();
   const last = useLastActivity();
   const now = useNow(true, current ? 1000 : 30_000);
   const { threads, status } = useActivityLog();
   const recent = threads.filter((entry) => entry.status !== "running").slice(0, 4);
-  // What it last did: live from this visit, else the newest from the log.
   const lastDone = last ?? recent[0] ?? null;
   const loadingRecent = status === "loading" && recent.length === 0;
 
@@ -364,9 +329,6 @@ function Overview({ showActivity }: { showActivity: () => void }) {
   );
 }
 
-// ─── Media ───────────────────────────────────────────────────────────────────
-
-/** Photos and files sent in the chat, newest first. */
 function Media() {
   const { files, failed, retry } = useSentFiles();
   const [viewing, setViewing] = React.useState<TiboSentFile | null>(null);
@@ -453,8 +415,6 @@ function Media() {
   );
 }
 
-// ─── Activity ────────────────────────────────────────────────────────────────
-
 const dayLabel = (at: number) => {
   const date = new Date(at);
   const today = new Date();
@@ -465,7 +425,6 @@ const dayLabel = (at: number) => {
   return date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 };
 
-/** Everything Tibo did, newest first, by day: each thread with its steps on a rail. */
 function ActivityLog() {
   const { threads, status, hasMore, loadOlder, retry } = useActivityLog();
   const running = threads.some((thread) => thread.status === "running");
@@ -552,7 +511,6 @@ function ActivityThreadView({ thread, now }: { thread: TiboActivityThread; now: 
           {thread.detail ? `. ${thread.detail}` : ""}
         </p>
         {thread.steps.length > 0 && (
-          // The steps on a rail, in order.
           <ol className="mt-2 flex flex-col gap-1.5 border-l border-tibo-side-border pl-3">
             {thread.steps.map((step) => (
               <li key={step.id} className="relative flex flex-col">

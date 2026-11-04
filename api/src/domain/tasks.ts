@@ -33,12 +33,6 @@ import {
   titleSearchPattern,
 } from "./tasks-rules.ts";
 
-// The user's tasks (planning.md "Tasks", architecture.md §4). A task shows
-// on its assigned date, its deadline date, or both; with neither it's
-// "unscheduled". Settling one records a `task_settled` activity in the same
-// transaction, and un-settling or deleting it removes that row. Goals
-// linked to the task move with it (`goals.ts`), in the same transaction.
-
 export const toTask = (row: TaskRow): Task =>
   new Task({
     id: row.id,
@@ -64,7 +58,6 @@ const checkDates = (dates: Pick<TaskRow, "assignedDate" | "deadlineDate">) => {
   return message ? Effect.fail(new InvalidInput({ message })) : Effect.void;
 };
 
-/** One of the user's tasks, locked for the rest of the transaction when `lock` is set. */
 const findTask = (tx: Executor, userId: string, id: string, lock = false) =>
   Effect.gen(function* () {
     const query = tx
@@ -75,8 +68,6 @@ const findTask = (tx: Executor, userId: string, id: string, lock = false) =>
     if (!row) return yield* notFound(id);
     return row;
   });
-
-// ─── Writes ──────────────────────────────────────────────────────────────────
 
 export const createTask = Effect.fn("createTask")(function* (
   userId: string,
@@ -99,10 +90,7 @@ export const createTask = Effect.fn("createTask")(function* (
         })
         .from(UserSettings)
         .where(eq(UserSettings.userId, userId));
-      // `Bootstrap` creates the row on every app load, so a missing one is a bug.
       if (!settings) return yield* Effect.die(new Error(`User ${userId} has no settings`));
-      // Set from JS rather than `now()`, so `created_at` has millisecond
-      // precision and `ListTasks` cursors (which go through `Date`) are exact.
       const now = new Date();
       const [row] = yield* tx
         .insert(Tasks)
@@ -127,11 +115,6 @@ export const createTask = Effect.fn("createTask")(function* (
   );
 });
 
-/**
- * Changes the fields `input` names: a missing key is left as it is, and
- * `null` clears an optional field. The dates rule is checked against the
- * merged values.
- */
 export const updateTask = Effect.fn("updateTask")(function* (
   userId: string,
   input: UpdateTaskInput,
@@ -156,11 +139,6 @@ export const updateTask = Effect.fn("updateTask")(function* (
   );
 });
 
-/**
- * Moves a task to `status`. Settling sets `settled_at` and records a
- * `task_settled` activity; leaving `settled` clears both. `idle` ⇄ `working`
- * only relabels.
- */
 export const setTaskStatus = Effect.fn("setTaskStatus")(function* (
   userId: string,
   input: SetTaskStatusInput,
@@ -197,10 +175,6 @@ export const setTaskStatus = Effect.fn("setTaskStatus")(function* (
   );
 });
 
-/**
- * Deletes a task, its activity and its goal links. A settled task's goals
- * lose what it added first. Returns the id.
- */
 export const deleteTask = Effect.fn("deleteTask")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -216,19 +190,12 @@ export const deleteTask = Effect.fn("deleteTask")(function* (userId: string, id:
   );
 });
 
-// ─── Reads ───────────────────────────────────────────────────────────────────
-
 export const getTask = Effect.fn("getTask")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
   return toTask(yield* findTask(db, userId, id).pipe(orDieOnDbError));
 });
 
-/**
- * The tasks whose assigned or deadline date is `date`, split into open and
- * settled, each with the date roles that apply. Overdue tasks are not
- * carried over.
- */
 export const listTasksForDay = Effect.fn("listTasksForDay")(function* (
   userId: string,
   date: LocalDate,
@@ -253,10 +220,6 @@ export const listTasksForDay = Effect.fn("listTasksForDay")(function* (
   return new TasksForDay({ date: day, open, settled });
 });
 
-/**
- * Upcoming's tasks: open ones assigned or due on a day of `[from, last]`,
- * per day, oldest first. A task with both dates in range shows on both.
- */
 export const listOpenTasksBetween = (userId: string, from: LocalDate, last: LocalDate) =>
   Effect.gen(function* () {
     const db = yield* Database;
@@ -290,11 +253,6 @@ export const listOpenTasksBetween = (userId: string, from: LocalDate, last: Loca
 
 const unscheduled = and(isNull(Tasks.assignedDate), isNull(Tasks.deadlineDate));
 
-/**
- * Open tasks with no dates, oldest first. With `settledOn`, also the
- * unscheduled tasks settled on that day in the user's zone (the day of
- * their `task_settled` activity), most recent first.
- */
 export const listUnscheduledTasks = Effect.fn("listUnscheduledTasks")(function* (
   userId: string,
   input: ListUnscheduledTasksInput,
@@ -337,7 +295,6 @@ export const listUnscheduledTasks = Effect.fn("listUnscheduledTasks")(function* 
   });
 });
 
-/** `/tasks`: the user's tasks, newest first, filtered and paginated by cursor. */
 export const listTasks = Effect.fn("listTasks")(function* (userId: string, input: ListTasksInput) {
   const filters = yield* decodeInput(ListTasksInput)(input);
   const { from, to } = filters;

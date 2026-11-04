@@ -17,19 +17,8 @@ import { type LocalDate, formatDay } from "@/lib/dates";
 import { checkInWindow, oldestCheckInDay, progressHint } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 
-// `/now`'s habits for the selected day. A due habit is a card: tapping it
-// adds a check-in, its ring fills a segment, and once the target is met it
-// lingers full for a moment and moves to Settled. Undo is the small arrow on
-// the card, the "Undo" in the toast, or the arrow on a settled row. Every
-// habit wears the `habit` tag's color.
-
 const cardTransition = { type: "spring", stiffness: 520, damping: 42, mass: 0.8 } as const;
 
-/**
- * The due cards, one per row, then "All habits today checked" when nothing is
- * left (unless `allChecked` is off, as in `/now`'s All view, where the
- * habits tab says it).
- */
 export function DueHabits({
   habits,
   date,
@@ -185,7 +174,6 @@ function Streak({ count }: { count: number }) {
   );
 }
 
-/** Edit or pause, from a card's corner. */
 function HabitMenu({ habit, onEdit }: { habit: Habit; onEdit: (habit: Habit) => void }) {
   const actions = useHabitActions();
   const pause = async () => {
@@ -226,10 +214,6 @@ function HabitMenu({ habit, onEdit }: { habit: Habit; onEdit: (habit: Habit) => 
   );
 }
 
-/**
- * Every due habit is done. When the user's own tap got here, rings spread
- * from the check once; with reduced motion it just appears.
- */
 function AllChecked({ count, celebrate, onDay }: { count: number; celebrate: boolean; onDay: string }) {
   const reduced = useReducedMotion();
   return (
@@ -260,7 +244,6 @@ function AllChecked({ count, celebrate, onDay }: { count: number; celebrate: boo
   );
 }
 
-/** The day's completed habits: compact rows, each with an undo. */
 export function SettledHabits({
   habits,
   date,

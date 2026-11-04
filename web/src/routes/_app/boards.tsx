@@ -4,7 +4,6 @@ import { Page, PageHeader } from "@/components/page";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BOARDS, BOARD_EXTRAS } from "@/lib/nav";
 
-/** Every board as a card, then Profile, Leaderboard, Discover and Settings; each card opens its page. */
 export const Route = createFileRoute("/_app/boards")({
   head: () => ({ meta: [{ title: "Boards · Dueboard" }] }),
   component: Boards,
@@ -35,11 +34,6 @@ function Boards() {
   return (
     <Page>
       <PageHeader title="Boards" />
-      {/*
-        Square cards, close together, sized to the window: ten of them, in
-        rows of two on narrow screens and five from `md`, so no card is left alone
-        on a row. The cap keeps each card at most 13rem wide.
-      */}
       <ul className="mx-auto grid w-full max-w-[27rem] grid-cols-2 gap-2.5 md:max-w-[67rem] md:grid-cols-5 md:gap-3">
         {cards.map(({ key, link, label, description, icon: Icon }) => (
           <li key={key}>

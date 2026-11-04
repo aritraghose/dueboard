@@ -7,7 +7,6 @@ export function getRouter() {
   return createRouter({
     routeTree,
     scrollRestoration: true,
-    // Routes without their own error or not-found screen use these.
     defaultErrorComponent: DefaultCatchBoundary,
     defaultNotFoundComponent: NotFound,
   });

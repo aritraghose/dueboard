@@ -54,12 +54,10 @@ const STATUS_LABEL: Record<HabitStatus, string> = { active: "Active", paused: "P
 const STATUSES = ["active", "paused", "archived"] as const;
 
 type HabitsSearch = {
-  /** Absent means `active`. */
   status?: Exclude<HabitStatus, "active"> | undefined;
 };
 
 export const Route = createFileRoute("/_app/habits")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): HabitsSearch => ({
     status: search.status === "paused" || search.status === "archived" ? search.status : undefined,
   }),
@@ -199,16 +197,10 @@ function HabitRow({ summary, today, onEdit }: { summary: HabitSummary; today: Lo
   );
 }
 
-/**
- * The last 12 weeks of taps: a column per week (Sunday on top), shaded by
- * how much of a day's share of the target was done. Days before the start
- * date are faint; days after today are left blank.
- */
 function Heatmap({ summary, today }: { summary: HabitSummary; today: LocalDate }) {
   const { habit, history } = summary;
   const counts = useMemo(() => new Map(history.map((day) => [day.date, day.count])), [history]);
   const first = addDays(startOfWeek(today), -7 * (HABIT_HISTORY_WEEKS - 1));
-  // A day's full share: the target itself when it's per day, otherwise any tap.
   const perDay = habit.scheduleKind === "specific_days" || (habit.periodUnit === "day" && habit.periodLength === 1) ? habit.targetCount : 1;
   const days = Array.from({ length: HABIT_HISTORY_WEEKS * 7 }, (_, i) => addDays(first, i));
   const total = history.reduce((sum, day) => sum + day.count, 0);
@@ -246,7 +238,6 @@ function Heatmap({ summary, today }: { summary: HabitSummary; today: LocalDate }
   );
 }
 
-/** Edit, pause or resume, archive or restore, and delete (after a confirmation). */
 function HabitActions({ summary, onEdit }: { summary: HabitSummary; onEdit: () => void }) {
   const { habit } = summary;
   const actions = useHabitActions();

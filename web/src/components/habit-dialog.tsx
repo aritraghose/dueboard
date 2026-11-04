@@ -18,11 +18,6 @@ import type { LocalDate } from "@/lib/dates";
 import { DEFAULT_DRAFT, type ScheduleDraft, draftFor, draftProblem, toSchedule } from "@/lib/habits";
 import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 
-// The habit card: one form for creating and editing a habit, saved as a
-// whole with "Initialize Habit" or "Save". Unlike the task card, a habit's fields
-// hang together (the schedule especially), so nothing saves halfway. The
-// goals it moves save with it, after the habit itself.
-
 type Values = {
   title: string;
   description: string;
@@ -41,7 +36,6 @@ export function HabitDialog({
 }: {
   target: HabitDialogTarget | null;
   open: boolean;
-  /** Changes on every open, so the form starts from the target each time. */
   version: number;
   onOpenChange: (open: boolean) => void;
   today: LocalDate;
@@ -104,7 +98,6 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
     const schedule = toSchedule(values.schedule);
     let exit;
     if (habit) {
-      // Only what changed: a new schedule replaces the rule, so an untouched one isn't sent.
       const scheduleChanged = JSON.stringify(schedule) !== JSON.stringify(toSchedule(draftFor(habit)));
       exit = await actions.update({
         id: habit.id,
@@ -126,7 +119,6 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
       });
     }
     if (Exit.isSuccess(exit) && goals.drafts && goals.saved) {
-      // The habit is saved either way; a goal that didn't link says so.
       const failure = await syncGoals("habit", exit.value.id, goals.saved, goals.drafts);
       if (failure) toast.error(failure);
     }
@@ -232,7 +224,6 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
         </Row>
       </dl>
 
-      {/* One row on every width: Cancel at the left edge, the action at the right. */}
       <DialogFooter className="mx-0! mb-0! flex-row! flex-wrap items-center justify-between!">
         {error && (
           <p role="alert" className="basis-full text-sm text-destructive">

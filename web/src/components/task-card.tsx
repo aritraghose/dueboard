@@ -40,11 +40,6 @@ import { type LocalDate, formatDay, localDateOf } from "@/lib/dates";
 import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 import { formatMinutes } from "@/lib/tasks";
 
-// The task card: a dialog with every field of one task, the unset ones as
-// "Not set". Editing saves each change as it's made (the goals it moves
-// too); creating collects the fields and adds the task with "Add task" (or
-// Enter in the title), then links its goals.
-
 const STATUS_LABEL: Record<TaskStatus, string> = { idle: "Idle", working: "Working", settled: "Settled" };
 type Field = Exclude<keyof UpdateTaskInput, "id"> | "status";
 type Values = Pick<Task, Field>;
@@ -59,7 +54,6 @@ export function TaskDialog({
 }: {
   target: TaskDialogTarget | null;
   open: boolean;
-  /** Changes on every open, so a new task always starts blank. */
   version: number;
   onOpenChange: (open: boolean) => void;
   today: LocalDate;
@@ -122,7 +116,6 @@ function CreateTask({ date, today, onClose }: { date: LocalDate | null; today: L
       expectedMinutes: values.expectedMinutes,
     });
     if (Exit.isSuccess(exit) && goals.drafts && goals.drafts.length > 0) {
-      // The task is added either way; a goal that didn't link says so.
       const failure = await syncGoals("task", exit.value.id, [], goals.drafts);
       if (failure) toast.error(failure);
     }
@@ -172,7 +165,6 @@ function CreateTask({ date, today, onClose }: { date: LocalDate | null; today: L
         goals={<ItemGoalsField itemType="task" value={goals.drafts} onChange={goals.edit} />}
       />
 
-      {/* One row on every width: Cancel at the left edge, the action at the right. */}
       <DialogFooter className="mx-0! mb-0! flex-row! flex-wrap items-center justify-between!">
         {errors.form && (
           <p role="alert" className="basis-full text-sm text-destructive">
@@ -194,14 +186,10 @@ function EditTask({ initial, today, onClose }: { initial: Task; today: LocalDate
   const actions = useTaskActions();
   const timeZone = useTimeZone();
   const fetched = useAtomValue(taskAtom(initial.id));
-  // The newest copy wins: what the list passed in, the refetched task, or
-  // what the last save returned (it arrives before the refetch does).
   const [saved, setSaved] = useState<Task>(initial);
   const server = AsyncResult.isSuccess(fetched) ? fetched.value : undefined;
   const base = server && server.updatedAt >= saved.updatedAt ? server : saved;
 
-  // Changes show at once: each field's unsaved value sits in `draft` until
-  // its save answers. Only the latest save of a field clears it.
   const [draft, setDraft] = useState<Partial<Values>>({});
   const latestSave = useRef(new Map<Field, number>());
   const task = { ...base, ...draft } as Task;
@@ -274,7 +262,6 @@ function EditTask({ initial, today, onClose }: { initial: Task; today: LocalDate
   );
 }
 
-/** Every field but the title, the unset ones as "Not set". */
 function TaskFields({
   mode,
   values,
@@ -288,7 +275,6 @@ function TaskFields({
   errors: Errors;
   today: LocalDate;
   onChange: (field: Field, patch: Partial<Values>) => unknown;
-  /** The "Moves goal" field. */
   goals: ReactNode;
 }) {
   return (
@@ -378,7 +364,6 @@ function TaskFields({
   );
 }
 
-/** An open task's goals, saved as each change is made. */
 function TaskGoals({ taskId }: { taskId: string }) {
   const goals = useItemGoalDrafts("task", taskId);
   const syncGoals = useItemGoalSync();
@@ -425,7 +410,6 @@ function Row({ label, error, children }: { label: string; error: string | undefi
   );
 }
 
-/** The title, edited in place. Enter or leaving the field saves; Escape undoes. */
 function TitleField({
   value,
   onSave,
@@ -479,7 +463,6 @@ function TitleField({
   );
 }
 
-/** Saves when the field is left. */
 function DescriptionField({
   value,
   onSave,

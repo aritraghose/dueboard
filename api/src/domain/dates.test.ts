@@ -54,7 +54,6 @@ describe("isValidTimeZone", () => {
 });
 
 describe("localDateOf", () => {
-  // 2026-11-01 03:30 UTC
   const instant = new Date(Date.UTC(2026, 10, 1, 3, 30));
 
   test("uses the zone's calendar day", () => {
@@ -94,7 +93,6 @@ describe("addDays", () => {
   });
 
   test("ignores DST changes", () => {
-    // US DST ends on 2026-11-01; date math is calendar math.
     expect(addDays(d("2026-10-31"), 2)).toBe(d("2026-11-02"));
     expect(addDays(d("2026-03-07"), 1)).toBe(d("2026-03-08"));
   });
@@ -102,10 +100,10 @@ describe("addDays", () => {
 
 describe("startOfWeek", () => {
   test("returns the Sunday on or before the date", () => {
-    expect(startOfWeek(d("2026-11-01"))).toBe(d("2026-11-01")); // Sunday
-    expect(startOfWeek(d("2026-11-07"))).toBe(d("2026-11-01")); // Saturday
-    expect(startOfWeek(d("2026-11-04"))).toBe(d("2026-11-01")); // Wednesday
-    expect(startOfWeek(d("2027-01-01"))).toBe(d("2026-12-27")); // across a year
+    expect(startOfWeek(d("2026-11-01"))).toBe(d("2026-11-01"));
+    expect(startOfWeek(d("2026-11-07"))).toBe(d("2026-11-01"));
+    expect(startOfWeek(d("2026-11-04"))).toBe(d("2026-11-01"));
+    expect(startOfWeek(d("2027-01-01"))).toBe(d("2026-12-27"));
   });
 });
 

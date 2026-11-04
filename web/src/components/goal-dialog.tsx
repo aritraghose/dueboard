@@ -41,22 +41,14 @@ import type { LocalDate } from "@/lib/dates";
 import type { LinkDraft } from "@/lib/goals";
 import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 
-// The goal card: one form for creating and editing a goal, saved as a whole
-// with "Add goal" or "Save", like the habit card. Its links panel (count
-// goals only) is part of the form: links are added, changed and removed
-// when the form saves.
-
 const MODE_LABEL: Record<GoalProgressMode, string> = { count: "Count", slider: "Slider" };
 
 type Values = {
   name: string;
   description: string;
   mode: GoalProgressMode;
-  /** Text, so a half-typed number can sit in the field. */
   target: string;
-  /** A count (as text) or a percent (as text). */
   progress: string;
-  /** Whether the user set the progress here, so Save sends it. */
   progressTouched: boolean;
   targetDate: LocalDate | null;
   privacy: Privacy;
@@ -72,7 +64,6 @@ export function GoalDialog({
 }: {
   target: GoalDialogTarget | null;
   open: boolean;
-  /** Changes on every open, so the form starts from the target each time. */
   version: number;
   onOpenChange: (open: boolean) => void;
   today: LocalDate;
@@ -90,10 +81,8 @@ export function GoalDialog({
   );
 }
 
-/** Loads the goal's links, then shows the form. */
 function EditGoal({ goal, today, onClose }: { goal: Goal; today: LocalDate; onClose: () => void }) {
   const result = useAtomValue(goalAtom(goal.id));
-  // The links the form starts from: read once, so a refetch doesn't undo the user's edits.
   const [links, setLinks] = useState<readonly LinkDraft[] | null>(null);
   const summary = AsyncResult.isSuccess(result) ? result.value : undefined;
   useEffect(() => {
@@ -108,7 +97,6 @@ function EditGoal({ goal, today, onClose }: { goal: Goal; today: LocalDate; onCl
       );
     }
   }, [summary, links]);
-  // The freshest copy of the goal (its progress may have moved since the list loaded).
   const fresh = summary && summary.goal.updatedAt >= goal.updatedAt ? summary.goal : goal;
   return (
     <GoalForm
@@ -131,7 +119,6 @@ function GoalForm({
   onClose,
 }: {
   goal: Goal | null;
-  /** `null` while an existing goal's links load. */
   savedLinks: readonly LinkDraft[] | null;
   failed?: boolean;
   today: LocalDate;
@@ -175,7 +162,6 @@ function GoalForm({
     setError(null);
   };
 
-  // Progress follows the open goal until the user sets it here.
   useEffect(() => {
     if (goal && !values.progressTouched && values.mode === goal.progressMode) {
       setValues((current) => ({ ...current, progress: valueText(goal) }));
@@ -195,7 +181,6 @@ function GoalForm({
 
   const switchMode = (mode: GoalProgressMode) => {
     if (mode === values.mode) return;
-    // Show the progress carried over, as the API will carry it.
     const percent =
       values.mode === "slider" ? progress : targetValid && targetCount > 0 ? Math.min(100, Math.floor((progress * 100) / targetCount)) : 0;
     const carried = mode === "slider" ? percent : targetValid ? Math.floor((percent * targetCount) / 100) : 0;
@@ -240,7 +225,6 @@ function GoalForm({
     if (Exit.isFailure(created)) return failureMessage(created, "Couldn't add the goal.");
     if (values.mode !== "count") return null;
     const linked = await saveLinks(created.value.id, []);
-    // The goal exists either way; say what didn't link and close.
     if (linked !== null) {
       toast.error(linked);
       return null;
@@ -250,7 +234,6 @@ function GoalForm({
 
   const saveEdit = async (saved: Goal, description: string | null): Promise<string | null> => {
     const before = savedLinks ?? [];
-    // Unlink first: a goal with links can't switch to a slider.
     for (const link of before) {
       if (links?.some((other) => other.itemType === link.itemType && other.itemId === link.itemId)) continue;
       const exit = await actions.unlink({ goalId: saved.id, itemType: link.itemType, itemId: link.itemId });
@@ -459,7 +442,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** Delete, after a confirmation; shared by the goal card and `/goals`. */
 export function DeleteGoalDialog({
   goal,
   onOpenChange,

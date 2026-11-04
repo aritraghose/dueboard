@@ -3,10 +3,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { initials } from "@/lib/people";
 import { cn } from "@/lib/utils";
 
-/**
- * Someone's Google picture, or their initials while it loads or when
- * there's none. `no-referrer`, so Google never learns which page showed it.
- */
 export function PersonAvatar({ person, className }: { person: Person; className?: string }) {
   return (
     <Avatar className={cn("size-9", className)}>

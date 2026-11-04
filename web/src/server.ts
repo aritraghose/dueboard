@@ -17,30 +17,12 @@ import { TIBO_AGENT, TIBO_FILES_PATH, TIBO_FILE_MAX_BYTES } from "@dueboard/api/
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import { env } from "./env.ts";
 
-/**
- * The Worker's entry: TanStack Start's default handler, plus a same-origin
- * proxy for Tibo (`api/src/tibo/TiboAgent.ts`) and the public Ask page
- * (`api/src/ask/AskAgent.ts`). `TiboThread` talks to
- * `/agents/tibo-agent/<name>` over a WebSocket and the Ask page to
- * `/agents/ask-agent/<username>/…` over HTTP; this forwards both to the
- * private `AGENT` service binding. It runs before Start, so the
- * WebSocket upgrade response reaches the browser untouched.
- *
- * Every request is limited per IP before any session lookup (architecture.md
- * §9): `/agents/*` by `AGENT_RATE_LIMIT`, Better Auth's routes by their own
- * `AUTH_RATE_LIMIT` (`routes/api/auth/$.ts`), and the rest (`/rpc`, pages,
- * server functions) by `WEB_RATE_LIMIT`. Request bodies are capped at
- * `MAX_REQUEST_BODY_BYTES`.
- */
 export default createServerEntry({
   async fetch(request) {
     const { pathname } = new URL(request.url);
-    // Cloudflare sets it on every incoming request, so clients can't spoof it.
     const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
 
     if (pathname === "/agents" || pathname.startsWith("/agents/")) {
-      // Showing a thread loads each of its images: those reads count
-      // against the page-load budget, not the agent's tighter one.
       const fileRead = request.method === "GET" && isTiboFilePath(pathname);
       const { success } = await (fileRead ? env.WEB_RATE_LIMIT : env.AGENT_RATE_LIMIT).limit({ key: ip });
       if (!success) return tooManyRequests();
@@ -50,16 +32,11 @@ export default createServerEntry({
     if (pathname !== "/api/auth" && !pathname.startsWith("/api/auth/")) {
       const { success } = await env.WEB_RATE_LIMIT.limit({ key: ip });
       if (!success) return tooManyRequests();
-      // `/rpc` and server functions change data on the user's behalf: only
-      // this site's own pages may send them. SameSite cookies already keep
-      // other sites out; this also covers sibling subdomains. Better Auth
-      // checks its own routes against `AUTH_BASE_URL`.
       if (!SAFE_METHODS.has(request.method) && !sameOrigin(request)) {
         return new Response("Forbidden", { status: 403 });
       }
     }
 
-    // Files are bigger than every other body, so this has its own cap.
     if (pathname === ASK_DOCUMENT_CONVERT_PATH) return await convertAskDocument(request);
 
     const limited = await limitBody(request);
@@ -70,17 +47,11 @@ export default createServerEntry({
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-/** `/agents/tibo-agent/<name>/files/<id>`: one of the user's chat files. */
 const isTiboFilePath = (pathname: string) => {
   const [, , agent, , route, id, ...more] = pathname.split("/");
   return agent === TIBO_AGENT && route === TIBO_FILES_PATH && id !== undefined && id !== "" && more.length === 0;
 };
 
-/**
- * The request came from one of this site's pages, or from no browser page
- * at all (no `Origin` and no cross-site `Sec-Fetch-Site`; such a client
- * holds no one's cookies).
- */
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (origin !== null) return origin === new URL(request.url).origin;
@@ -94,11 +65,6 @@ const tooManyRequests = () =>
     headers: { "retry-after": "60" },
   });
 
-/**
- * The request with its body read into memory, or a 413 when it's over
- * `MAX_REQUEST_BODY_BYTES`. Reads the stream itself rather than trusting
- * `content-length`, which chunked requests don't send.
- */
 async function limitBody(request: Request, max = MAX_REQUEST_BODY_BYTES): Promise<Request | Response> {
   if (request.body === null) return request;
   const tooLarge = () => new Response("Request body too large.", { status: 413 });
@@ -129,8 +95,6 @@ async function limitBody(request: Request, max = MAX_REQUEST_BODY_BYTES): Promis
 async function proxyAgent(request: Request): Promise<Response> {
   const url = new URL(request.url);
 
-  // Browsers send cookies on cross-site WebSocket handshakes, so only accept
-  // requests from this site's own pages.
   if (!sameOrigin(request)) return new Response("Forbidden", { status: 403 });
 
   const [, , agent, name, ...rest] = url.pathname.split("/");
@@ -139,23 +103,15 @@ async function proxyAgent(request: Request): Promise<Response> {
   const userId = await getOnboardedUserId(request);
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
-  // `/agents/tibo-agent/<name>/…`: only Tibo, and only the signed-in user's
-  // own instance, whatever name the browser asked for.
   if (agent !== TIBO_AGENT) return new Response("Not found", { status: 404 });
   url.pathname = ["", "agents", agent, encodeURIComponent(userId), ...rest].join("/");
 
-  // A WebSocket upgrade has no body: pass it through untouched.
   if (request.headers.get("upgrade") !== null) return await env.AGENT.fetch(new Request(url, request));
 
-  // HTTP never carries the user's cookies past here: the agent knows who
-  // it is from its pinned name alone.
   const headers = new Headers(request.headers);
   headers.delete("cookie");
   headers.delete("authorization");
 
-  // `POST files`: a file for Tibo's chat (architecture.md §7.9). Only from
-  // this site's own pages (an `Origin` is required), under the per-user
-  // burst limit, and at most `TIBO_FILE_MAX_BYTES`, counted as it streams in.
   const upload = request.method === "POST" && rest.length === 1 && rest[0] === TIBO_FILES_PATH;
   if (upload) {
     if (request.headers.get("origin") !== url.origin) return new Response("Forbidden", { status: 403 });
@@ -172,16 +128,6 @@ async function proxyAgent(request: Request): Promise<Response> {
   );
 }
 
-/**
- * `/agents/ask-agent/<username>/thread|ask`: the public Ask page
- * (architecture.md §7.6), with its own rules. No sign-in is needed. The
- * instance is computed here from the owner's username and the visitor
- * (their user id when signed in and onboarded, else a random id in an
- * HttpOnly cookie this sets), never taken from the browser. HTTP only, body
- * capped, and the visitor's cookies are not passed on: the agent learns who
- * is asking only from its name. The origin check and the per-IP limit
- * (`AGENT_RATE_LIMIT`) ran before this.
- */
 async function proxyAsk(request: Request, url: URL, segment: string, rest: string[]): Promise<Response> {
   const notFound = () => new Response("Not found", { status: 404 });
   if (request.headers.get("upgrade") !== null) return notFound();
@@ -193,7 +139,6 @@ async function proxyAsk(request: Request, url: URL, segment: string, rest: strin
   try {
     username = askUsername(decodeURIComponent(segment));
   } catch {
-    // A malformed escape: no such page.
   }
   if (!username) return notFound();
 
@@ -217,7 +162,6 @@ async function proxyAsk(request: Request, url: URL, segment: string, rest: strin
     }),
   );
   if (userId || cookie) return response;
-  // A new logged-out visitor: name them for next time.
   const withCookie = new Response(response.body, response);
   withCookie.headers.append(
     "set-cookie",
@@ -226,14 +170,6 @@ async function proxyAsk(request: Request, url: URL, segment: string, rest: strin
   return withCookie;
 }
 
-/**
- * `POST /api/ask-documents/convert`: a PDF for the signed-in user's Ask page
- * (Settings → Ask page), turned into text with Workers AI's `toMarkdown`
- * (embedded images skipped, no metadata). Nothing is stored here: the
- * owner reviews the text and saves it with the `AddAskDocument` RPC. Same
- * origin only, onboarded users only, `ASK_DOCUMENT_RATE_LIMIT` per user,
- * at most `ASK_DOCUMENT_MAX_BYTES`, and only real PDFs (`%PDF-`).
- */
 async function convertAskDocument(request: Request): Promise<Response> {
   const answer = (body: AskConversion, status = 200) => Response.json(body, { status });
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -268,19 +204,16 @@ async function convertAskDocument(request: Request): Promise<Response> {
   }
 }
 
-/** The file's name as the browser sent it (URI-encoded), tidied, or a plain default. */
 function fileName(header: string | null): string {
   let name = "";
   try {
     name = decodeURIComponent(header ?? "");
   } catch {
-    // A malformed escape: use the default.
   }
   name = name.replace(/[\u0000-\u001F\u007F/\\]/g, "").trim().slice(0, ASK_DOCUMENT_NAME_MAX_LENGTH).trim();
   return name || "Document.pdf";
 }
 
-/** One cookie's value from the request, or `null`. */
 function readCookie(request: Request, name: string): string | null {
   for (const part of (request.headers.get("cookie") ?? "").split(";")) {
     const [key, ...value] = part.trim().split("=");
@@ -289,13 +222,6 @@ function readCookie(request: Request, name: string): string | null {
   return null;
 }
 
-/**
- * The signed-in user's id, if they finished onboarding. Same check as the
- * API's RPC middleware, through Better Auth's `get-session` over the `API`
- * service binding, and like it from the database rather than the 5-minute
- * cookie cache: a session revoked or deleted with its account (whose Tibo
- * the wipe cron is about to destroy) can't open an agent again.
- */
 async function getOnboardedUserId(request: Request): Promise<string | null> {
   const url = new URL("/api/auth/get-session", request.url);
   url.searchParams.set("disableCookieCache", "true");

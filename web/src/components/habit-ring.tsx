@@ -1,10 +1,6 @@
 import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// A habit's progress as a ring in the color of the nearest `data-tag`
-// (the `habit` tag's): one segment per tap up to 12, a smooth arc above
-// that. A met target shows a check in the middle; otherwise the taps so far.
-
 const MAX_SEGMENTS = 12;
 
 export function HabitRing({
@@ -23,7 +19,6 @@ export function HabitRing({
   const circumference = 2 * Math.PI * radius;
   const complete = done >= target;
   const segmented = target > 1 && target <= MAX_SEGMENTS;
-  // Gaps between segments, in px along the circle; fewer segments get wider gaps.
   const gap = segmented ? Math.min(6, circumference / target / 3) : 0;
   const segment = circumference / target;
   const center = size / 2;

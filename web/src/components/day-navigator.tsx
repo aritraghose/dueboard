@@ -15,11 +15,6 @@ import {
   relativeDay,
 } from "@/lib/dates";
 
-// The two date pieces of `/now`: a small clock at the top center (today and
-// the user's local time) and the day stepper heading the tasks card (the
-// selected day, with ← and → around it).
-
-/** Today's date and the user's local time, ticking every second. */
 export function NowClock({ today, timeZone }: { today: LocalDate | null; timeZone: string }) {
   const now = useNow(1000);
   if (!today || !now) {
@@ -43,11 +38,6 @@ export function NowClock({ today, timeZone }: { today: LocalDate | null; timeZon
   );
 }
 
-/**
- * The tasks card's heading, centered: "Today" (or "Yesterday", "Tomorrow",
- * or the date further out) between ← and →, with the date under
- * "Yesterday" and "Tomorrow".
- */
 export function DayStepper({
   date,
   today,

@@ -13,10 +13,6 @@ import { cn } from "@/lib/utils";
 
 const DEBOUNCE_MS = 300;
 
-/**
- * A person in a list: picture, name and @username linking to their
- * profile, then `actions`. A little smaller on phones, actions included.
- */
 export function PersonRow({ person, children }: { person: Person; children?: ReactNode }) {
   return (
     <li className="-mx-1.5 flex items-center gap-3 rounded-xl px-1.5 py-2.5 transition-colors hover:bg-tibo-soft/45 max-md:gap-2.5 max-md:py-2">
@@ -40,11 +36,6 @@ export function PersonRow({ person, children }: { person: Person; children?: Rea
   );
 }
 
-/**
- * Find people by name (any part) or username (exact or the start of it)
- * and connect from the results: a roomy search field in the message box's
- * colors, with the results in a card below.
- */
 export function PeopleSearch() {
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");

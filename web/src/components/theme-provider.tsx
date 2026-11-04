@@ -4,8 +4,6 @@ export type Theme = "dark" | "light" | "system";
 
 export const THEME_STORAGE_KEY = "dueboard-theme";
 
-// Runs in <head> before the first paint, so the page never flashes the wrong
-// theme. Keep it in sync with `applyTheme` below.
 export const themeScript = `(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(t!=="dark"&&t!=="light"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.classList.add(t)}catch(e){}})()`;
 
 type ThemeProviderState = {
@@ -37,7 +35,6 @@ export function ThemeProvider({
   useEffect(() => {
     applyTheme(theme);
     if (theme !== "system") return;
-    // Follow the OS while on "system", e.g. when it switches at sunset.
     const media = window.matchMedia(systemQuery);
     const onChange = () => applyTheme("system");
     media.addEventListener("change", onChange);

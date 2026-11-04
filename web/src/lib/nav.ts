@@ -14,9 +14,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-// The app's navigation, shared by the desktop sidebar, the phone tab bar and
-// the Boards page.
-
 export type NavItem = {
   readonly to:
     | "/now"
@@ -35,7 +32,6 @@ export type NavItem = {
   readonly icon: LucideIcon;
 };
 
-/** The top of the sidebar, and the phone tab bar (with Profile after it). */
 export const MAIN_NAV: readonly NavItem[] = [
   { to: "/now", label: "Now", icon: HouseIcon },
   { to: "/inbox", label: "Inbox", icon: MessageCircleIcon },
@@ -43,11 +39,9 @@ export const MAIN_NAV: readonly NavItem[] = [
 ];
 
 export type Board = NavItem & {
-  /** What the board holds, for its card on the Boards page. */
   readonly description: string;
 };
 
-/** Every board: cards on `/boards`, and Boards' subsection in the expanded sidebar. */
 export const BOARDS: readonly Board[] = [
   {
     to: "/tasks",
@@ -89,17 +83,10 @@ export const BOARDS: readonly Board[] = [
 
 export const SETTINGS_NAV: NavItem = { to: "/settings", label: "Settings", icon: SettingsIcon };
 
-/** Finding people and answering requests. In the desktop sidebar after Boards (not the phone tab bar). */
 export const DISCOVER_NAV: NavItem = { to: "/discover", label: "Discover", icon: SearchIcon };
 
-/** Points among connections or everyone. In the desktop sidebar after Discover. */
 export const LEADERBOARD_NAV: NavItem = { to: "/leaderboard", label: "Leaderboard", icon: TrendingUpIcon };
 
-/**
- * The cards `/boards` shows after the boards: places that aren't boards but
- * are handy to reach from there. Profile is added by the page (it needs the
- * username).
- */
 export const BOARD_EXTRAS: readonly Board[] = [
   {
     to: "/leaderboard",

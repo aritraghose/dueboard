@@ -1,28 +1,22 @@
-// Building what the model sees for one turn (architecture.md §7.3). Built
-// from scratch every turn, never from the whole history. Pure, so it can be
-// tested and extended without the Durable Object.
-//
-// Sections, in order: the persona, the facts of right now, the today
-// snapshot (`./snapshot.ts`), the story so far and relevant memories
-// (`./recall.ts`), then the recent messages. Everything fits a token budget
-// (`CONTEXT_BUDGET_TOKENS`): sections are capped where they're built, and
-// the recent window drops its oldest messages (never below
-// `MIN_RECENT_MESSAGES`) to fit what's left. Tools come on top.
-
 import type { FilePart, ModelMessage, TextPart } from "ai";
 import { fileLine } from "./attachment-rules.ts";
 import { joinBubbles, reactionLine } from "./bubbles.ts";
 import { CONTEXT_BUDGET_TOKENS, MIN_RECENT_MESSAGES, estimateTokens } from "./memory-rules.ts";
-import { heldItem, type TiboConfirm, type TiboMessage, type TiboQuote, type TiboReceipt } from "./protocol.ts";
+import { imageRef } from "./image-rules.ts";
+import {
+  heldItem,
+  type TiboAttachment,
+  type TiboConfirm,
+  type TiboMessage,
+  type TiboQuote,
+  type TiboReceipt,
+} from "./protocol.ts";
 
-/** The user facts every turn needs, read from Postgres. */
 export interface TiboProfile {
   readonly firstName: string;
-  /** IANA zone. */
   readonly timeZone: string;
 }
 
-/** A titled block of the system prompt, such as a today snapshot or memories. */
 export interface ContextSection {
   readonly title: string;
   readonly body: string;
@@ -32,26 +26,17 @@ export interface TurnInputs {
   readonly persona: string;
   readonly profile: TiboProfile;
   readonly now: Date;
-  /** The latest messages, oldest first (`RECENT_WINDOW`). */
   readonly recent: readonly TiboMessage[];
-  /** Added after the persona and the date, in order. */
   readonly sections?: readonly ContextSection[];
-  /** Tokens for the system prompt and the messages together (`CONTEXT_BUDGET_TOKENS`). */
   readonly budget?: number;
-  /**
-   * What the memory jobs noted about a sent file, by id, so an older
-   * message's files still say what was in them. `null`: no note (yet).
-   */
   readonly fileNote?: (attachmentId: string) => string | null;
 }
 
-/** Estimated tokens per part of the context, logged in development to tune the budget. */
 export interface ContextSizes {
   readonly persona: number;
   readonly sections: Readonly<Record<string, number>>;
   readonly recent: number;
   readonly recentMessages: number;
-  /** Recent messages left out to stay in budget. */
   readonly dropped: number;
   readonly total: number;
 }
@@ -62,10 +47,8 @@ export interface TurnContext {
   readonly sizes: ContextSizes;
 }
 
-/** Messages of the thread the model sees verbatim. */
 export const RECENT_WINDOW = 40;
 
-/** "Tuesday, November 4, 2026, 2:05 PM" in the user's zone. */
 export const formatNow = (now: Date, timeZone: string) =>
   new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -96,7 +79,6 @@ export const buildTurnContext = ({
   const blocks = [facts, ...sections].map(({ title, body }) => ({ title, text: `## ${title}\n${body}` }));
   const system = [persona, ...blocks.map((block) => block.text)].join("\n\n");
 
-  // The recent window gets what's left, newest messages first.
   const room = budget - estimateTokens(system);
   let window = recent;
   let messages = toModelMessages(window, fileNote);
@@ -122,7 +104,6 @@ export const buildTurnContext = ({
 const messageTokens = (messages: readonly ModelMessage[]) =>
   messages.reduce((sum, message) => sum + estimateTokens(typeof message.content === "string" ? message.content : JSON.stringify(message.content)), 0);
 
-/** How a reply's quote reads to the model ("you" is Tibo). */
 const quoteLine = ({ role, body }: TiboQuote) =>
   `[Replying to ${role === "tibo" ? "your" : "my own"} earlier message: "${body.replace(/\s+/g, " ")}"]`;
 
@@ -133,10 +114,6 @@ const CONFIRM_NOTE: Record<TiboConfirm["status"], string> = {
   expired: "Expired without an answer, so these didn't happen",
 };
 
-/**
- * What Tibo did in a turn, as an app note after its bubbles: the receipts
- * and any actions held for the user. `null` when the turn changed nothing.
- */
 export const actionNote = (receipts: readonly TiboReceipt[] = [], confirm?: TiboConfirm): string | null => {
   const lines = [
     ...(receipts.length > 0
@@ -147,14 +124,17 @@ export const actionNote = (receipts: readonly TiboReceipt[] = [], confirm?: Tibo
   return lines.length > 0 ? lines.join("\n") : null;
 };
 
-/**
- * The thread as chat turns: a Tibo turn's bubbles become one assistant
- * message in the delimiter format (led by its reaction line if Tibo reacted
- * to the message before it), back-to-back user messages one user message,
- * and system events user-side notes the model can tell apart. A turn's
- * receipts and held actions follow it as such a note, so Tibo knows what it
- * did without being tempted to write receipts itself.
- */
+export const madeImagesNote = (
+  attachments: readonly TiboAttachment[],
+  fileNote: (attachmentId: string) => string | null,
+): string | null => {
+  const lines = attachments.map((attachment) => {
+    const prompt = fileNote(attachment.id);
+    return `You sent a picture you made (ref ${imageRef(attachment.id)})${prompt ? `, from the prompt: "${prompt.replace(/\s+/g, " ").trim()}"` : ""}.`;
+  });
+  return lines.length > 0 ? lines.join("\n") : null;
+};
+
 export const toModelMessages = (
   recent: readonly TiboMessage[],
   fileNote: (attachmentId: string) => string | null = () => null,
@@ -162,14 +142,24 @@ export const toModelMessages = (
   const out: { role: "user" | "assistant"; parts: string[]; turnId: string; reaction?: string }[] = [];
   let reaction: string | undefined;
   const rows = recent.flatMap((message): TiboMessage[] => {
-    const note = message.role === "tibo" ? actionNote(message.receipts, message.confirm) : null;
-    return note === null
-      ? [message]
-      : [message, { id: `${message.id}:actions`, turnId: `${message.id}:actions`, role: "system_event", body: note, createdAt: message.createdAt }];
+    if (message.role !== "tibo") return [message];
+    const appNote = (suffix: string, body: string): TiboMessage => ({
+      id: `${message.id}:${suffix}`,
+      turnId: `${message.id}:${suffix}`,
+      role: "system_event",
+      body,
+      createdAt: message.createdAt,
+    });
+    const note = actionNote(message.receipts, message.confirm);
+    const made = madeImagesNote(message.attachments ?? [], fileNote);
+    const { attachments: _pictures, ...bubble } = message;
+    return [
+      ...(bubble.body ? [bubble] : []),
+      ...(made ? [appNote("images", made)] : []),
+      ...(note ? [appNote("actions", note)] : []),
+    ];
   });
   for (const message of rows) {
-    // Only Tibo's own reactions (on user messages) go back to the model; the
-    // user's reactions to Tibo stay in the UI.
     if (message.role === "user") reaction = message.reaction;
     const role = message.role === "tibo" ? "assistant" : "user";
     const body =
@@ -178,9 +168,9 @@ export const toModelMessages = (
         : [
             ...(message.replyTo ? [quoteLine(message.replyTo)] : []),
             ...(message.body ? [message.body] : []),
-            // Files read as lines naming them (and what was in them, once noted);
-            // the newest ones' contents are added by `withFiles`.
-            ...(message.attachments ?? []).map((attachment) => fileLine({ ...attachment, note: fileNote(attachment.id) })),
+            ...(message.attachments ?? []).map((attachment) =>
+              fileLine({ ...attachment, note: fileNote(attachment.id), ref: imageRef(attachment.id) }),
+            ),
           ].join("\n");
     const last = out.at(-1);
     if (last && last.role === role && (role === "user" || last.turnId === message.turnId)) {
@@ -190,7 +180,6 @@ export const toModelMessages = (
       if (role === "assistant") reaction = undefined;
     }
   }
-  // The model's window starts with a user turn.
   while (out[0]?.role === "assistant") out.shift();
   return out.map(({ role, parts, reaction: emoji }) =>
     role === "assistant"
@@ -199,12 +188,6 @@ export const toModelMessages = (
   );
 };
 
-/**
- * The context with files added to its last message, the user's latest
- * (the files they just sent): the images and PDFs themselves, or a text
- * file's text. Added after the budget was worked out: files have their own
- * caps (`TURN_FILE_MAX_BYTES`, `TURN_FILE_TEXT_MAX_LENGTH`).
- */
 export const withFiles = (messages: readonly ModelMessage[], parts: readonly (TextPart | FilePart)[]): ModelMessage[] => {
   const last = messages.at(-1);
   if (parts.length === 0 || !last || last.role !== "user") return [...messages];

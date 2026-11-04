@@ -20,11 +20,6 @@ import { formatDay, formatDayLong, relativeDay } from "@/lib/dates";
 import { PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_LABEL } from "@/lib/privacy";
 
-// A diary (`/diary`, and under the graph on `/@username`): the owner's days,
-// newest first, each a card with its entries grouped by type and timed.
-// What a viewer may see is decided by `GetDiary`; the owner also sees each
-// non-public entry's privacy.
-
 type Group = "tasks" | "habits" | "goals" | "sessions" | "notes";
 
 const GROUPS: { key: Group; label: string; icon: LucideIcon }[] = [
@@ -47,7 +42,6 @@ const GROUP_OF: Partial<Record<ActivityKind, Group>> = {
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
-/** What happened, beside the title: "Reached 40%", "Stopped after 12 min". */
 const entryDetail = ({ kind, meta }: DiaryEntry): string | null => {
   switch (kind) {
     case "habit_completed":
@@ -80,33 +74,27 @@ export function DiaryView({
   onShowLatest,
 }: {
   username: string;
-  /** The viewer owns this diary. */
   self: boolean;
   today: LocalDate;
-  /** Start on this day (or the nearest earlier one with entries). */
   from: LocalDate | null;
   onShowLatest: () => void;
 }) {
-  // Back to one page whenever the starting day changes.
   const [paging, setPaging] = useState({ from, pages: 1 });
   const pages = paging.from === from ? paging.pages : 1;
   const result = useAtomValue(diaryAtom({ username, from, pages }));
   const { reload } = useSocialActions();
-  // Keep the pages already shown while the next one loads (not across a jump).
   const last = useRef<{ from: LocalDate | null; days: readonly DiaryDay[]; nextCursor: LocalDate | null } | undefined>(undefined);
   if (AsyncResult.isSuccess(result)) last.current = { from, ...result.value };
   const data = last.current?.from === from ? last.current : undefined;
   const loading = !AsyncResult.isSuccess(result);
   const loadMore = () => setPaging({ from, pages: pages + 1 });
 
-  // A jump scrolls the diary into view once the day has loaded.
   const top = useRef<HTMLDivElement>(null);
   const jumped = data !== undefined && from !== null;
   useEffect(() => {
     if (jumped) top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [jumped, from]);
 
-  // Older days load as the end of the list comes into view.
   const end = useRef<HTMLDivElement>(null);
   const canLoadMore = Boolean(data?.nextCursor) && !loading;
   useEffect(() => {
@@ -227,7 +215,6 @@ function DiaryRow({ entry, self }: { entry: DiaryEntry; self: boolean }) {
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="min-w-0 break-words">{entry.title ?? FALLBACK_TITLE[entry.kind] ?? "Untitled"}</span>
         {detail && <span className="text-sm text-muted-foreground">{detail}</span>}
-        {/* Only the owner sees who else can see it; others only get what they may see. */}
         {self && entry.privacy !== "public" && (
           <span
             className="inline-flex items-center gap-1 self-center text-xs text-muted-foreground"

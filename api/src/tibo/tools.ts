@@ -1,13 +1,3 @@
-// Tibo's tools (architecture.md §7.4): everything the user can do in the
-// app, done as that user through the DomainWorker, which runs the same RPC
-// handlers as the UI. Every call passes the agent's own user id; no tool
-// takes a user id from the model.
-//
-// Tools answer with short JSON the model reads back. Failures are answers
-// too (`{ error }`), never thrown, so the model can explain or retry. Changes
-// leave a receipt on the turn (`TurnLedger`); destructive or surprising ones
-// are held for the user instead (`./actions.ts` has the design).
-
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { DomainBinding, DomainResult, TiboRpc } from "../domain-client.ts";
@@ -15,6 +5,8 @@ import { BULK_LIMIT, MAX_TOOL_CALLS, receiptFor, type DomainCall, type TurnLedge
 import { dayLabel } from "./dates.ts";
 import { TIBO_MEMORY_KINDS, type TiboMemoryKind } from "./protocol.ts";
 import { REMINDER_MESSAGE_MAX } from "./reminders.ts";
+import { IMAGES_PER_DAY, IMAGE_PROMPT_MAX, IMAGE_REFERENCES_MAX } from "./image-rules.ts";
+import { IMAGE_SHAPES, type ImageShape } from "../muse-image.ts";
 import { RELAY_MESSAGE_MAX_LENGTH } from "../domain/relay-constants.ts";
 import {
   IMPORTANCE,
@@ -42,56 +34,41 @@ import {
   theirWords,
 } from "./views.ts";
 
-/** What the tools act with, for one turn. */
 export interface ToolRuntime {
   readonly domain: DomainBinding;
-  /** The agent's own user: the only user Tibo acts as. */
   readonly userId: string;
   readonly timeZone: string;
-  /** Today in the user's zone, `YYYY-MM-DD`. */
   readonly today: string;
   readonly ledger: TurnLedger;
-  /**
-   * Answers the pending action from `confirm_action`. Only offered when the
-   * turn was started by a message the user typed after the action was held.
-   */
   readonly confirmPending: ((approve: boolean) => Promise<unknown>) | null;
-  /** Long-term memory (`./recall.ts`), bound to this turn by the agent. */
   readonly memory: MemoryTools;
-  /** Reminders the user asks for (`./reminders.ts`), bound to this turn by the agent. */
   readonly reminders: ReminderTools;
-  /** Messages to and from other people through Tibo (`./relays.ts`), bound to this turn by the agent. */
   readonly relays: RelayTools;
+  readonly images: ImageTools;
 }
 
-/**
- * The relay tools' backends. Sending and answering are checked by the
- * agent: the words must be the user's own (`ownWords` in `./relays.ts`).
- */
+export interface ImageTools {
+  make(input: { prompt: string; from: readonly string[]; shape: ImageShape }): Promise<unknown>;
+}
+
 export interface RelayTools {
-  /** Sends the user's message to `to` (a username or a connection's name) through their Tibo. */
   send(to: string, message: string): Promise<unknown>;
-  /** Sends the user's answer back to whoever sent the relay. */
   answer(relayId: string, answer: string): Promise<unknown>;
   decline(relayId: string): Promise<unknown>;
   list(): Promise<unknown>;
 }
 
-/** The reminder tools' backends. Their answers go to the model as they are. */
 export interface ReminderTools {
   set(input: { date: string; time: string; about: string; message: string }): Promise<unknown>;
   list(): Promise<unknown>;
   cancel(input: { id: string }): Promise<unknown>;
 }
 
-/** The memory tools' backends. Their answers go to the model as they are. */
 export interface MemoryTools {
   search(input: { query: string; from?: string; to?: string }): Promise<unknown>;
   remember(input: { text: string; kind: TiboMemoryKind; replaces: readonly string[] }): Promise<unknown>;
   forget(input: { refs: readonly string[]; about?: string }): Promise<unknown>;
 }
-
-// ─── Reactivity keys of the app's lists (`web/src/hooks/use-*.ts`) ─────────
 
 const TASKS = ["tasks"];
 const HABITS = ["habits"];
@@ -99,8 +76,6 @@ const GOALS = ["goals"];
 const NOTES = ["notes"];
 const SESSIONS = ["sessions", "active-session"];
 const TAGS = ["tags"];
-
-// ─── Shared schemas ────────────────────────────────────────────────────────
 
 const day = z
   .string()
@@ -112,11 +87,8 @@ const privacy = z
   .describe("Who can see it. Leave it out to use the user's default. Public needs the user's go-ahead.");
 const importance = z.enum(IMPORTANCE).describe("Importance, as the app's stars: low (1) to critical (5)");
 
-// ─── Running domain calls ──────────────────────────────────────────────────
-
 const NOT_AVAILABLE = "Couldn't reach the app just now. Nothing was changed. Say so and suggest trying again.";
 
-/** One RPC as the user. A broken call comes back as a failure, never a throw. */
 const run = async (rt: ToolRuntime, rpc: TiboRpc, payload: unknown): Promise<DomainResult> => {
   try {
     return await rt.domain.run(rt.userId, rpc, payload);
@@ -131,17 +103,11 @@ const failed = (result: Extract<DomainResult, { ok: false }>) => ({
   code: result.error.tag,
 });
 
-/** A read: the view of its value, or the error. */
 const read = async <A>(rt: ToolRuntime, rpc: TiboRpc, payload: unknown, view: (value: A) => unknown) => {
   const result = await run(rt, rpc, payload);
   return result.ok ? view(result.value as A) : failed(result);
 };
 
-/**
- * A change. Runs now unless it must wait: `hold` says why it always does
- * (delete, stop, public), and past `BULK_LIMIT` changes in one reply
- * anything else waits too. A held change is answered `needs_confirmation`.
- */
 const change = async <A>(
   rt: ToolRuntime,
   call: DomainCall & { rpc: TiboRpc; hold?: boolean; receipt?: (value: A) => string; view?: (value: A) => unknown },
@@ -164,7 +130,6 @@ const change = async <A>(
   return { status: "done", ...(view ? { result: view(value) } : {}) };
 };
 
-/** A tool counted against `MAX_TOOL_CALLS`; past it, the call is refused. */
 const counted =
   <I, O>(rt: ToolRuntime, execute: (input: I) => Promise<O>) =>
   async (input: I) => {
@@ -177,7 +142,6 @@ const counted =
     return execute(input);
   };
 
-/** A task by id, for the summaries of held changes. */
 const taskById = async (rt: ToolRuntime, taskId: string) => {
   const result = await run(rt, "GetTask", { id: taskId });
   return result.ok ? (result.value as TaskJson) : null;
@@ -192,13 +156,11 @@ const sessionName = (session: SessionJson) => (session.label ? `“${session.lab
 
 const NO_SESSION = { error: "There's no running or paused session." };
 
-/** Every tool, bound to this turn. */
 export function tiboTools(rt: ToolRuntime): ToolSet {
   const today = rt.today;
   const when = (date: string | null | undefined) => (date ? dayLabel(date, today) : "No date");
 
   const tools = {
-    // ─── Tasks ───────────────────────────────────────────────────────────
     list_tasks: tool({
       description:
         "Find the user's tasks. Pass `day` for one day's board (tasks on that day or due that day), `unscheduled: true` for tasks with no date, or any of `from`/`to`/`query`/`status` to search everything.",
@@ -358,7 +320,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
       }),
     }),
 
-    // ─── Habits ──────────────────────────────────────────────────────────
     list_habits: tool({
       description:
         "The user's habits for a day (default today): which are due, done, or not due, with progress this period. `all: true` lists every habit instead, paused ones too.",
@@ -415,7 +376,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           view: (habit) => habit,
         });
         if (!("result" in created)) return created;
-        // The schedule in the app's own words, to read back.
         const habit = created.result as HabitJson;
         const summary = await run(rt, "GetHabit", { id: habit.id });
         if (!summary.ok) return { status: "done", result: { id: habit.id, title: habit.title } };
@@ -517,7 +477,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
       }),
     }),
 
-    // ─── Goals ───────────────────────────────────────────────────────────
     list_goals: tool({
       description: "The user's goals with progress and linked habits and tasks. Filter by status if you like.",
       inputSchema: z.object({ status: z.array(z.enum(["active", "paused", "completed"])).optional() }),
@@ -666,7 +625,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
       }),
     }),
 
-    // ─── Notes ───────────────────────────────────────────────────────────
     create_note: tool({
       description: "Write a note for today: one line, at most 60 characters. Notes can only be written for today.",
       inputSchema: z.object({ body: z.string().trim().min(1).max(60), privacy: privacy.optional() }),
@@ -697,7 +655,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
       ),
     }),
 
-    // ─── Focus sessions ──────────────────────────────────────────────────
     get_active_session: tool({
       description: "The running or paused focus session, if any.",
       inputSchema: z.object({}),
@@ -793,7 +750,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
       }),
     }),
 
-    // ─── Tags ────────────────────────────────────────────────────────────
     list_tags: tool({
       description: "The user's tags (task categories), with ids for create_task and update_task.",
       inputSchema: z.object({}),
@@ -822,7 +778,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
       ),
     }),
 
-    // ─── What others share (visibility rules apply) ──────────────────────
     read_live: tool({
       description:
         "Recent activity on Live: `connections` (people the user is connected to), `mine`, or `all` (the user and their connections). Only what each person lets the user see. Other people's titles come in <their_words> tags.",
@@ -862,7 +817,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     }),
   };
 
-  // ─── Long-term memory ───────────────────────────────────────────────────
   const memoryTools = {
     search_conversation: tool({
       description:
@@ -910,9 +864,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     }),
   };
 
-  // ─── Messages to and from other people (relays) ────────────────────────
-  // Like chat between friends: no confirm step. What goes to the other
-  // person must be the user's own words, which the agent checks in code.
   const relayTools = {
     relay_message: tool({
       description:
@@ -951,7 +902,6 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     }),
   };
 
-  // ─── Answering a held action in words ──────────────────────────────────
   const reminderTools = {
     set_reminder: tool({
       description:
@@ -979,12 +929,32 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     }),
   };
 
+  const imageTools = {
+    make_image: tool({
+      description: `Make a picture and send it in the chat, with Meta's image model: when the user asks for an image, a drawing, a sticker, a wallpaper, a mockup, or to change a picture (theirs or one you made). Each costs them one more message and they get ${IMAGES_PER_DAY} a day, so only when they ask, one at a time unless they ask for more. Write \`prompt\` as a full description: subject, style, mood, colors, composition, any text to show. To change or build on pictures in the chat, put their refs in \`from\` (the ref shown with each picture, like 3f2a9c1b) and say in \`prompt\` what to change and what to keep. Never a real person's likeness unless it's the user's own photo and they asked.`,
+      inputSchema: z.object({
+        prompt: z.string().min(1).max(IMAGE_PROMPT_MAX).describe("What to draw, or what to change in the pictures in `from`"),
+        from: z
+          .array(z.string().min(1).max(40))
+          .max(IMAGE_REFERENCES_MAX)
+          .default([])
+          .describe("Refs of pictures in the chat to edit or work from, in order; empty for a new picture"),
+        shape: z
+          .enum(IMAGE_SHAPES)
+          .default("square")
+          .describe("square, portrait (phone wallpaper, poster) or landscape (desktop wallpaper, banner)"),
+      }),
+      execute: counted(rt, (input) => rt.images.make(input)),
+    }),
+  };
+
   const { confirmPending } = rt;
   return confirmPending
     ? {
         ...tools,
         ...memoryTools,
         ...reminderTools,
+        ...imageTools,
         ...relayTools,
         confirm_action: tool({
           description:
@@ -993,5 +963,5 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           execute: counted(rt, ({ approve }) => confirmPending(approve)),
         }),
       }
-    : { ...tools, ...memoryTools, ...reminderTools, ...relayTools };
+    : { ...tools, ...memoryTools, ...reminderTools, ...imageTools, ...relayTools };
 }

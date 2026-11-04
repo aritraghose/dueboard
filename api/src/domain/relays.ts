@@ -31,42 +31,21 @@ import {
 import { normalizeUsername } from "./social-rules.ts";
 import { canSpend } from "./usage.ts";
 
-// Tibo relays (architecture.md §7.5): a message one user's Tibo passes to
-// another user through theirs, and the answer back. Only the AgentWorker
-// calls these, through the DomainWorker (`../DomainWorker.ts`), with the
-// acting user's id first; a relay is only ever read or changed by its sender
-// or its recipient.
-//
-// The domain keeps the truth (status, answer, timestamps); each side's
-// `TiboAgent` shows the relay as a card and tells its user when it changes.
-// `sender_synced`/`recipient_synced` track whether each side has caught up,
-// and `sweepRelays` (every minute, from the AgentWorker's cron) expires old
-// relays and hands back the ones an agent still has to hear about.
-
 const DAY_MS = 24 * 60 * 60_000;
-/** A held delivery (someone's out of quota) is tried again this much later. */
 const HOLD_RETRY_MS = 30 * 60_000;
-/** The sweep leaves a change this long to the direct path between agents. */
 const SWEEP_GRACE_MS = 20_000;
-/** Between the sweep's tries for one relay. */
 const SWEEP_RETRY_MS = 5 * 60_000;
-/** The most relays one sweep hands out. */
 export const RELAY_SWEEP_BATCH = 100;
-/** The most relays `listRelays` returns. */
 const LIST_LIMIT = 20;
 
-/** The other side of a relay, as the acting user sees it. */
 export interface RelayPersonJson {
-  /** Their user id: for the agent to reach their Tibo, never shown to the model. */
   readonly userId: string;
   readonly username: string;
   readonly name: string;
 }
 
-/** A relay from one side's point of view, as plain JSON. */
 export interface RelayJson {
   readonly id: string;
-  /** `out`: the acting user sent it; `in`: it's for them. */
   readonly direction: "in" | "out";
   readonly person: RelayPersonJson;
   readonly message: string;
@@ -78,7 +57,6 @@ export interface RelayJson {
   readonly expiresAt: string;
 }
 
-/** A relay one side's agent still has to hear about (`sweepRelays`). */
 export interface RelaySyncJson {
   readonly id: string;
   readonly fromUserId: string;
@@ -116,7 +94,6 @@ const noOne = (input: string) =>
 
 const openStatuses = [...RELAY_OPEN_STATUS];
 
-/** Serializes relay writes for these users (the caps) until the transaction ends. */
 const lockUsers = (tx: Executor, ...userIds: string[]) =>
   Effect.forEach(
     [...new Set(userIds)].sort(),
@@ -124,12 +101,6 @@ const lockUsers = (tx: Executor, ...userIds: string[]) =>
     { discard: true },
   );
 
-/**
- * Who a relay is for. A username (`@` optional) first; failing that, when
- * `byName`, one of the sender's connections whose name matches (several
- * matches ask the user which one). Someone without a username yet can't be
- * found.
- */
 const resolveRecipient = (tx: Executor, fromUserId: string, input: string, byName: boolean) =>
   Effect.gen(function* () {
     const username = normalizeUsername(input);
@@ -162,10 +133,6 @@ const resolveRecipient = (tx: Executor, fromUserId: string, input: string, byNam
     return yield* noOne(input);
   });
 
-/**
- * Every rule a new relay from `fromUserId` to `target` must pass: blocks,
- * the recipient's policy, the caps and both quotas. Fails with the reason.
- */
 const vet = (tx: Executor, fromUserId: string, target: PersonRow & { username: string }) =>
   Effect.gen(function* () {
     const [blocks, [settings], [connected]] = yield* Effect.all([
@@ -193,7 +160,6 @@ const vet = (tx: Executor, fromUserId: string, target: PersonRow & { username: s
       self: target.id === fromUserId,
       senderBlocked: blocks.some((row) => row.blockerId === fromUserId),
       recipientBlocked: blocks.some((row) => row.blockerId === target.id),
-      // No settings row yet: the column's default.
       policy: settings?.policy ?? "connections",
       connected: connected !== undefined,
     });
@@ -225,8 +191,6 @@ const vet = (tx: Executor, fromUserId: string, target: PersonRow & { username: s
     );
     if (cap) return yield* new RelayLimitReached({ message: cap });
 
-    // Telling the recipient and telling the sender the answer are two model
-    // turns, half a message to each side each: the sender pays for both.
     if (!(yield* canSpend(fromUserId, RELAY_UNITS_PER_SIDE * 2))) {
       return yield* new RelayNotAllowed({
         message: refusalMessage("out_of_messages", target.username),
@@ -238,15 +202,9 @@ const vet = (tx: Executor, fromUserId: string, target: PersonRow & { username: s
     }
   });
 
-/** A resolved recipient with a username (onboarded). */
 const withUsername = (row: PersonRow) =>
   row.username ? Effect.succeed({ ...row, username: row.username }) : Effect.fail(noOne(""));
 
-/**
- * Whether the user could send a relay to `to` (a username, or a
- * connection's name) right now, without sending it: Tibo checks before it
- * asks the user to confirm the words. Answers who it would go to.
- */
 export const checkRelay = Effect.fn("checkRelay")(function* (fromUserId: string, to: string) {
   const input = yield* decodeInput(RelayRecipient)(to);
   const db = yield* Database;
@@ -259,12 +217,6 @@ export const checkRelay = Effect.fn("checkRelay")(function* (fromUserId: string,
   );
 });
 
-/**
- * Sends a relay from `fromUserId` to `toUsername` (exact, as `checkRelay`
- * resolved it): every rule again, then the row. The agent delivers it to
- * the recipient's Tibo next. Limited to a burst per minute (`LIMITS.relay`)
- * and `RELAYS_PER_DAY` in any 24 hours.
- */
 export const sendRelay = Effect.fn("sendRelay")(function* (fromUserId: string, input: unknown) {
   const raw = input as { toUsername?: unknown; message?: unknown } | null;
   const { toUsername, message } = yield* decodeInput(SendRelayInput)({
@@ -301,7 +253,6 @@ export const sendRelay = Effect.fn("sendRelay")(function* (fromUserId: string, i
   );
 });
 
-/** The relay with the other side's person, if the actor sent or received it. */
 const findRelay = (tx: Executor, actorId: string, relayId: string, lock = false) =>
   Effect.gen(function* () {
     const query = tx
@@ -319,7 +270,6 @@ const findRelay = (tx: Executor, actorId: string, relayId: string, lock = false)
 const decodeId = (relayId: string) =>
   decodeInput(Id)(relayId).pipe(Effect.catch(() => Effect.fail(notFound(String(relayId).slice(0, 64)))));
 
-/** One relay, from the actor's side. */
 export const getRelay = Effect.fn("getRelay")(function* (actorId: string, relayId: string) {
   const id = yield* decodeId(relayId);
   const db = yield* Database;
@@ -327,10 +277,6 @@ export const getRelay = Effect.fn("getRelay")(function* (actorId: string, relayI
   return toJson(row, actorId, person);
 });
 
-/**
- * The recipient's Tibo has the relay and is telling them. Delivering twice
- * is fine; a relay past its time expires instead (the answer says so).
- */
 export const markRelayDelivered = Effect.fn("markRelayDelivered")(function* (actorId: string, relayId: string) {
   const id = yield* decodeId(relayId);
   const db = yield* Database;
@@ -358,7 +304,6 @@ export const markRelayDelivered = Effect.fn("markRelayDelivered")(function* (act
   );
 });
 
-/** The recipient's Tibo couldn't take the relay yet (someone's out of quota): try again later. */
 export const holdRelay = Effect.fn("holdRelay")(function* (actorId: string, relayId: string) {
   const id = yield* decodeId(relayId);
   const db = yield* Database;
@@ -369,10 +314,6 @@ export const holdRelay = Effect.fn("holdRelay")(function* (actorId: string, rela
     .pipe(orDieOnDbError);
 });
 
-/**
- * The recipient closes a delivered relay: `answered` with their words, or
- * `declined`. Only the recipient may; the sender's Tibo hears next.
- */
 const closeByRecipient = (actorId: string, relayId: string, outcome: "answered" | "declined", answer: string | null) =>
   Effect.gen(function* () {
     const id = yield* decodeId(relayId);
@@ -412,21 +353,15 @@ const closedMessage = (status: RelayStatus) =>
     cancelled: "That message isn't open any more.",
   })[status];
 
-/** The recipient's answer, in words they confirmed. */
 export const answerRelay = Effect.fn("answerRelay")(function* (actorId: string, relayId: string, answer: unknown) {
   const text = yield* decodeInput(RelayText)(typeof answer === "string" ? answer.trim() : answer);
   return yield* closeByRecipient(actorId, relayId, "answered", text);
 });
 
-/** The recipient won't answer. */
 export const declineRelay = Effect.fn("declineRelay")(function* (actorId: string, relayId: string) {
   return yield* closeByRecipient(actorId, relayId, "declined", null);
 });
 
-/**
- * The actor's Tibo has caught up with the relay at `status` (shown the
- * card, told its user). A newer change keeps it owed.
- */
 export const ackRelay = Effect.fn("ackRelay")(function* (actorId: string, relayId: string, status: RelayStatus) {
   const id = yield* decodeId(relayId);
   const db = yield* Database;
@@ -445,7 +380,6 @@ export const ackRelay = Effect.fn("ackRelay")(function* (actorId: string, relayI
   ).pipe(orDieOnDbError);
 });
 
-/** The user's latest relays, sent and received, newest first. */
 export const listRelays = Effect.fn("listRelays")(function* (actorId: string) {
   const db = yield* Database;
   const rows = yield* db
@@ -467,10 +401,6 @@ export const listRelays = Effect.fn("listRelays")(function* (actorId: string) {
   });
 });
 
-/**
- * Development only (through the agent's `dev/*` routes): the sender makes
- * their open relay due now, so the next sweep expires it.
- */
 export const expireRelayNow = Effect.fn("expireRelayNow")(function* (actorId: string, relayId: string) {
   const id = yield* decodeId(relayId);
   const db = yield* Database;
@@ -483,12 +413,6 @@ export const expireRelayNow = Effect.fn("expireRelayNow")(function* (actorId: st
   if (rows.length === 0) return yield* notFound(id);
 });
 
-/**
- * Every minute (the AgentWorker's cron): expires open relays past their
- * time, then claims up to `RELAY_SWEEP_BATCH` that an agent still has to
- * hear about (left a moment for the direct path between agents, and
- * spaced out after a failed try).
- */
 export const sweepRelays = Effect.fn("sweepRelays")(function* () {
   const db = yield* Database;
   const now = new Date();
@@ -497,12 +421,10 @@ export const sweepRelays = Effect.fn("sweepRelays")(function* () {
     .set({
       status: "expired",
       senderSynced: false,
-      // A relay still pending was never shown to the recipient.
       recipientSynced: sql`${Relays.status} = 'pending'`,
     })
     .where(and(inArray(Relays.status, openStatuses), lte(Relays.expiresAt, now)))
     .pipe(orDieOnDbError);
-  // Two steps: the effect driver doesn't render a subquery inside `inArray`.
   const due = yield* db
     .select({ id: Relays.id })
     .from(Relays)
@@ -519,7 +441,6 @@ export const sweepRelays = Effect.fn("sweepRelays")(function* () {
   if (due.length === 0) return [];
   const rows = yield* db
     .update(Relays)
-    // A claim isn't a change: `updated_at` stays, so the order holds.
     .set({ retryAt: new Date(now.getTime() + SWEEP_RETRY_MS), updatedAt: sql`${Relays.updatedAt}` })
     .where(inArray(Relays.id, due.map((row) => row.id)))
     .returning({
@@ -533,18 +454,12 @@ export const sweepRelays = Effect.fn("sweepRelays")(function* () {
   return rows satisfies RelaySyncJson[];
 });
 
-/**
- * A block closes every open relay between the two, in the block's own
- * transaction. Only the blocker's Tibo hears (its cards say "cancelled");
- * the blocked user is never told, as with everything else about blocks.
- */
 export const cancelRelaysBetween = (tx: Executor, blockerId: string, blockedId: string) =>
   tx
     .update(Relays)
     .set({
       status: "cancelled",
       senderSynced: sql`${Relays.fromUserId} <> ${blockerId}`,
-      // Only a delivered relay has a card on the recipient's side.
       recipientSynced: sql`not (${Relays.toUserId} = ${blockerId} and ${Relays.status} = 'delivered')`,
       retryAt: null,
     })

@@ -1,23 +1,11 @@
-// The Ask agent's prompt (architecture.md §7.6): a spokesperson for one
-// owner that answers only from what the owner wrote for it. Pure, so it's
-// tested (`./prompt.test.ts`). The page shows it as Tibo answering for the
-// owner, but it has none of Tibo's persona, thread, memories or tools.
-
 import { ASK_CONTEXT_EXCHANGES } from "../domain/ask-constants.ts";
 import type { AskOwnerContext as AskOwnerFacts } from "../domain-client.ts";
 
-/** `&`, `<` and `>` escaped, so text can't open or close the prompt's tags. */
 export const escapeTagText = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** The line for anything the owner didn't cover. */
 export const dontKnowLine = (username: string) => `I don't know — you could reach out to @${username} directly.`;
 
-/**
- * The system prompt: the rules, then the owner's instructions and shared
- * context, each escaped inside its own tag. These are the only facts about
- * the owner the model ever sees.
- */
 export function askSystemPrompt(owner: AskOwnerFacts): string {
   const instructions = owner.instructions.trim();
   const context = owner.sharedContext.trim();
@@ -51,17 +39,11 @@ ${context ? escapeTagText(context) : "(none)"}
     .join("")}`;
 }
 
-/** An earlier exchange the model sees for follow-ups. */
 export interface PastExchange {
   readonly question: string;
   readonly answer: string;
 }
 
-/**
- * The conversation sent with a new question: the last few exchanges (so
- * "and on weekends?" makes sense), then the question. Visitor turns are
- * wrapped and escaped as untrusted.
- */
 export function askMessages(past: readonly PastExchange[], question: string) {
   const recent = past.slice(-ASK_CONTEXT_EXCHANGES);
   return [

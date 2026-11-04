@@ -31,9 +31,7 @@ import { LIMITS, bindingProps } from "./limits.ts";
 import { AI_MONTHLY_MESSAGE_QUOTA_DEFAULT, ApiRpcs, CurrentUser, Viewer } from "./rpc.ts";
 import { relations } from "./schema.ts";
 
-/** Most queued Tibo wipes handed out per call. */
 const TIBO_WIPE_BATCH = 50;
-/** Most queued Tibo events handed out per call (the cron runs every minute). */
 const TIBO_EVENT_BATCH = 200;
 
 const Units = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: AI_UNITS_PER_CHARGE_MAX }));
@@ -53,26 +51,6 @@ const usageJson = (usage: AiUsage): AiUsageJson => ({
   resetsAt: usage.resetsAt.toISOString(),
 });
 
-/**
- * The domain services for Tibo (architecture.md §3): a private Worker with
- * no HTTP routes and no URL, only Worker RPC methods, bound into the
- * AgentWorker alone (`env.DOMAIN`). Nothing in the web stack binds it, so a
- * browser has no path to it.
- *
- * `run` executes one of the same `ApiRpcs` handlers the UI calls
- * (`./handlers.ts`), as `actorUserId`, with the same Schema decoding of its
- * payload. Only the RPCs in `TIBO_RPCS` are allowed. The `TiboAgent` passes
- * its own name (its user's id) as the actor, and its tools never take a user
- * id from the model, so Tibo can only ever act as its own user.
- *
- * Every answer is plain JSON (encoded with the RPC's own schemas), since
- * Worker RPC can't carry class instances, and the AgentWorker stays free of
- * Effect.
- *
- * Why not an entrypoint on the ApiWorker: Alchemy's Effect Workers only
- * export the default entrypoint (plus Durable Object and Workflow classes),
- * and the default one is what the website binds.
- */
 export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
   "DomainWorker",
   {
@@ -87,14 +65,10 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
     const monthlyMessages = yield* Config.Int("AI_MONTHLY_MESSAGE_QUOTA").pipe(
       Config.withDefault(AI_MONTHLY_MESSAGE_QUOTA_DEFAULT),
     );
-    // Relays sent, per user (architecture.md §9): Tibo is the only way to
-    // send one, so this Worker binds their burst limit.
     const relayLimit = yield* Cloudflare.RateLimit(LIMITS.relay.name, bindingProps(LIMITS.relay));
     const services = Layer.mergeAll(
       Layer.succeed(Database, db),
       Layer.succeed(AiQuota, { monthlyMessages }),
-      // Not in `TIBO_RPCS`: connection requests, people search and account
-      // deletion. Refuse them here too; relays have their own limit.
       Layer.succeed(RateLimiter, {
         allow: (limit, userId) =>
           limit === "relay"
@@ -110,7 +84,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
       }),
     );
 
-    /** Runs a domain effect, turning defects into a logged, rejected call. */
     const exec = <A, E>(effect: Effect.Effect<A, E, Database | AiQuota | RateLimiter>) =>
       effect.pipe(
         Effect.provide(services),
@@ -122,7 +95,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
         Effect.provide(RuntimeContext.phantom),
       );
 
-    /** A domain call as `DomainResult`: its value, or its typed failure as plain data. */
     const result = <A, E>(effect: Effect.Effect<A, E, Database | AiQuota | RateLimiter>) =>
       exec(
         effect.pipe(
@@ -130,13 +102,11 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           Effect.catch((error) => Effect.succeed<DomainResult>({ ok: false, error: errorOf(plain(error)) })),
         ),
       );
-    /** The acting user's id, checked. */
     const actor = (userId: string) => Schema.decodeUnknownEffect(Id)(userId).pipe(Effect.orDie);
 
     let nextRequestId = 0;
 
     return {
-      /** One of `TIBO_RPCS`, as `actorUserId`. Typed failures come back as `ok: false`. */
       run: (actorUserId: string, name: TiboRpc, payload: unknown) =>
         Effect.gen(function* () {
           if (!TIBO_RPCS.includes(name) || !ApiRpcs.requests.has(name)) {
@@ -149,9 +119,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           const decoded = yield* Schema.decodeUnknownEffect(rpc.payloadSchema as Schema.Codec<unknown, unknown>)(payload).pipe(
             Effect.mapError((error) => ({ tag: "InvalidInput", message: error.message })),
           );
-          // Built per call, inside this request: a context captured at init
-          // would carry another request's I/O, which Workers refuse (the
-          // call hangs).
           const handlers = yield* ApiRpcs.toHandlers(apiHandlers).pipe(Effect.provide(services));
           const handler = yield* (ApiRpcs.accessHandler(name).pipe(
             Effect.provide(handlers),
@@ -161,7 +128,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
             requestId: RpcMessage.RequestId(++nextRequestId),
             headers: Headers.empty,
           }).pipe(
-            // Only `id` is read by the allowed RPCs.
             Effect.provideService(CurrentUser, { id: actorUserId, username: "" }),
             Effect.provideService(Viewer, { user: { id: actorUserId, username: "" } }),
             Effect.map((value) => ({ ok: true as const, value })),
@@ -182,7 +148,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           exec,
         ),
 
-      // ─── The AI usage ledger (`./domain/usage.ts`) ─────────────────────────
       usageGet: (userId: string) =>
         exec(
           Schema.decodeUnknownEffect(Id)(userId).pipe(
@@ -239,7 +204,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           ),
         ),
 
-      // ─── Relays (`./domain/relays.ts`), always as the acting user ──────────
       relayCheck: (fromUserId: string, to: string) =>
         result(actor(fromUserId).pipe(Effect.flatMap((id) => RelayService.checkRelay(id, to)))),
       relaySend: (fromUserId: string, toUsername: string, message: string) =>
@@ -266,12 +230,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
         result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.expireRelayNow(id, relayId)))),
       relaySweep: () => exec(RelayService.sweepRelays().pipe(Effect.map((relays) => ({ relays })))),
 
-      // ─── The Ask page (`./domain/ask.ts`): the Ask agent's only two calls ──
-      /**
-       * Whether `visitorUserId` (`null` logged out) may ask `username`'s page
-       * now, and if so the owner's display name, username, instructions and
-       * shared context: nothing else about the owner.
-       */
       askPrepare: (username: string, visitorUserId: string | null) =>
         exec(
           Effect.all({
@@ -282,7 +240,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
             Effect.orDie,
           ),
         ),
-      /** Charges, counts and logs one answer the visitor was shown. */
       askRecord: (username: string, visitorUserId: string | null, question: string, answer: string) =>
         exec(
           Effect.all({
@@ -299,7 +256,6 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           ),
         ),
 
-      // ─── Tibo's own facts, the event outbox and the wipe queue (`./domain/tibo.ts`)
       tiboProfile: (userId: string) =>
         exec(Schema.decodeUnknownEffect(Id)(userId).pipe(Effect.flatMap(TiboService.getTiboProfile), Effect.orDie)),
       tiboProactive: (userId: string) =>
@@ -331,20 +287,17 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
   ),
 ) {}
 
-/** An `ApiRpcs` handler with its payload and services erased (they're checked at runtime). */
 type AnyHandler = (
   payload: unknown,
   options: { client: Rpc.ServerClient; requestId: RpcMessage.RequestId; headers: Headers.Headers },
 ) => Effect.Effect<unknown, unknown, CurrentUser | Viewer>;
 
-/** A typed domain error as plain data (its own fields, JSON-safe), for `errorOf`. */
 function plain(error: unknown): unknown {
   if (typeof error !== "object" || error === null) return { _tag: "Error", message: String(error) };
   const { _tag, message, ...fields } = error as Record<string, unknown>;
   return { _tag, message, ...(JSON.parse(JSON.stringify(fields)) as Record<string, unknown>) };
 }
 
-/** A typed error as `{ tag, message }` plus its other fields (an `ActiveSessionExists`'s session). */
 function errorOf(encoded: unknown): DomainError {
   const { _tag, message, ...details } = (encoded ?? {}) as Record<string, unknown>;
   return {

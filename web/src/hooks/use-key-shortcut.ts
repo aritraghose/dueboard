@@ -1,10 +1,8 @@
 import { useEffect, useRef } from "react";
 
-// Keys typed here are text, or belong to an open dialog or menu.
 const KEY_OWNERS =
   'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
 
-/** Runs `onPress` when the single key `key` is pressed outside fields and dialogs. */
 export function useKeyShortcut(key: string, onPress: () => void) {
   const latest = useRef(onPress);
   latest.current = onPress;

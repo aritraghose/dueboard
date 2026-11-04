@@ -84,7 +84,6 @@ type SettingsTab = (typeof TABS)[number]["value"];
 type SettingsSearch = { tab?: Exclude<SettingsTab, "general"> | undefined };
 
 export const Route = createFileRoute("/_app/settings")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): SettingsSearch => ({
     tab: TABS.some(({ value }) => value !== "general" && value === search.tab)
       ? (search.tab as SettingsSearch["tab"])
@@ -111,7 +110,6 @@ function Settings() {
         }
         className="w-full gap-5 pb-8 md:flex-row! md:items-start md:gap-8"
       >
-        {/* A row of tabs on phones; a column beside the panel from `md` up. */}
         <TabsList className="max-md:w-full md:sticky md:top-4 md:h-auto! md:w-44 md:shrink-0 md:flex-col md:items-stretch md:gap-0.5">
           {TABS.map(({ value, label }) => (
             <TabsTrigger key={value} value={value} className="md:h-8 md:flex-none md:justify-start md:px-2.5">
@@ -139,9 +137,6 @@ function Settings() {
   );
 }
 
-// ─── Layout pieces ───────────────────────────────────────────────────────────
-
-/** One card of settings rows. */
 function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={cn("flex flex-col divide-y rounded-xl border bg-card px-5 shadow-(--card-shadow)", className)}>
@@ -150,12 +145,6 @@ function Panel({ children, className }: { children: ReactNode; className?: strin
   );
 }
 
-/**
- * A setting: its name and what it does, then its control. `inline` keeps a
- * small control (a switch, a value, a button) beside the name at every
- * size. Otherwise the control fills the width below the name on phones and
- * takes a fixed column on the right from `md` up.
- */
 function Row({
   title,
   description,
@@ -193,10 +182,6 @@ function Row({
   );
 }
 
-/**
- * A choice shown as stacked options (with an optional hint): a radio group, so
- * the arrow keys move between them. Picking one saves at once.
- */
 function Choice<T extends string>({
   labelledBy,
   options,
@@ -267,7 +252,6 @@ function Choice<T extends string>({
   );
 }
 
-/** Saves one settings change, showing it at once and toasting a failure. */
 function useSaveSetting() {
   const update = useUpdateSettings();
   const [saving, setSaving] = useState(false);
@@ -281,8 +265,6 @@ function useSaveSetting() {
   return { save, saving };
 }
 
-// ─── General ─────────────────────────────────────────────────────────────────
-
 const PRIVACY_OPTIONS = PRIVACY.map((value) => ({
   value,
   label: PRIVACY_LABEL[value],
@@ -293,7 +275,6 @@ function General() {
   const settings = useBootstrap()?.settings;
   const timeZone = useTimeZone();
   const { save, saving } = useSaveSetting();
-  // The pick shows at once; the saved settings take over when they arrive.
   const [privacy, setPrivacy] = useState<Privacy | null>(null);
   const [share, setShare] = useState<boolean | null>(null);
   const shownPrivacy = privacy ?? settings?.defaultPrivacy;
@@ -347,9 +328,6 @@ function General() {
   );
 }
 
-// ─── Connections ─────────────────────────────────────────────────────────────
-
-/** Only the blocked list lives here; connections (`/connections`) and requests (`/discover`) have their own pages. */
 function Connections() {
   const result = useAtomValue(socialOverviewAtom);
   const { reload } = useSocialActions();
@@ -379,8 +357,6 @@ function Connections() {
     </Panel>
   );
 }
-
-// ─── Tibo ────────────────────────────────────────────────────────────────────
 
 const RELAY_OPTIONS: readonly { value: RelayPolicy; label: string; hint: string }[] = RELAY_POLICY.map((value) => ({
   value,
@@ -426,8 +402,6 @@ function Tibo() {
   );
 }
 
-// ─── Tibo → Check-ins ────────────────────────────────────────────────────────
-
 type CheckInSettings = Pick<
   UserSettings,
   | "tiboProactive"
@@ -438,7 +412,6 @@ type CheckInSettings = Pick<
   | "tiboEveningTime"
 >;
 
-/** "8:00 AM" (or "08:00" where clocks run to 24) from `HH:MM`. */
 const clockLabel = (time: string, short = false) => {
   const [hours = 0, minutes = 0] = time.split(":").map(Number);
   return new Intl.DateTimeFormat(undefined, {
@@ -448,15 +421,9 @@ const clockLabel = (time: string, short = false) => {
   }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
 };
 
-/**
- * When Tibo messages first: the master switch, the day strip, then each
- * kind. Every change saves at once and shows before the save answers;
- * the agent re-plans its alarms within a minute.
- */
 function TiboCheckIns() {
   const settings = useBootstrap()?.settings;
   const { save } = useSaveSetting();
-  // Picks not saved yet, over the saved settings.
   const [picked, setPicked] = useState<Partial<CheckInSettings>>({});
   const shown: CheckInSettings | undefined = settings && { ...settings, ...picked };
   const on = shown?.tiboProactive ?? false;
@@ -538,11 +505,6 @@ function TiboCheckIns() {
   );
 }
 
-/**
- * One kind: its name and when, its time (if it has one), then its switch
- * on the right. On phones the time drops under the description, so the
- * name keeps the width.
- */
 function CheckInRow({
   title,
   description,
@@ -566,7 +528,6 @@ function CheckInRow({
   );
 }
 
-// The strip's span: the waking day, 5 AM to midnight.
 const DAY_START = 5;
 const DAY_END = 24;
 const hourOf = (time: string) => {
@@ -574,12 +535,6 @@ const hourOf = (time: string) => {
   return hours + minutes / 60;
 };
 
-/**
- * The day as a strip, with a mark at each time Tibo may write: the one
- * picture of the schedule, so the times read at a glance. The deadline's
- * label sits above the strip, the others below, so marks an hour apart
- * never collide.
- */
 function CheckInDay({ settings }: { settings: CheckInSettings }) {
   const marks = [
     settings.tiboMorningPlan && { key: "morning", time: settings.tiboMorningTime, name: "morning plan", above: false },
@@ -620,10 +575,6 @@ function CheckInDay({ settings }: { settings: CheckInSettings }) {
   );
 }
 
-/**
- * What Tibo remembers about you (`TiboMemoryList`, also the inbox's
- * Memory tab).
- */
 function TiboMemories() {
   return (
     <Panel>
@@ -640,21 +591,12 @@ function TiboMemories() {
   );
 }
 
-// The knob's width, in px: the bar runs from its center at 0% to its
-// center at 100%, so it never hangs past the track.
 const KNOB = 14;
 
-/**
- * How much of this month's Tibo requests you've used: a percentage and a
- * bar that fills toward 100%, with a knob at its end. Deep teal, orange
- * from 80%, red once they're all used. Hovering or tapping the bar shows
- * how many are left.
- */
 function UsageMeter({ usage }: { usage: AiUsage }) {
   const { used, remaining, limit } = usage;
   const share = limit > 0 ? Math.min(used / limit, 1) : 1;
   const tone = remaining === 0 ? "empty" : share >= 0.8 ? "low" : "ok";
-  // Under 1% still reads as some use, not none.
   const percent = used > 0 && share < 0.01 ? "<1" : String(Math.round(share * 100));
   const left = `${remaining} of ${limit} ${limit === 1 ? "request" : "requests"} left`;
   const [open, setOpen] = useState(false);
@@ -680,7 +622,6 @@ function UsageMeter({ usage }: { usage: AiUsage }) {
           <button
             type="button"
             aria-label={`${percent}% of Tibo requests used, ${left}`}
-            // A tap toggles the count too (a tooltip alone only opens on hover).
             onClick={(event) => {
               event.preventDefault();
               setOpen((was) => !was);
@@ -730,10 +671,8 @@ function UsageMeter({ usage }: { usage: AiUsage }) {
   );
 }
 
-/** This month's AI messages: replies, check-ins, relays and Ask answers all count. */
 function AiUsageRow() {
   const { usage, failed } = useAiUsage();
-  // The server render can't reach `/rpc`; only a failure in the browser is real.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   return (
@@ -747,13 +686,6 @@ function AiUsageRow() {
   );
 }
 
-// ─── Ask page ────────────────────────────────────────────────────────────────
-
-/**
- * Settings → Ask page (architecture.md §7.6): the switch, what the Ask agent
- * may answer from, the pool for logged-out visitors, and the questions
- * people asked in the last 30 days, so the owner can fill the gaps.
- */
 function AskPageSettings() {
   const { user } = Route.useRouteContext();
   const result = useAtomValue(askSettingsAtom);
@@ -829,7 +761,6 @@ type AskSave = (patch: AskSettingsPatch, what: string) => Promise<Exit.Exit<unkn
 
 const WRITING = "what your Ask page knows";
 
-/** What the Ask agent answers from: two texts, saved together, then the files (each saved on its own). */
 function AskWriting({ settings, saving, save }: { settings: AskSettings; saving: string | null; save: AskSave }) {
   const [instructions, setInstructions] = useState(settings.instructions);
   const [context, setContext] = useState(settings.sharedContext);
@@ -882,7 +813,6 @@ function AskWriting({ settings, saving, save }: { settings: AskSettings; saving:
           disabled={!dirty || tooLong || saving === WRITING}
           onClick={() =>
             void save({ instructions, sharedContext: context }, WRITING).then((exit) => {
-              // The server trims; show what it saved.
               if (Exit.isSuccess(exit)) {
                 const saved = exit.value as AskSettings;
                 setInstructions(saved.instructions);
@@ -946,11 +876,6 @@ function AskField({
   );
 }
 
-/**
- * Files the Ask page answers from (PDFs, like a CV): the website turns one
- * into text and keeps nothing; the owner reads and can edit that text in a
- * dialog, and only what they save is kept. At most `ASK_DOCUMENTS_MAX`.
- */
 function AskFiles({ settings }: { settings: AskSettings }) {
   const { convert, add, remove } = useAskDocuments();
   const input = useRef<HTMLInputElement>(null);
@@ -989,7 +914,6 @@ function AskFiles({ settings }: { settings: AskSettings }) {
   };
 
   const over = (review?.text.length ?? 0) > ASK_DOCUMENT_MAX_LENGTH;
-  // Part of "What your Ask page knows": a block of its own in that card.
   return (
     <div className="flex flex-col py-1">
       <div className="flex flex-wrap items-start justify-between gap-3 py-3">
@@ -1103,7 +1027,6 @@ function AskFiles({ settings }: { settings: AskSettings }) {
 const POOL_OPTIONS = [5, 10, 25, 50].filter((value) => value <= ASK_MONTHLY_ANSWER_CAP_MAX);
 const POOL = "the answers for logged-out visitors";
 
-/** The free answers for logged-out visitors: its size, and how much of it this month used. */
 function AskPool({ settings, saving, save }: { settings: AskSettings; saving: string | null; save: AskSave }) {
   const [picked, setPicked] = useState<number | null>(null);
   const cap = picked ?? settings.monthlyAnswerCap;
@@ -1164,7 +1087,6 @@ function AskPool({ settings, saving, save }: { settings: AskSettings; saving: st
 const askedAt = (date: Date) =>
   date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-/** Questions from the last 30 days, newest first, so the owner can see what's missing: one card each. */
 function AskQuestions() {
   const result = useAtomValue(askQuestionsAtom);
   const questions = AsyncResult.isSuccess(result) ? result.value : undefined;
@@ -1213,11 +1135,6 @@ function AskQuestions() {
   );
 }
 
-/**
- * One question and its answer, as a card: who asked (their picture, name
- * and @username when signed in, else "Logged-out user") and when, the
- * question, then the answer on Tibo's soft teal, clipped until opened.
- */
 function AskQuestionCard({ question }: { question: AskQuestion }) {
   const [open, setOpen] = useState(false);
   const { asker } = question;
@@ -1269,8 +1186,6 @@ function AskQuestionCard({ question }: { question: AskQuestion }) {
   );
 }
 
-// ─── Account ─────────────────────────────────────────────────────────────────
-
 function Account() {
   const { user } = Route.useRouteContext();
   const [open, setOpen] = useState(false);
@@ -1318,8 +1233,6 @@ function DeleteAccountDialog({
       setError(failureMessage(exit, "Couldn't delete your account."));
       return;
     }
-    // The account is gone; signing out clears the session cookies (and the
-    // cached copy the route guards read), then a full load starts fresh.
     await authClient.signOut().catch(() => undefined);
     window.location.assign("/");
   };

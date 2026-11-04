@@ -10,8 +10,6 @@ import { SITE_DESCRIPTION, seo } from "@/lib/seo";
 import { getSessionUser } from "../../session.ts";
 
 export const Route = createFileRoute("/_auth/auth")({
-  // Better Auth sends the browser back here with `?error=...` when the
-  // Google callback fails (`errorCallbackURL` below).
   validateSearch: (search: Record<string, unknown>): { error?: string } =>
     typeof search.error === "string" ? { error: search.error } : {},
   beforeLoad: async () => {
@@ -37,11 +35,9 @@ function SignIn() {
     const { error } = await authClient.signIn.social({
       provider: "google",
       callbackURL: "/now",
-      // First sign-in creates the account; send new users to pick a username.
       newUserCallbackURL: "/onboarding",
       errorCallbackURL: "/auth",
     });
-    // On success the browser is already navigating to Google.
     if (error) {
       setPending(false);
       setError("Couldn't start Google sign-in. Please try again.");

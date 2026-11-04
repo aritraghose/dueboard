@@ -39,19 +39,9 @@ import {
   type Segment,
 } from "./session-rules.ts";
 
-// Focus sessions (planning.md "Focus sessions", architecture.md §4 and §11).
-// At most one session per user is running or paused, which a partial unique
-// index enforces. Each running stretch is a segment; elapsed time is their
-// sum, and `ends_at` (set only while running) is when the time runs out.
-// Expired sessions are completed by the cron sweep (`sweepExpiredSessions`,
-// run every minute by `../api.ts`) and lazily by every read and write here,
-// both through `completeExpiredSessions`, so reads are right between sweeps.
-
 const ACTIVE = ["running", "paused"] as const;
 
-/** Sessions completed per sweep batch; the sweep runs batches until one comes back short. */
 const SWEEP_BATCH = 200;
-/** Batches per sweep run, so one run can't go on forever; the next minute's run picks up the rest. */
 const SWEEP_MAX_BATCHES = 25;
 
 export const toSession = (
@@ -81,7 +71,6 @@ export const toSession = (
 const notFound = (id: string) =>
   new SessionNotFound({ message: "That session no longer exists.", id });
 
-/** One of the user's sessions, locked for the rest of the transaction when `lock` is set. */
 const findSession = (tx: Executor, userId: string, id: string, lock = false) =>
   Effect.gen(function* () {
     const query = tx
@@ -93,7 +82,6 @@ const findSession = (tx: Executor, userId: string, id: string, lock = false) =>
     return row;
   });
 
-/** The segments of `sessionIds`, oldest first, by session id. */
 const loadSegments = (tx: Executor, sessionIds: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const bySession = new Map<string, Array<Segment>>();
@@ -111,7 +99,6 @@ const loadSegments = (tx: Executor, sessionIds: ReadonlyArray<string>) =>
     return bySession;
   });
 
-/** `rows` as sessions measured at `now`, with their segments loaded. */
 const withSegments = (tx: Executor, rows: ReadonlyArray<FocusSessionRow>, now: Date) =>
   Effect.gen(function* () {
     const segments = yield* loadSegments(
@@ -121,7 +108,6 @@ const withSegments = (tx: Executor, rows: ReadonlyArray<FocusSessionRow>, now: D
     return rows.map((row) => toSession(row, segments.get(row.id) ?? [], now));
   });
 
-/** Closes a session's open segment at `at` (a no-op while paused). */
 const closeOpenSegment = (tx: Executor, sessionId: string, at: Date) =>
   tx
     .update(FocusSessionSegments)
@@ -130,16 +116,6 @@ const closeOpenSegment = (tx: Executor, sessionId: string, at: Date) =>
       and(eq(FocusSessionSegments.sessionId, sessionId), isNull(FocusSessionSegments.endedAt)),
     );
 
-// ─── Completion ──────────────────────────────────────────────────────────────
-
-/**
- * Completes up to `limit` running sessions whose `ends_at <= now` (only
- * `userId`'s when given): status `completed`, `ended_at` and the last
- * segment's end set to `ends_at`, one `session_completed` activity each.
- * Rows another transaction holds are skipped, so the sweep never waits on a
- * user's write (that write sees the expiry itself). Running it twice
- * completes nothing the second time. Returns the completed rows.
- */
 export const completeExpiredSessions = Effect.fn("completeExpiredSessions")(function* (
   tx: Executor,
   options: { readonly now: Date; readonly userId?: string; readonly limit?: number },
@@ -157,7 +133,6 @@ export const completeExpiredSessions = Effect.fn("completeExpiredSessions")(func
     .orderBy(asc(FocusSessions.endsAt))
     .limit(options.limit ?? SWEEP_BATCH)
     .for("update", { skipLocked: true });
-  // `SET` reads the old row, so `ended_at` takes `ends_at` before it's cleared.
   const completed = yield* tx
     .update(FocusSessions)
     .set({ status: "completed", endedAt: sql`${FocusSessions.endsAt}`, endsAt: null })
@@ -166,8 +141,6 @@ export const completeExpiredSessions = Effect.fn("completeExpiredSessions")(func
   if (completed.length === 0) return completed;
 
   const ids = completed.map((row) => row.id);
-  // `greatest` can't change a real close (`ends_at` is never before the open
-  // segment's start), but keeps one odd row from failing every batch.
   yield* tx
     .update(FocusSessionSegments)
     .set({
@@ -203,10 +176,6 @@ export const completeExpiredSessions = Effect.fn("completeExpiredSessions")(func
   return completed;
 });
 
-/**
- * The cron sweep: completes every expired running session, in batches of
- * 200, each in its own transaction. Returns how many it completed.
- */
 export const sweepExpiredSessions = Effect.fn("sweepExpiredSessions")(function* () {
   const db = yield* Database;
   let total = 0;
@@ -220,7 +189,6 @@ export const sweepExpiredSessions = Effect.fn("sweepExpiredSessions")(function* 
   return total;
 });
 
-/** Stops an active session at `now`, with a `session_stopped` activity. */
 const stopRow = (tx: Executor, row: FocusSessionRow, now: Date, timeZone?: string) =>
   Effect.gen(function* () {
     yield* closeOpenSegment(tx, row.id, now);
@@ -240,13 +208,6 @@ const stopRow = (tx: Executor, row: FocusSessionRow, now: Date, timeZone?: strin
     return stopped!;
   });
 
-// ─── Writes ──────────────────────────────────────────────────────────────────
-
-/**
- * Starts a running session now, with a `session_started` activity. While
- * another is running or paused, fails with `ActiveSessionExists` (carrying
- * it), or with `replaceActive` stops it first in the same transaction.
- */
 export const startSession = Effect.fn("startSession")(function* (
   userId: string,
   input: StartSessionInput,
@@ -255,8 +216,6 @@ export const startSession = Effect.fn("startSession")(function* (
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
     Effect.gen(function* () {
-      // Locking the settings row serializes the user's starts, so two
-      // concurrent ones meet here instead of at the unique index.
       const [settings] = yield* tx
         .select({
           timeZone: UserSettings.timeZone,
@@ -266,7 +225,6 @@ export const startSession = Effect.fn("startSession")(function* (
         .from(UserSettings)
         .where(eq(UserSettings.userId, userId))
         .for("update");
-      // `Bootstrap` creates the row on every app load, so a missing one is a bug.
       if (!settings) return yield* Effect.die(new Error(`User ${userId} has no settings`));
       const now = new Date();
       yield* completeExpiredSessions(tx, { userId, now });
@@ -323,11 +281,6 @@ export const startSession = Effect.fn("startSession")(function* (
   );
 });
 
-/**
- * Runs `action` on one of the user's sessions: completes expired sessions
- * first, locks the row, refuses a transition its status doesn't allow,
- * then applies `change` and returns the session as of now.
- */
 const changeSession = <E, R>(
   userId: string,
   id: string,
@@ -351,7 +304,6 @@ const changeSession = <E, R>(
     );
   });
 
-/** Pauses a running session: closes its segment and clears `ends_at`. */
 export const pauseSession = Effect.fn("pauseSession")(function* (userId: string, id: string) {
   return yield* changeSession(userId, id, "pause", (tx, row, now) =>
     Effect.gen(function* () {
@@ -366,7 +318,6 @@ export const pauseSession = Effect.fn("pauseSession")(function* (userId: string,
   );
 });
 
-/** Resumes a paused session: opens a segment and sets `ends_at` from the time left. */
 export const resumeSession = Effect.fn("resumeSession")(function* (userId: string, id: string) {
   return yield* changeSession(userId, id, "resume", (tx, row, now) =>
     Effect.gen(function* () {
@@ -384,10 +335,6 @@ export const resumeSession = Effect.fn("resumeSession")(function* (userId: strin
   );
 });
 
-/**
- * Adds minutes to a running or paused session (the total stays within
- * 600), moving a running session's `ends_at` later by as much.
- */
 export const extendSession = Effect.fn("extendSession")(function* (
   userId: string,
   input: ExtendSessionInput,
@@ -413,12 +360,10 @@ export const extendSession = Effect.fn("extendSession")(function* (
   );
 });
 
-/** Ends a running or paused session early, as `stopped`, with a `session_stopped` activity. */
 export const stopSession = Effect.fn("stopSession")(function* (userId: string, id: string) {
   return yield* changeSession(userId, id, "stop", (tx, row, now) => stopRow(tx, row, now));
 });
 
-/** Deletes a session (any status), its segments and its activity, and returns its id. */
 export const deleteSession = Effect.fn("deleteSession")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -434,11 +379,6 @@ export const deleteSession = Effect.fn("deleteSession")(function* (userId: strin
   );
 });
 
-// ─── Reads ───────────────────────────────────────────────────────────────────
-// Each read first completes the user's expired sessions, so it never shows
-// a running session whose time has run out.
-
-/** The user's running or paused session, or `null`. */
 export const getActiveSession = Effect.fn("getActiveSession")(function* (userId: string) {
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
@@ -455,7 +395,6 @@ export const getActiveSession = Effect.fn("getActiveSession")(function* (userId:
   );
 });
 
-/** The sessions started on `date` (the user's local day), oldest first, with that day's focused minutes. */
 export const listSessionsForDay = Effect.fn("listSessionsForDay")(function* (
   userId: string,
   date: LocalDate,
@@ -478,16 +417,11 @@ export const listSessionsForDay = Effect.fn("listSessionsForDay")(function* (
   );
 });
 
-/**
- * `/sessions`: newest day first, newest session first, grouped by day with
- * each day's focused minutes, paginated by cursor.
- */
 export const listSessions = Effect.fn("listSessions")(function* (
   userId: string,
   input: ListSessionsInput,
 ) {
   const filters = yield* decodeInput(ListSessionsInput)(input);
-  // Same `<date>|<ISO timestamp>|<id>` shape as `ListNotes`, keyed on `started_at`.
   const cursor = filters.cursor === undefined ? undefined : decodeNoteCursor(filters.cursor);
   if (cursor === null) {
     return yield* new InvalidInput({ message: "That page link is invalid. Reload the list." });
@@ -524,8 +458,6 @@ export const listSessions = Effect.fn("listSessions")(function* (
       const page = rows.slice(0, limit);
       const sessions = yield* withSegments(tx, page, now);
 
-      // A day can run across pages, so its total counts all of that day's
-      // sessions, not just the ones on this page.
       const dates = [...new Set(page.map((row) => row.localDate))];
       const sameDays =
         dates.length === 0

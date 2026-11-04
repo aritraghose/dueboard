@@ -47,17 +47,6 @@ import {
   decodeInput,
 } from "./model.ts";
 
-// The user's habits (planning.md "Habits", architecture.md §4). A habit
-// stores its rule; `habit-rules.ts` decides what's due, progress and
-// streaks from the rule, its pauses and its check-ins. A check-in that meets
-// the period's (or day's) target records one `habit_completed` activity,
-// and an undo that drops below it removes that row. Each tap and undo also
-// moves the goals linked to the habit (`goals.ts`), in the same transaction.
-//
-// Pauses cover `[start_date, end_date)` and are dated in the user's zone.
-// `paused` and `archived` habits always have one open pause, so the days
-// they spend that way are never due and never break a streak.
-
 export const toHabit = (row: HabitRow): Habit =>
   new Habit({
     id: row.id,
@@ -79,7 +68,6 @@ export const toHabit = (row: HabitRow): Habit =>
 
 const notFound = (id: string) => new HabitNotFound({ message: "That habit no longer exists.", id });
 
-/** One of the user's habits, locked for the rest of the transaction when `lock` is set. */
 const findHabit = (tx: Executor, userId: string, id: string, lock = false) =>
   Effect.gen(function* () {
     const query = tx
@@ -91,7 +79,6 @@ const findHabit = (tx: Executor, userId: string, id: string, lock = false) =>
     return row;
   });
 
-/** The user's settings the habit writes need. */
 const userSettings = (tx: Executor, userId: string) =>
   Effect.gen(function* () {
     const [settings] = yield* tx
@@ -102,12 +89,10 @@ const userSettings = (tx: Executor, userId: string) =>
       })
       .from(UserSettings)
       .where(eq(UserSettings.userId, userId));
-    // `Bootstrap` creates the row on every app load, so a missing one is a bug.
     if (!settings) return yield* Effect.die(new Error(`User ${userId} has no settings`));
     return settings;
   });
 
-/** Today in the user's zone. */
 const userToday = (tx: Executor, userId: string) =>
   userSettings(tx, userId).pipe(Effect.map((settings) => todayIn(settings.timeZone)));
 
@@ -116,7 +101,6 @@ const scheduleColumns = (schedule: HabitSchedule) => {
   return result.ok ? Effect.succeed(result.columns) : Effect.fail(new InvalidInput({ message: result.message }));
 };
 
-/** Pauses per habit id. */
 const loadPauses = (tx: Executor, habitIds: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const byHabit = new Map<string, Array<HabitPauseRow>>();
@@ -134,10 +118,6 @@ const loadPauses = (tx: Executor, habitIds: ReadonlyArray<string>) =>
     return byHabit;
   });
 
-/**
- * Every day with taps, per habit id: the streak can reach back to the
- * habit's start. Fine at v1 scale (one row per habit and day).
- */
 const loadCheckins = (tx: Executor, userId: string, habitIds: ReadonlyArray<string>) =>
   Effect.gen(function* () {
     const byHabit = new Map<string, Array<HabitCheckinRow>>();
@@ -166,7 +146,6 @@ const toProgress = (habit: HabitRow, index: CheckinIndex, date: LocalDate) => {
   return new HabitProgress({ periodStart: period.start, periodEnd: period.end, done, target, complete });
 };
 
-/** `habit` as it stands on `date`, with its streak as of `today`. */
 const habitOnDay = (
   habit: HabitRow,
   pauses: ReadonlyArray<HabitPause>,
@@ -203,8 +182,6 @@ const habitSummary = (
   });
 };
 
-// ─── Writes ──────────────────────────────────────────────────────────────────
-
 export const createHabit = Effect.fn("createHabit")(function* (
   userId: string,
   input: CreateHabitInput,
@@ -238,10 +215,6 @@ export const createHabit = Effect.fn("createHabit")(function* (
   );
 });
 
-/**
- * Changes the fields `input` names. A new `schedule` replaces the whole rule;
- * check-ins and earlier `habit_completed` rows are kept as they are.
- */
 export const updateHabit = Effect.fn("updateHabit")(function* (
   userId: string,
   input: UpdateHabitInput,
@@ -271,11 +244,9 @@ export const updateHabit = Effect.fn("updateHabit")(function* (
   );
 });
 
-/** Opens a pause from today. */
 const openPause = (tx: Executor, habitId: string, today: LocalDate) =>
   tx.insert(HabitPauses).values({ id: newId(), habitId, startDate: today, endDate: null });
 
-/** Pauses an active habit from today. A paused habit is returned as it is; an archived one can't be paused. */
 export const pauseHabit = Effect.fn("pauseHabit")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -293,10 +264,6 @@ export const pauseHabit = Effect.fn("pauseHabit")(function* (userId: string, id:
   );
 });
 
-/**
- * Makes a paused or archived habit active again from today: its open pause
- * ends today (and is dropped when it began today, so it leaves no trace).
- */
 export const resumeHabit = Effect.fn("resumeHabit")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -306,7 +273,6 @@ export const resumeHabit = Effect.fn("resumeHabit")(function* (userId: string, i
       if (current.status === "active") return toHabit(current);
       const today = yield* userToday(tx, userId);
       const open = and(eq(HabitPauses.habitId, id), isNull(HabitPauses.endDate));
-      // `>=` also covers a pause dated after today (the user moved west).
       yield* tx.delete(HabitPauses).where(and(open, gte(HabitPauses.startDate, today)));
       yield* tx.update(HabitPauses).set({ endDate: today }).where(open);
       const [row] = yield* tx.update(Habits).set({ status: "active" }).where(eq(Habits.id, id)).returning();
@@ -315,11 +281,6 @@ export const resumeHabit = Effect.fn("resumeHabit")(function* (userId: string, i
   );
 });
 
-/**
- * Hides a habit from `/now`. Its open pause (opened here for an active
- * habit) keeps the archived days from counting against its streak;
- * `resumeHabit` restores it.
- */
 export const archiveHabit = Effect.fn("archiveHabit")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -334,10 +295,6 @@ export const archiveHabit = Effect.fn("archiveHabit")(function* (userId: string,
   );
 });
 
-/**
- * Deletes a habit with its pauses, check-ins (both cascade), activity and
- * goal links. The progress its taps added to goals stays. Returns the id.
- */
 export const deleteHabit = Effect.fn("deleteHabit")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
   const db = yield* Database;
@@ -352,7 +309,6 @@ export const deleteHabit = Effect.fn("deleteHabit")(function* (userId: string, i
   );
 });
 
-/** The `habit_completed` rows for the period starting `periodStart`. */
 const completedIn = (userId: string, habitId: string, periodStart: LocalDate) =>
   and(
     eq(Activity.userId, userId),
@@ -362,11 +318,6 @@ const completedIn = (userId: string, habitId: string, periodStart: LocalDate) =>
     sql`${Activity.meta}->>'periodStart' = ${periodStart}`,
   );
 
-/**
- * Adds (`delta` 1) or takes back (`delta` -1) one tap on `date`, which must
- * be today or up to 30 days back, and a day the habit is due. An undo with
- * no taps that day changes nothing.
- */
 const tap = (userId: string, input: HabitCheckInInput, delta: 1 | -1) =>
   Effect.gen(function* () {
     const { id, date } = yield* decodeInput(HabitCheckInInput)(input);
@@ -424,14 +375,12 @@ const tap = (userId: string, input: HabitCheckInInput, delta: 1 | -1) =>
             .select({ id: Activity.id })
             .from(Activity)
             .where(completedIn(userId, id, now.period.start));
-          // A rule edit can leave a row behind for this period already.
           if (!existing) {
             yield* recordActivity(tx, {
               userId,
               kind: "habit_completed",
               subjectType: "habit",
               subjectId: id,
-              // Counts on the day whose tap met the target, even when backfilled.
               localDate: date,
               meta: { periodStart: now.period.start, periodEnd: now.period.end },
             });
@@ -445,11 +394,6 @@ const tap = (userId: string, input: HabitCheckInInput, delta: 1 | -1) =>
     );
   });
 
-/**
- * The day's `habit_checked` row (Live): one per habit and day, moved to the
- * latest tap with its count, and deleted when the day is back to 0. An undo
- * keeps its time, so taking a tap back doesn't bump it to the top.
- */
 const recordDayCheck = (tx: Executor, userId: string, habitId: string, date: LocalDate, count: number, delta: 1 | -1) =>
   Effect.gen(function* () {
     const onDay = and(
@@ -480,17 +424,13 @@ const recordDayCheck = (tx: Executor, userId: string, habitId: string, date: Loc
     }
   });
 
-/** One tap on `date`. Returns the habit as it stands that day. */
 export const checkIn = Effect.fn("checkIn")(function* (userId: string, input: HabitCheckInInput) {
   return yield* tap(userId, input, 1);
 });
 
-/** Takes back one tap on `date`. Returns the habit as it stands that day. */
 export const undoCheckIn = Effect.fn("undoCheckIn")(function* (userId: string, input: HabitCheckInInput) {
   return yield* tap(userId, input, -1);
 });
-
-// ─── Reads ───────────────────────────────────────────────────────────────────
 
 export const getHabit = Effect.fn("getHabit")(function* (userId: string, id: string) {
   yield* decodeInput(Id)(id);
@@ -504,11 +444,6 @@ export const getHabit = Effect.fn("getHabit")(function* (userId: string, id: str
   }).pipe(orDieOnDbError);
 });
 
-/**
- * `/now`'s habits on `date`: due ones (target not met yet) and settled ones
- * (met this period or day), oldest first. Archived habits, and habits not
- * scheduled that day (paused, not started, off-schedule), are left out.
- */
 export const listHabitsForDay = Effect.fn("listHabitsForDay")(function* (
   userId: string,
   date: LocalDate,
@@ -547,11 +482,6 @@ export const listHabitsForDay = Effect.fn("listHabitsForDay")(function* (
   }).pipe(orDieOnDbError);
 });
 
-/**
- * Upcoming's habits on the days of `[from, until)`, per day, oldest habit
- * first: every scheduled day for specific-days habits, and once per period
- * for flexible ones (`occurrences`). Archived and paused habits never show.
- */
 export const listUpcomingHabits = (userId: string, from: LocalDate, until: LocalDate) =>
   Effect.gen(function* () {
     const db = yield* Database;
@@ -587,7 +517,6 @@ export const listUpcomingHabits = (userId: string, from: LocalDate, until: Local
     return byDay;
   }).pipe(orDieOnDbError);
 
-/** `/habits`: every habit (archived ones too), oldest first, with its streak, progress and last 12 weeks. */
 export const listHabits = Effect.fn("listHabits")(function* (userId: string) {
   const db = yield* Database;
   return yield* Effect.gen(function* () {

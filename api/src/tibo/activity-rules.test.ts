@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { currentActivity, memoryRunDetail, toolLabel } from "./activity-rules.ts";
+import { THINKING_DETAIL_MAX, currentActivity, memoryRunDetail, thinkingDetail, toolLabel } from "./activity-rules.ts";
 import type { TiboActivity } from "./protocol.ts";
 
 const activity = (id: string, startedAt: number, extra: Partial<TiboActivity> = {}): TiboActivity => ({
@@ -42,5 +42,23 @@ describe("labels", () => {
     expect(memoryRunDetail({ memories: 2, files: 1, summaries: 0 })).toBe("Learned 2 memories, noted 1 file");
     expect(memoryRunDetail({ memories: 0, files: 0, summaries: 1 })).toBe("Wrote 1 summary");
     expect(memoryRunDetail({ memories: 0, files: 0, summaries: 0 })).toBeNull();
+  });
+});
+
+describe("thinkingDetail", () => {
+  test("drops the bold heading and joins lines", () => {
+    expect(thinkingDetail("**Planning the day**\n\nThey asked what's left today, so  I'll list\nthe open tasks.")).toBe(
+      "They asked what's left today, so I'll list the open tasks.",
+    );
+  });
+
+  test("keeps a summary with no heading as it is", () => {
+    expect(thinkingDetail("Checking which habits are due.")).toBe("Checking which habits are due.");
+  });
+
+  test("cuts a long summary at a word, with an ellipsis", () => {
+    const detail = thinkingDetail("word ".repeat(100));
+    expect(detail.length).toBeLessThanOrEqual(THINKING_DETAIL_MAX + 1);
+    expect(detail.endsWith("word…")).toBe(true);
   });
 });

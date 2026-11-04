@@ -45,16 +45,13 @@ const VIEW_LABEL: Record<View, string> = {
 };
 
 type TasksSearch = {
-  /** Absent means `all`. */
   view?: Exclude<View, "all"> | undefined;
-  /** Tag ids; a task shows when it has any of them. */
   tags?: readonly string[] | undefined;
   q?: string | undefined;
 };
 
 const PAGE_SIZE = 30;
 
-/** `?tags=` from the URL: up to 50 tag ids (anything else is dropped). */
 const readTagIds = (raw: unknown): readonly string[] | undefined => {
   if (!Array.isArray(raw)) return undefined;
   const ids = raw.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 64).slice(0, 50);
@@ -62,7 +59,6 @@ const readTagIds = (raw: unknown): readonly string[] | undefined => {
 };
 
 export const Route = createFileRoute("/_app/tasks")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): TasksSearch => ({
     view:
       typeof search.view === "string" && VIEWS.includes(search.view as View) && search.view !== "all"
@@ -84,9 +80,7 @@ function Tasks() {
   const tagIds = search.tags ?? [];
 
   const dialog = useTaskDialog();
-  // How the list is sorted and grouped (the tabs above pick which tasks).
   const [display, setDisplay] = useViewOptions("tasks");
-  // A new task goes on today, or stays undated from the Unscheduled view.
   const newTask = () => {
     if (today) dialog.openNew(view === "unscheduled" ? null : today);
   };
@@ -132,7 +126,6 @@ function Tasks() {
               { value: "none", label: "None" },
             ]}
             extra={
-              // On phones Manage tags sits with Sort and Group; wider screens have it in the header.
               <Button asChild variant="ghost" size="sm" className="md:hidden">
                 <Link to="/tags">
                   <TagsIcon />
@@ -169,7 +162,6 @@ function Tasks() {
   );
 }
 
-/** Title search, sent to the URL a moment after typing stops. */
 function SearchField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [text, setText] = useState(value);
   const latest = useRef(onChange);
@@ -225,7 +217,6 @@ function Results(props: ResultsProps) {
   return props.view === "unscheduled" ? <UnscheduledResults {...props} /> : <PagedResults {...props} />;
 }
 
-/** Unscheduled tasks come whole from `ListUnscheduledTasks`; tag and search filter them here. */
 function UnscheduledResults({ tagIds, query, today, onClearFilters, onOpenTask, display }: ResultsProps) {
   const result = useAtomValue(unscheduledAtom);
   const { reload } = useTaskActions();
@@ -252,7 +243,6 @@ function UnscheduledResults({ tagIds, query, today, onClearFilters, onOpenTask, 
   );
 }
 
-/** `ListTasks`, a page at a time ("Load more"). */
 function PagedResults({ view, tagIds, query, today, onClearFilters, onOpenTask, display }: ResultsProps) {
   const [pages, setPages] = useState(1);
   const filters = useMemo((): Omit<ListTasksInput, "cursor"> => {
@@ -270,7 +260,6 @@ function PagedResults({ view, tagIds, query, today, onClearFilters, onOpenTask, 
   const result = useAtomValue(atom);
   const { reload } = useTaskActions();
 
-  // Keep showing the pages already loaded while the next one arrives.
   const last = useRef<{ tasks: Task[]; nextCursor: string | null } | undefined>(undefined);
   if (AsyncResult.isSuccess(result)) last.current = result.value;
   const data = last.current;
@@ -335,8 +324,6 @@ function ResultList({
 
   const tagList = useTags();
 
-  // Sorted first; grouping keeps that order inside each group. "Day" groups
-  // only where the view has days to group by (Upcoming, Settled).
   const sections = useMemo((): Section[] | null => {
     if (!tasks) return null;
     const sorted = sortTasks(tasks, display.sort, display.direction);
@@ -420,7 +407,6 @@ function ResultList({
   );
 }
 
-/** A run of rows under one heading (a day or a tag), or the whole list with none. */
 type Section = {
   readonly key: string;
   readonly heading: ReactNode;

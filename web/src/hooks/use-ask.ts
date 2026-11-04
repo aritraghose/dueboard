@@ -16,30 +16,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiClient } from "../rpc-client.ts";
 import { useRun } from "./use-tasks.ts";
 
-// The Ask page (architecture.md §7.6). The page's card comes from the
-// public `GetAskPage` RPC; the visitor's thread and questions go to the
-// owner's Ask agent over HTTP, through the website's
-// `/agents/ask-agent/<username>/…` proxy, which picks the agent instance from
-// the visitor's session or cookie. Settings → Ask page uses the RPCs below.
-
 const ASK = ["ask"];
 
-/** `/@username/ask`'s card and whether the viewer can ask. */
 export const askPageAtom = Atom.family((username: string) =>
   ApiClient.query("GetAskPage", { username }, { reactivityKeys: ASK }),
 );
 
-/** Settings → Ask page. */
 export const askSettingsAtom = ApiClient.query("GetAskSettings", undefined, { reactivityKeys: ASK });
 export const askQuestionsAtom = ApiClient.query("ListAskQuestions", undefined, { reactivityKeys: ASK });
 
-/** Saves an Ask settings change; resolves to the call's `Exit` (the queries refresh). */
 export function useUpdateAskSettings() {
   const run = useRun();
   return useCallback(
     (patch: AskSettingsPatch) =>
       run(
-        // Profiles show "Ask Tibo" only while it's on, so they refresh too.
         ApiClient.use((client) => client("UpdateAskSettings", patch)).pipe(
           Reactivity.mutation([...ASK, "social"]),
         ),
@@ -48,7 +38,6 @@ export function useUpdateAskSettings() {
   );
 }
 
-/** Why a PDF couldn't be read, as Settings says it. */
 export const CONVERT_ERROR: Record<Exclude<AskConversion, { ok: true }>["error"] | "network", string> = {
   not_pdf: "That isn't a PDF. Pick a .pdf file.",
   too_large: "That PDF is over 4 MB. Try a smaller one.",
@@ -58,11 +47,6 @@ export const CONVERT_ERROR: Record<Exclude<AskConversion, { ok: true }>["error"]
   network: "Couldn't upload that file. Check your connection and try again.",
 };
 
-/**
- * Files on the user's Ask page: `convert` sends a PDF to the website, which
- * turns it into text and keeps nothing; `add` saves the reviewed text
- * (`AddAskDocument`); `remove` deletes one. Both writes refresh the settings.
- */
 export function useAskDocuments() {
   const run = useRun();
   const convert = useCallback(async (file: File): Promise<AskConversion | { ok: false; error: "network" }> => {
@@ -105,14 +89,8 @@ export type AskThreadState =
       readonly siteKey: string;
     };
 
-/** Why a question got no answer, as the page shows it; `network` when the request itself failed. */
 export type AskError = AskRefusal | "network";
 
-/**
- * This visitor's thread with `username`'s Ask page, and `ask`. A question
- * shows at once as pending; on an answer it becomes an exchange, on a
- * refusal it's handed back (so the composer can restore it).
- */
 export function useAskThread(username: string, enabled: boolean) {
   const [state, setState] = useState<AskThreadState>({ status: "loading" });
   const [pending, setPending] = useState<string | null>(null);
@@ -151,7 +129,6 @@ export function useAskThread(username: string, enabled: boolean) {
         const result = (await response.json().catch(() => null)) as AskResponse | null;
         if (!result) return { ok: false, error: response.status === 429 ? "limited" : "network" };
         if (!result.ok) {
-          // A passed check counts even when the question itself was refused.
           setState((current) =>
             current.status === "ready" ? { ...current, needsVerification: result.needsVerification } : current,
           );

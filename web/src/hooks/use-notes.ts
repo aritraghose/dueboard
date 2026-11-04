@@ -9,16 +9,8 @@ import type { LocalDate } from "@/lib/dates";
 import { ApiClient } from "../rpc-client.ts";
 import { useRun } from "./use-tasks.ts";
 
-// Notes for the UI. Every note query carries the `notes` reactivity key and
-// every note write invalidates it, so `/notes` and the Live card's count
-// refetch after a change.
-
 const NOTES = ["notes"];
 
-/**
- * `/notes`' list: the first `pages` pages of `ListNotes` for `query`, joined.
- * A day that runs over a page boundary is merged back into one group.
- */
 export const noteListAtom = Atom.family(
   ({ query, pages, limit }: { query: string | undefined; pages: number; limit: number }) =>
     Atom.make((get) =>
@@ -43,17 +35,13 @@ const appendDay = (days: Array<{ date: LocalDate; notes: Note[] }>, day: NoteDay
   else days.push({ date: day.date, notes: [...day.notes] });
 };
 
-/** Notes deleted in this session: lists leave them out while their delete (and the refetch) is under way. */
-// Wrapped in an object: given a Set itself, `Atom.make` would read it as a stream of values.
 const removedNotesAtom = Atom.make({ ids: new Set<string>() as ReadonlySet<string> }).pipe(Atom.keepAlive);
 
-/** Whether a note is being deleted, or was just deleted. */
 export function useIsRemoved(): (id: string) => boolean {
   const { ids } = useAtomValue(removedNotesAtom);
   return useCallback((id: string) => ids.has(id), [ids]);
 }
 
-/** Note writes, each its own short-lived call (see `useRun`). Each returns its `Exit`. */
 export function useNoteActions() {
   const registry = useContext(RegistryContext);
   const run = useRun();
@@ -63,7 +51,6 @@ export function useNoteActions() {
         run(ApiClient.use((client) => client("CreateNote", payload)).pipe(Reactivity.mutation(NOTES))),
       update: (payload: UpdateNoteInput) =>
         run(ApiClient.use((client) => client("UpdateNote", payload)).pipe(Reactivity.mutation(NOTES))),
-      // The row hides at once and comes back only if the delete fails.
       remove: async (id: string) => {
         registry.update(removedNotesAtom, ({ ids }) => ({ ids: new Set(ids).add(id) }));
         const exit = await run(
@@ -78,7 +65,6 @@ export function useNoteActions() {
         }
         return exit;
       },
-      /** Refetches every note query on screen, failed ones included ("Try again"). */
       reload: () => run(Reactivity.invalidate(NOTES)),
     }),
     [run, registry],
@@ -87,11 +73,6 @@ export function useNoteActions() {
 
 type NotePatch = Omit<UpdateNoteInput, "id">;
 
-/**
- * Edits shown right away: `apply` gives a note with the user's pending
- * changes on top. A change is dropped once the refetched note agrees, or
- * when its call fails (the caller shows the failure).
- */
 export function useOptimisticNotes(notes: readonly Note[]) {
   const { update } = useNoteActions();
   const [patches, setPatches] = useState<ReadonlyMap<string, NotePatch>>(new Map());

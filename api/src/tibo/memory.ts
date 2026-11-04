@@ -1,20 +1,5 @@
 /// <reference types="@cloudflare/workers-types" />
 
-// Tibo's long-term memory in the Durable Object's SQLite (architecture.md
-// §7.2), next to the thread:
-//
-// - `summaries`: rolling, hierarchical summaries of the thread (a day, a
-//   week, a month, a year), in the third person about the user.
-// - `memories`: lasting facts. A contradicted one is kept with
-//   `superseded_by` (the memory that replaced it) and leaves Vectorize.
-// - `message_chunks`: consecutive messages embedded together, for
-//   `search_conversation`.
-// - `memory_state`: how far the jobs have read, which rollups are due, and
-//   today's spend against the background budget.
-//
-// Each memory and chunk has a vector in the `MEMORY` index (namespace = the
-// user's id) under `m:<id>` or `c:<id>`, written once `embedding_model` is set.
-
 import { EMBEDDING_MODEL } from "./embeddings.ts";
 import type { Chunk, SummaryLevel } from "./memory-rules.ts";
 import type { TiboMemory, TiboMemoryKind } from "./protocol.ts";
@@ -57,9 +42,7 @@ CREATE TABLE IF NOT EXISTS memory_state (
 );
 `;
 
-/** A stored memory, with what the jobs need beyond `TiboMemory`. */
 export interface MemoryRow extends TiboMemory {
-  /** 3 = core to who they are (or asked to be remembered), 1 = minor. */
   readonly importance: number;
   readonly supersededBy: string | null;
   readonly sourceMessageIds: readonly string[];
@@ -121,10 +104,8 @@ const toSummary = (row: SummaryDbRow): SummaryRow => ({
   updatedAt: row.updated_at,
 });
 
-/** Vector ids in the `MEMORY` index (64 bytes at most). */
 export const memoryVectorId = (id: string) => `m:${id}`;
 export const chunkVectorId = (id: string) => `c:${id}`;
-/** The row id behind a vector id, and which table it's in. */
 export const parseVectorId = (vectorId: string) =>
   vectorId.startsWith("m:")
     ? ({ type: "memory", id: vectorId.slice(2) } as const)
@@ -132,7 +113,6 @@ export const parseVectorId = (vectorId: string) =>
       ? ({ type: "message", id: vectorId.slice(2) } as const)
       : null;
 
-/** Keys of `memory_state`. */
 type StateKey =
   | "summarized_seq"
   | "extracted_seq"
@@ -147,12 +127,9 @@ type StateKey =
 export class MemoryStore {
   constructor(private readonly sql: SqlStorage) {}
 
-  /** Creates the tables if they're missing. Safe to run on every start. */
   migrate() {
     this.sql.exec(SCHEMA);
   }
-
-  // ─── State ───────────────────────────────────────────────────────────
 
   get(key: StateKey): string | null {
     return this.sql.exec<{ value: string }>(`SELECT value FROM memory_state WHERE key = ?`, key).toArray()[0]?.value ?? null;
@@ -171,10 +148,6 @@ export class MemoryStore {
     );
   }
 
-  /**
-   * Takes `amount` from today's background budget for `what`, if it has
-   * that much left. The budget resets with the user's day.
-   */
   spend(what: "model_calls" | "embeddings", amount: number, cap: number, today: string): boolean {
     if (this.get("budget_day") !== today) {
       this.set("budget_day", today);
@@ -188,7 +161,6 @@ export class MemoryStore {
     return true;
   }
 
-  /** Rollups waiting for their inputs to settle, as `level:YYYY-MM-DD`. */
   dirtyRollups(): Set<string> {
     return new Set(JSON.parse(this.get("dirty_rollups") ?? "[]") as string[]);
   }
@@ -197,8 +169,6 @@ export class MemoryStore {
     this.set("dirty_rollups", JSON.stringify([...keys].sort()));
   }
 
-  // ─── Summaries ───────────────────────────────────────────────────────
-
   summary(level: SummaryLevel, periodStart: string): SummaryRow | null {
     const row = this.sql
       .exec<SummaryDbRow>(`SELECT * FROM summaries WHERE level = ? AND period_start = ?`, level, periodStart)
@@ -206,7 +176,6 @@ export class MemoryStore {
     return row ? toSummary(row) : null;
   }
 
-  /** Summaries of `level` starting in [from, to), oldest first. */
   summariesBetween(level: SummaryLevel, from: string, to: string): SummaryRow[] {
     return this.sql
       .exec<SummaryDbRow>(
@@ -219,7 +188,6 @@ export class MemoryStore {
       .map(toSummary);
   }
 
-  /** The newest `limit` summaries of `level`, newest first. */
   latestSummaries(level: SummaryLevel, limit: number): SummaryRow[] {
     return this.sql
       .exec<SummaryDbRow>(`SELECT * FROM summaries WHERE level = ? ORDER BY period_start DESC LIMIT ?`, level, limit)
@@ -243,14 +211,11 @@ export class MemoryStore {
     );
   }
 
-  // ─── Memories ────────────────────────────────────────────────────────
-
   memory(id: string): MemoryRow | null {
     const row = this.sql.exec<MemoryDbRow>(`SELECT * FROM memories WHERE id = ?`, id).toArray()[0];
     return row ? toMemory(row) : null;
   }
 
-  /** The memories with these ids that are still current (not superseded). */
   activeMemories(ids: readonly string[]): MemoryRow[] {
     if (ids.length === 0) return [];
     return this.sql
@@ -262,7 +227,6 @@ export class MemoryStore {
       .map(toMemory);
   }
 
-  /** Current memories, newest learned first (Settings' list, which shows "Since"). */
   listActive(limit: number): MemoryRow[] {
     return this.sql
       .exec<MemoryDbRow>(`SELECT * FROM memories WHERE superseded_by IS NULL ORDER BY created_at DESC LIMIT ?`, limit)
@@ -270,7 +234,6 @@ export class MemoryStore {
       .map(toMemory);
   }
 
-  /** The newest current memories at `importance` or above. */
   recentImportant(minImportance: number, limit: number): MemoryRow[] {
     return this.sql
       .exec<MemoryDbRow>(
@@ -292,7 +255,6 @@ export class MemoryStore {
     kind: TiboMemoryKind;
     importance: number;
     sourceMessageIds: readonly string[];
-    /** When the fact was said (ms); now by default. */
     at?: number;
   }): MemoryRow {
     const now = input.at ?? Date.now();
@@ -312,7 +274,6 @@ export class MemoryStore {
     return toMemory(row);
   }
 
-  /** Marks `ids` as replaced by `byId` (they stay, for history, out of Vectorize and context). */
   supersede(ids: readonly string[], byId: string) {
     for (const id of ids) {
       this.sql.exec(
@@ -325,7 +286,6 @@ export class MemoryStore {
     }
   }
 
-  /** A duplicate was said again: note where, and that it's still true. */
   confirmMemory(id: string, sourceMessageIds: readonly string[]) {
     const memory = this.memory(id);
     if (!memory) return;
@@ -342,7 +302,6 @@ export class MemoryStore {
     this.sql.exec(`DELETE FROM memories WHERE id = ?`, id);
   }
 
-  /** Current memories not yet embedded by `EMBEDDING_MODEL`. */
   memoriesToEmbed(limit: number): MemoryRow[] {
     return this.sql
       .exec<MemoryDbRow>(
@@ -358,8 +317,6 @@ export class MemoryStore {
   markMemoriesEmbedded(ids: readonly string[]) {
     for (const id of ids) this.sql.exec(`UPDATE memories SET embedding_model = ? WHERE id = ?`, EMBEDDING_MODEL, id);
   }
-
-  // ─── Thread chunks ───────────────────────────────────────────────────
 
   addChunk(chunk: Chunk): string {
     const id = crypto.randomUUID();
@@ -403,12 +360,6 @@ export class MemoryStore {
     for (const id of ids) this.sql.exec(`UPDATE message_chunks SET embedding_model = ? WHERE id = ?`, EMBEDDING_MODEL, id);
   }
 
-  // ─── Everything ──────────────────────────────────────────────────────
-
-  /**
-   * Every vector id this user may have in the index (superseded memories
-   * included, in case removing one failed), for account deletion.
-   */
   allVectorIds(): string[] {
     return [
       ...this.sql.exec<{ id: string }>(`SELECT id FROM memories`).toArray().map((row) => memoryVectorId(row.id)),
@@ -416,7 +367,6 @@ export class MemoryStore {
     ];
   }
 
-  /** Counts, for the dev status route. */
   stats() {
     const count = (query: string) => this.sql.exec<{ n: number }>(query).one().n;
     return {
@@ -435,7 +385,6 @@ export class MemoryStore {
     };
   }
 
-  /** Development only: empties every memory table (the dev seed starts from nothing). */
   clear() {
     this.sql.exec(`DELETE FROM summaries; DELETE FROM memories; DELETE FROM message_chunks; DELETE FROM memory_state;`);
   }

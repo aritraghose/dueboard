@@ -7,13 +7,6 @@ import { contributionGraphAtom } from "@/hooks/use-diary";
 import { addDays, daysBetween, formatDay } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-// A profile's contribution graph: one square per day for the last 53
-// Sunday-starting weeks, shaded in the owner's user color by how much they
-// got done (settled tasks, met habit goals, completed goals, finished
-// sessions; private ones counted, never described). Squares are one tab
-// stop: arrow keys move between days, Enter opens the day in the diary.
-
-/** Count → shade, fixed so profiles compare: 0, 1–2, 3–4, 5–7, 8+. */
 const levelOf = (count: number): number => (count === 0 ? 0 : count <= 2 ? 1 : count <= 4 ? 2 : count <= 7 ? 3 : 4);
 const LEGEND = [0, 1, 2, 3, 4] as const;
 
@@ -24,7 +17,6 @@ const describe = (count: number, date: LocalDate, today: LocalDate) =>
 const monthFormat = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short" });
 const monthOf = (date: LocalDate) => monthFormat.format(new Date(`${date}T12:00:00Z`));
 
-/** The weekday labels, on Monday, Wednesday and Friday rows. */
 const WEEKDAYS = [
   { row: 1, label: "Mon" },
   { row: 3, label: "Wed" },
@@ -46,8 +38,6 @@ function layout(graph: Graph) {
     return { date, count: counts.get(date) ?? 0, week: Math.floor(index / 7), day: index % 7 };
   });
   const weeks = Math.ceil(length / 7);
-  // A month is named over its first week; the first column only when the
-  // next name is far enough away not to collide with it.
   const months: { week: number; label: string }[] = [];
   for (let week = 0; week < weeks; week++) {
     const sunday = cells[week * 7]!.date;
@@ -109,7 +99,6 @@ function GraphBody({
   const scroller = useRef<HTMLDivElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Narrow screens scroll the weeks; start at the newest.
   useLayoutEffect(() => {
     const node = scroller.current;
     if (node) node.scrollLeft = node.scrollWidth;

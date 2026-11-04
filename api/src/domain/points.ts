@@ -15,17 +15,6 @@ import {
 import { periodStart } from "./points-rules.ts";
 import { connectedSql, notBlockedSql } from "./visibility.ts";
 
-// Points and the leaderboard. Points aren't stored: they're counted from
-// the rows the actions already leave (the rules are in `points-rules.ts`),
-// so undos take them back and there's no ledger to keep in step. Counts
-// include private items, like the contribution graph: they never show
-// what was done. Fine at v1 scale; a per-user, per-day table can replace
-// the counting later without changing the RPCs.
-
-/**
- * `(user_id, points)` for days from `from` on (every day when `null`),
- * for one user when `userId` is set, everyone otherwise.
- */
 const scores = (from: LocalDate | null, userId: string | null): SQL => {
   const activityFrom = from ? sql` and ${Activity.localDate} >= ${from}` : sql``;
   const checkinFrom = from ? sql` and ${HabitCheckins.localDate} >= ${from}` : sql``;
@@ -40,7 +29,6 @@ const scores = (from: LocalDate | null, userId: string | null): SQL => {
   ) earned group by earned.user_id`;
 };
 
-/** A user's points over all time. */
 export const pointsOf = (tx: Executor, userId: string) =>
   Effect.gen(function* () {
     const rows = yield* tx.execute<{ points: number }>(scores(null, userId), "objects");
@@ -56,12 +44,6 @@ type RankedRow = {
   image: string | null;
 };
 
-/**
- * The top scorers for the viewer: in `connections` scope the viewer and
- * their connections, in `public` everyone. Anyone blocked either way is
- * left out. `period` counts days in the viewer's zone. The viewer's own row
- * comes back as `me` (and in `entries` if they're in the top ranks).
- */
 export const getLeaderboard = Effect.fn("getLeaderboard")(function* (
   viewerId: string,
   input: GetLeaderboardInput,
@@ -75,8 +57,6 @@ export const getLeaderboard = Effect.fn("getLeaderboard")(function* (
     .pipe(orDieOnDbError);
   const from = periodStart(period, todayIn(settings?.timeZone ?? FALLBACK_TIME_ZONE));
 
-  // Who may be ranked for this viewer comes from the visibility module, like
-  // every other cross-user read (planning.md working rule 9).
   const owner = sql`s.user_id`;
   const inScope =
     scope === "connections" ? sql`and (s.user_id = ${viewerId} or ${connectedSql(viewerId, owner)})` : sql``;

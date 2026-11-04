@@ -29,15 +29,8 @@ import { Label } from "@/components/ui/label";
 import { failureMessage, useTaskActions } from "@/hooks/use-tasks";
 import { cn } from "@/lib/utils";
 
-// Creating and editing a tag, in its own card over the task card.
-
-/** `tag` set: edit it. `null`: create one. */
 export type TagDialogTarget = { readonly tag: Tag | null };
 
-/**
- * The tag card. `onSaved` gets the created or updated tag (the task card
- * picks a newly created one); `onDeleted` the id of a deleted one.
- */
 export function TagDialog({
   target,
   open,
@@ -101,7 +94,6 @@ function TagForm({
       ? await actions.updateTag({
           id: tag.id,
           color,
-          // System tags can't be renamed; sending the name would be refused.
           ...(system || trimmed === tag.name ? {} : { name: trimmed }),
         })
       : await actions.createTag({ name: trimmed, color });
@@ -115,8 +107,6 @@ function TagForm({
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        // This card renders in a portal, but React still bubbles its submit
-        // through the component tree, into the task card's form around it.
         event.stopPropagation();
         void submit();
       }}

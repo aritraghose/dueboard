@@ -14,11 +14,6 @@ import {
 } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 
-// The habit card's schedule: presets first, then the few inputs the picked
-// preset needs, written as a sentence ("[3] times a week"), and a live
-// preview of the sentence the habit will show, from the API's own
-// `describeSchedule`.
-
 const WEEKDAYS = [
   { day: 0, short: "S", name: "Sunday" },
   { day: 1, short: "M", name: "Monday" },
@@ -114,7 +109,6 @@ export function ScheduleBuilder({
   );
 }
 
-/** The presets as a wrapping row of choices; arrow keys move between them. */
 function PresetPicker({ value, onChange }: { value: SchedulePreset; onChange: (preset: SchedulePreset) => void }) {
   return (
     <div
@@ -153,12 +147,10 @@ function PresetPicker({ value, onChange }: { value: SchedulePreset; onChange: (p
   );
 }
 
-/** Controls and words on one line, reading as a sentence. */
 function Phrase({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-2 text-sm">{children}</div>;
 }
 
-/** A whole number with − and + beside it; typing works too. */
 function Stepper({
   label,
   value,

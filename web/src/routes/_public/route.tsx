@@ -4,13 +4,6 @@ import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { getSessionUser } from "../../session.ts";
 
-/**
- * Pathless layout for pages anyone can visit: the landing page (`/`) and,
- * later, `/pricing`, `/about` and the like. Add them as files in `_public/`.
- *
- * The session only picks the header's call to action, so a failed lookup
- * shows the signed-out header instead of an error page.
- */
 export const Route = createFileRoute("/_public")({
   beforeLoad: async () => ({
     user: await getSessionUser().catch(() => null),

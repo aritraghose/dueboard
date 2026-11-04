@@ -16,7 +16,6 @@ describe("startOfDayInstant", () => {
   });
 
   test("follows the offset on DST days", () => {
-    // New York springs forward at 2:00 on 2026-03-08; midnight is still EST.
     expect(startOfDayInstant(d("2026-03-08"), "America/New_York").toISOString()).toBe(
       "2026-03-08T05:00:00.000Z",
     );
@@ -26,7 +25,6 @@ describe("startOfDayInstant", () => {
   });
 
   test("skips to the first instant when midnight doesn't exist", () => {
-    // Santiago jumps from 00:00 to 01:00 on 2026-09-06.
     const start = startOfDayInstant(d("2026-09-06"), "America/Santiago");
     expect(start.toISOString()).toBe("2026-09-06T04:00:00.000Z");
   });
@@ -37,7 +35,6 @@ describe("periodOf / nextResetAt", () => {
 
   test("use the user's month", () => {
     expect(periodOf(now, "UTC")).toBe("2026-11");
-    // Already December 1st in Kolkata.
     expect(periodOf(now, "Asia/Kolkata")).toBe("2026-12");
   });
 
@@ -61,7 +58,6 @@ describe("quota math", () => {
     expect(remainingUnits(0, 1)).toBe(2);
     expect(fits(0, 1, 2)).toBe(true);
     expect(fits(2, 1, 2)).toBe(false);
-    // Half a message left: a relay's share fits, a reply doesn't.
     expect(fits(1, 1, 1)).toBe(true);
     expect(fits(1, 1, 2)).toBe(false);
     expect(remainingUnits(10, 1)).toBe(0);

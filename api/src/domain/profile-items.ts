@@ -23,19 +23,9 @@ import {
   viewerRelation,
 } from "./visibility.ts";
 
-// A profile's item tabs (Tasks, Habits, Goals, Sessions): what the owner
-// completed, newest first, filtered to what the viewer may see (`visibility.ts`). Each row is an activity row
-// joined to its item, so a privacy change applies at once and deleted items
-// never show.
-
 const notFound = (username: string) =>
   new UserNotFound({ message: `There's no one called @${username.replace(/^@/, "")}.`, username });
 
-/**
- * A profile's owner and how `viewerId` relates to them. Someone who blocked
- * the viewer is `UserNotFound`; `hidden` means the viewer blocked them, and
- * sees the card but no items.
- */
 export const profileOwner = Effect.fn("profileOwner")(function* (viewerId: string | null, typed: string) {
   const username = normalizeUsername(typed);
   if (!username) return yield* notFound(typed);
@@ -53,7 +43,6 @@ export const profileOwner = Effect.fn("profileOwner")(function* (viewerId: strin
   return { id: owner.id, relation, hidden: relation === "blocked" };
 });
 
-/** One page of a profile tab for `viewerId` (`null` when logged out). Someone who blocked the viewer is `UserNotFound`. */
 export const getProfileItems = Effect.fn("getProfileItems")(function* (
   viewerId: string | null,
   input: GetProfileItemsInput,
@@ -119,7 +108,6 @@ export const getProfileItems = Effect.fn("getProfileItems")(function* (
   });
 });
 
-/** Whether `blockerId` blocked `blockedId` (one way). */
 const blockedBy = (blockerId: string, blockedId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;

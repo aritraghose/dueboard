@@ -23,12 +23,6 @@ import { type MenuUser, UserAvatar, UserMenuContent } from "@/components/user-me
 import { BOARDS, DISCOVER_NAV, LEADERBOARD_NAV, MAIN_NAV, type NavItem, SETTINGS_NAV } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-// The `_app` navigation on wide screens, after Gemini's web app: a
-// full-height icon rail that expands to labels, in its own nav color
-// (`--sidebar`). Built on shadcn's sidebar-07 block. Phones get
-// `mobile-nav.tsx` instead.
-
-// Gemini's rail: slightly larger icons than shadcn's 16px, in circles while collapsed.
 const railButton =
   "[&_svg]:size-[1.125rem] text-sidebar-foreground/80 data-active:text-sidebar-foreground group-data-[collapsible=icon]:rounded-full";
 
@@ -45,7 +39,6 @@ export function AppSidebar({ user }: { user: MenuUser }) {
           <SidebarMenu className="gap-1.5">
             {MAIN_NAV.map((item) => (
               <NavLink key={item.to} item={item}>
-                {/* Boards' own pages. The sidebar hides a subsection while collapsed. */}
                 {item.to === "/boards" && <BoardLinks />}
               </NavLink>
             ))}
@@ -86,7 +79,6 @@ function NavLink({
   );
 }
 
-/** Tasks, Habits, Goals, Notes, Live and Diary, under Boards. */
 function BoardLinks() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
@@ -105,11 +97,6 @@ function BoardLinks() {
   );
 }
 
-/**
- * The top of the rail. Collapsed, it's the logo, which turns into an
- * "expand" icon on hover or focus. Expanded, it's the wordmark with a
- * collapse button. Ctrl/⌘+B toggles too.
- */
 function BrandToggle() {
   const { state, toggleSidebar } = useSidebar();
 
@@ -152,7 +139,6 @@ function BrandToggle() {
   );
 }
 
-/** The avatar at the bottom of the rail. */
 function SidebarUserMenu({ user }: { user: MenuUser }) {
   return (
     <SidebarMenuItem>

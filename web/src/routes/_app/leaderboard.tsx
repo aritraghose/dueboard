@@ -30,9 +30,7 @@ type LeaderboardSearch = {
   period?: Exclude<LeaderboardPeriod, "week"> | undefined;
 };
 
-/** Top scorers among your connections or everyone, for a period. Defaults: Connections, This week. */
 export const Route = createFileRoute("/_app/leaderboard")({
-  // Every key is always returned (see the decision log on `validateSearch`).
   validateSearch: (search: Record<string, unknown>): LeaderboardSearch => ({
     scope: search.scope === "public" ? "public" : undefined,
     period:

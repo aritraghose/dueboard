@@ -289,6 +289,23 @@ If it gets slow later, add a materialized per-user inbox.
   (`@ai-sdk/openai` `.responses()` + `env.AI.run` with
   `openaiEndpoint: "/v1/responses"` + the `cf-aig-no-wholesale` header). The
   Agents SDK's `createAI` cannot read this model's replies.
+- **Reasoning** (2026-11-05): every Muse call passes `museOptions(purpose)`
+  (`muse.ts`): `forceReasoning` (the AI SDK only sends `reasoning` for OpenAI
+  ids), `systemMessageMode: "system"`, and `REASONING_EFFORT` (`low` for
+  replies, memory jobs and Ask; the gateway accepts `none|low|medium|high|xhigh|max`,
+  not `minimal`). Measured on one question: unset 18.8 s / 1,377 reasoning
+  tokens, `medium` 13.2 s / 1,039, `low` 8.0 s / 457. The provider asks for
+  a `detailed` summary whenever an effort is set, so calls that want none
+  pass `reasoningSummary: null`; replies ask for `auto` and show it as the
+  Thinking step's detail (`thinkingDetail`), but the catalog route returns no
+  reasoning items yet, so the detail stays empty. Each call logs one
+  `Muse usage` line (input, cached, output, reasoning tokens, ms; per step
+  for replies). `POST …/dev/muse-probe?effort=` times one call. First
+  reading (2026-11-05, dev): about 113 of ~12,000 input tokens cached, even on
+  a turn's second step, whose prefix is identical. So the misses aren't only
+  our prompt order; the route or Meta's routing matters too.
+- **Images** (2026-11-05): `muse-image-1.0` through the `custom-meta`
+  custom provider (§7.9 Pictures), not the catalog.
 - **Built (step 17)**: `api/src/tibo/` (`TiboAgent.ts`, `thread.ts`, `context.ts`,
   `bubbles.ts`, `persona.ts`, `protocol.ts`, `model.ts`); step 19 added
   `memory.ts`, `memory-rules.ts`, `memory-jobs.ts`, `recall.ts`,
@@ -493,6 +510,11 @@ The user can send Tibo any file: images, PDFs, text and code, office documents, 
 - **Serving**: `GET …/files/<id>` from the user's own agent only. Headers (`serveHeaders`, tested): the sniffed type, `nosniff`, `Cross-Origin-Resource-Policy: same-origin`, `no-referrer`, `private` caching, a sandbox CSP on everything but PDFs, and `Content-Disposition` inline only for images and PDFs (RFC 5987 names that can't break out). File reads count against `WEB_RATE_LIMIT` (1012) rather than the agent's 1010, since a thread loads each of its images.
 - **The model**: the files in the user's messages since Tibo last spoke reach Muse Spark as they are (images, and PDFs as files with `PDF_AS_FILE`) or as their text in escaped `<attached_file>` tags, within a turn's caps (20 MiB of images and PDFs, 32,000 characters of text), added after the context budget (`withFiles`, `tibo/context.ts`). Older files read as `[Sent image "name": note]` lines. The persona calls file contents data, never instructions. Account deletion (`wipe`) deletes every object under the user's prefix, listed from R2, before `destroy()`.
 - **Memory, with judgement**: the memory jobs' first step (`noteFiles`, `tibo/memory-jobs.ts`) writes a short factual note of each sent file (one Muse call with the file and the user's words, never charged, under `DAILY_JOB_CAP`; secrets are left out) and judges it **memorable** or not: lasting facts about the user (a timetable, an offer letter, a pet they named, or their own words asking to remember it) versus memes, screenshots, articles, homework, code, receipts. "Remember this" inside a file doesn't count. Only memorable files' notes reach memory extraction and the summaries, where extraction still judges each fact; every note serves conversation search (chunks) and later turns. Extraction and chunking wait for a message's notes; a note that fails twice is skipped. A PDF the model refuses is retried as its text.
+- **Pictures Tibo makes** (2026-11-05, the user's call): the `make_image` tool (`tools.ts`) makes a picture with Meta's `muse-image-1.0` (`api/src/muse-image.ts`), new or from pictures in the chat (`from`: up to 4 refs). Muse Image isn't in the gateway's catalog and `meta` isn't a universal provider, so it goes through the gateway's **custom provider** (slug `meta`, addressed as `custom-meta`, base URL `https://api.meta.ai/v1`) at its provider-native endpoint through the binding: `env.AI.fetch("https://workers-binding.ai/ai-gateway/gateways/<id>/custom-meta/responses")`, as the Agents SDK's `createAI` sends vendor models. The gateway adds the Meta provider key stored for it (each gateway needs that key). A universal request (`env.AI.gateway(id).run`) went out without the key (502, error 2006). Request: `image_generation` tool with `size` (square 1024², portrait 1024×1536, landscape 1536×1024), `output_format: "jpeg"` (JPEG so saved pictures open anywhere, the user's call), `store: false`; a 503 is retried once; `content_policy_violation` is "blocked". `cf-aig-custom-cost` tags each call $0.01.
+  - **Rules** (`tibo/image-rules.ts`, tested): `IMAGES_PER_DAY` 5 in any 24 h (counted in DO SQLite `made_images`), `IMAGES_PER_TURN` 2, storage room, then the quota: the turn's message plus **one more message per image** (`IMAGE_UNITS`, reason `tibo_image`, charged as soon as Meta returns it). Refusals answer the model in words (`IMAGE_REFUSAL_TEXT`).
+  - **Refs**: every picture in the model's context carries `ref <first 8 of its id>` (`imageRef`; user photos in their lines, Tibo's in an app note after its bubble: "You sent a picture you made (ref …), from the prompt: …", never in its own words). `findImage` resolves a ref to one sent or made image of this user, else `unknown_image`.
+  - **Storage and chat**: a made image is an ordinary attachment (`createMade`: R2 plus a row, its prompt as a non-memorable note, so the memory jobs skip it) named from the prompt (`imageFileName`). The tool puts it on the `TurnLedger`; the reply flushes the words said so far and sends it as its own Tibo bubble (body empty, `meta.attachments`), so it shows in the thread and the Media tab like a sent photo. Words before the call are flushed at `tool-call`, so "one sec" shows while it's drawn. Activity: "Making a picture".
+  - **Dev**: `POST …/dev/image?prompt=…[&shape=][&from=<attachment id>]` makes one and answers it (nothing stored or charged).
 - **UI**: the + at the left of the composer, paste and drop anywhere on the thread (`components/tibo-attachments.tsx`, `lib/tibo-files.ts`). Files upload as soon as they're added; Send waits for them. In the thread, each file of a message is its own card (a photo edge to edge, at its own proportions; other files as a card with their kind, size and Save), then the words; the ticks and Tibo's reaction go on the last card. A photo opens full size with Save.
 
 ### 7.10 What Tibo is doing (the inbox's Tibo section)
@@ -509,7 +531,8 @@ The user can send Tibo any file: images, PDFs, text and code, office documents, 
   - a Tibo reply turn,
   - a proactive message,
   - a relay turn,
-  - an Ask-page answer (to the signed-in visitor who asked).
+  - an Ask-page answer (to the signed-in visitor who asked),
+  - a picture Tibo makes: one more message each, on top of its turn (`tibo_image`, 2026-11-05).
 - One reply turn counts as one message, however many bubbles it has.
 - Internal background jobs (summaries, memory extraction) do not count, but they have their own internal budget.
 - The ledger stores **units**: 1 message = 2 units, so a relay turn costs 1 unit (half a message) to each user.

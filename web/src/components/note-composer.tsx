@@ -23,11 +23,6 @@ import { NOTE_BODY_MAX_LENGTH, NOTE_WARN_AT, cleanNoteBody } from "@/lib/notes";
 import { PRIVACY_HINT } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
-// Writing notes: 60 characters, for today. The compact box sits at the
-// bottom of the Live card; the full composer heads `/notes`. Both have
-// privacy and Live controls, starting from the user's defaults.
-
-/** Characters left, turning to the warning color for the last 10. */
 export function NoteCountdown({ length, className }: { length: number; className?: string }) {
   const left = NOTE_BODY_MAX_LENGTH - length;
   return (
@@ -40,10 +35,6 @@ export function NoteCountdown({ length, className }: { length: number; className
   );
 }
 
-/**
- * A ring that fills toward the 60-character limit. For the last 10 it grows,
- * turns to the warning color and shows what's left.
- */
 export function NoteRing({ length }: { length: number }) {
   const left = NOTE_BODY_MAX_LENGTH - length;
   const warn = left <= NOTE_WARN_AT;
@@ -81,20 +72,14 @@ export function NoteRing({ length }: { length: number }) {
   );
 }
 
-/** A note still on its way to the API, shown faded in today's list. */
 export type PendingNote = {
   readonly key: string;
   readonly body: string;
   readonly privacy: Privacy;
   readonly shareToLive: boolean;
-  /** Set once the API has answered, until the refetched list has it. */
   readonly id?: string;
 };
 
-/**
- * Posts `text` as today's note. The box clears at once and gets the text
- * back if the call fails. Returns the new note, or `null` on failure.
- */
 function usePostNote(today: LocalDate | null) {
   const { create } = useNoteActions();
   return async (body: string, options: { privacy?: Privacy; shareToLive?: boolean } = {}): Promise<Note | null> => {
@@ -106,11 +91,6 @@ function usePostNote(today: LocalDate | null) {
   };
 }
 
-/**
- * The Live card's note box: 60 characters with a countdown, and the privacy
- * and Live pills under it (the user's defaults until changed). `footer`
- * sits at the right of that row.
- */
 export function CompactNoteComposer({ today, footer }: { today: LocalDate | null; footer?: ReactNode }) {
   const settings = useBootstrap()?.settings;
   const [text, setText] = useState("");
@@ -161,7 +141,6 @@ export function CompactNoteComposer({ today, footer }: { today: LocalDate | null
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
-      {/* One row; on phones it stops short of Tibo's button, which floats at the bottom right. */}
       <div className="flex items-center gap-0.5 px-1 max-md:pr-12">
         <PrivacyPill value={shownPrivacy} onChange={setPrivacy} />
         <LiveToggle value={shownShare} onChange={setShareToLive} />
@@ -171,11 +150,6 @@ export function CompactNoteComposer({ today, footer }: { today: LocalDate | null
   );
 }
 
-/**
- * `/notes`' composer: today's note with privacy and Live controls, starting
- * from the user's defaults. `onPending` shows the note in the list before
- * the API answers; `onSettled` gives its id (or `null` when it failed).
- */
 export function NoteComposer({
   user,
   today,
@@ -195,12 +169,10 @@ export function NoteComposer({
   const inputId = useId();
   const hintId = useId();
 
-  // The user's defaults, until they pick something for this note.
   const shownPrivacy = privacy ?? settings?.defaultPrivacy ?? "connections";
   const shownShare = shareToLive ?? settings?.defaultShareToLive ?? true;
   const body = cleanNoteBody(text);
 
-  // `N` (the app's "new" key) focuses the box.
   useKeyShortcut("n", () => document.getElementById(inputId)?.focus());
 
   return (

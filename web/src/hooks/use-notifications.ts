@@ -6,20 +6,13 @@ import { useCallback, useEffect, useRef } from "react";
 import { ApiClient } from "../rpc-client.ts";
 import { useRun } from "./use-tasks.ts";
 
-// Notifications (`ListNotifications`, `GetUnseenNotifications`). Both reads
-// carry `notifications` and `social`, so answering a request anywhere
-// updates them; `NotificationsSync` asks again every minute while the tab
-// is visible, since other people's requests arrive with no write of ours.
-
 const NOTIFICATIONS = ["notifications"];
 const KEYS = ["notifications", "social"];
-/** How often the unseen count (and the list, if open) is asked for again. */
 const POLL_MS = 60_000;
 
 const listAtom = ApiClient.query("ListNotifications", undefined, { reactivityKeys: KEYS });
 const unseenAtom = ApiClient.query("GetUnseenNotifications", undefined, { reactivityKeys: KEYS });
 
-/** The list, newest first (kept while a refresh is in flight); `undefined` until it first arrives. */
 export function useNotifications() {
   const run = useRun();
   const result = useAtomValue(listAtom);
@@ -33,7 +26,6 @@ export function useNotifications() {
   };
 }
 
-/** How many notifications are unseen (0 until the count arrives, or if it fails). */
 export function useUnseenNotifications(): number {
   const result = useAtomValue(unseenAtom);
   const last = useRef(0);
@@ -41,7 +33,6 @@ export function useUnseenNotifications(): number {
   return last.current;
 }
 
-/** Marks them all seen, then counts again (the nav dot goes). */
 export function useMarkNotificationsSeen() {
   const run = useRun();
   return useCallback(
@@ -55,11 +46,6 @@ export function useMarkNotificationsSeen() {
   );
 }
 
-/**
- * Asks for notifications again every minute while the tab is visible;
- * pauses while hidden and catches up on return. Mounted once, by the app
- * shell.
- */
 export function NotificationsSync() {
   const run = useRun();
   useEffect(() => {

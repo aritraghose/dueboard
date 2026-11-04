@@ -1,13 +1,8 @@
 import type { Tag, Task } from "@dueboard/api/rpc";
 import { type LocalDate, daysBetween, formatDay, relativeDay } from "@/lib/dates";
 
-// Display helpers for tasks. The rules (which day a task shows on, what
-// settling records) live in the API; these only word things.
-
-/** Importance 1–5 in words. */
 export const IMPORTANCE_LABEL = ["Low", "Minor", "Medium", "High", "Critical"] as const;
 
-/** "45 min", "1 h", "1 h 30 min". */
 export const formatMinutes = (minutes: number): string => {
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
@@ -15,27 +10,20 @@ export const formatMinutes = (minutes: number): string => {
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 };
 
-/** "Due today", "Due tomorrow", "Due yesterday", "Due Wed, Nov 4". */
 export const deadlineLabel = (deadline: LocalDate, today: LocalDate): string => {
   const days = daysBetween(today, deadline);
   if (Math.abs(days) <= 1) return `Due ${relativeDay(deadline, today).toLowerCase()}`;
   return `Due ${formatDay(deadline, today)}`;
 };
 
-/** A deadline that passed while the task is still open. */
 export const isOverdue = (task: Task, today: LocalDate): boolean =>
   task.status !== "settled" && task.deadlineDate !== null && task.deadlineDate < today;
 
-/** "Today", "Tomorrow", "Yesterday", or "Wed, Nov 4", for group headings. */
 export const dayHeading = (date: LocalDate, today: LocalDate): string =>
   Math.abs(daysBetween(today, date)) <= 1 ? relativeDay(date, today) : formatDay(date, today);
 
 export type TaskGroup = { readonly date: LocalDate; readonly tasks: readonly Task[] };
 
-/**
- * Groups tasks under a day, keeping each group's order, and sorts the
- * groups by day (`"asc"` or `"desc"`). Tasks `dayOf` can't place are left out.
- */
 export const groupByDay = (
   tasks: readonly Task[],
   dayOf: (task: Task) => LocalDate | null,
@@ -54,7 +42,6 @@ export const groupByDay = (
     .map(([date, list]) => ({ date, tasks: list }));
 };
 
-/** The task's next day on or after `today`: its assigned date, else its deadline. */
 export const upcomingDay = (task: Task, today: LocalDate): LocalDate | null => {
   const days = [task.assignedDate, task.deadlineDate].filter(
     (day): day is LocalDate => day !== null && day >= today,
@@ -62,10 +49,6 @@ export const upcomingDay = (task: Task, today: LocalDate): LocalDate | null => {
   return days.sort()[0] ?? null;
 };
 
-/**
- * Sorts by importance or expected minutes, keeping the list's own order for
- * ties. Tasks without the value go last whichever the direction.
- */
 export const sortTasks = <T extends Task>(
   tasks: readonly T[],
   sort: "default" | "importance" | "minutes",
@@ -88,7 +71,6 @@ export const sortTasks = <T extends Task>(
 
 export type TagGroup<T> = { readonly tag: Tag | undefined; readonly tasks: readonly T[] };
 
-/** Groups tasks by tag, in the order of the user's tag list (an unknown tag last). */
 export const groupByTag = <T extends Task>(tasks: readonly T[], tags: readonly Tag[]): TagGroup<T>[] => {
   const order = new Map(tags.map((tag, index) => [tag.id, index]));
   const groups = new Map<string, T[]>();

@@ -1,7 +1,6 @@
 import type { TagColor } from "@dueboard/api/rpc";
 import { cn } from "@/lib/utils";
 
-/** A tag's name on its palette color (`data-tag` in styles.css). */
 export function TagChip({
   name,
   color,

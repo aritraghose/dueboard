@@ -1,12 +1,6 @@
 import { TIBO_AGENT, TIBO_MEMORIES_PATH, type TiboMemory } from "@dueboard/api/tibo";
 import { useCallback, useEffect, useState } from "react";
 
-// What Tibo remembers about the user (Settings → Tibo). Read from and
-// deleted in the user's own `TiboAgent` over HTTP, through the web stack's
-// `/agents/*` proxy, which signs the user in and pins the agent to them
-// (the name in the path is ignored). Not an `/rpc` call: the memories live
-// in the agent's SQLite, not in Postgres.
-
 const memoriesUrl = (id?: string) =>
   `/agents/${TIBO_AGENT}/me/${TIBO_MEMORIES_PATH}${id ? `/${encodeURIComponent(id)}` : ""}`;
 
@@ -15,7 +9,6 @@ export type TiboMemoriesState =
   | { readonly status: "failed" }
   | { readonly status: "ready"; readonly memories: readonly TiboMemory[] };
 
-/** The user's current memories, newest learned first, and `remove` (shown gone at once; put back if it fails). */
 export function useTiboMemories() {
   const [state, setState] = useState<TiboMemoriesState>({ status: "loading" });
 
@@ -42,7 +35,6 @@ export function useTiboMemories() {
         : current,
     );
     const response = await fetch(memoriesUrl(memory.id), { method: "DELETE" }).catch(() => null);
-    // Already gone (another tab, or Tibo forgot it) counts as done.
     if (response && (response.ok || response.status === 404)) return true;
     setState((current) =>
       current.status === "ready"

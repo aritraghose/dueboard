@@ -10,19 +10,12 @@ import { goalListAtom, linkableTasksAtom, useGoalColor } from "@/hooks/use-goals
 import { habitListAtom } from "@/hooks/use-habits";
 import type { ItemGoalDraft, LinkDraft } from "@/lib/goals";
 
-// Linking habits and tasks to goals, from both sides: the goal card's links
-// panel picks habits and tasks, and the habit and task cards pick goals
-// (or create a count goal on the spot). Every link carries an amount: what
-// one check-in, or settling the task, adds to the goal.
-
-/** What one check-in or settle adds: a small whole-number field. Saves on blur or Enter. */
 export function AmountInput({
   value,
   label,
   onChange,
 }: {
   value: number;
-  /** Read by screen readers: "Amount for 5 a day". */
   label: string;
   onChange: (amount: number) => void;
 }) {
@@ -60,7 +53,6 @@ export function AmountInput({
   );
 }
 
-/** One row of a links list: an icon, the title, its amount and a remove button. */
 function LinkRow({
   icon,
   title,
@@ -98,7 +90,6 @@ function LinkRow({
 const ITEM_ICON: Record<GoalLinkItem, ReactNode> = { habit: <RepeatIcon />, task: <CheckSquareIcon /> };
 const ITEM_NOTE: Record<GoalLinkItem, string> = { habit: "per check-in", task: "when settled" };
 
-/** A goal's links panel: the linked habits and tasks, and a picker to add more. */
 export function GoalLinksPanel({
   links,
   onChange,
@@ -138,7 +129,6 @@ export function GoalLinksPanel({
   );
 }
 
-/** Search the user's habits and open tasks, and pick one to link. */
 function ItemPicker({
   linked,
   onPick,
@@ -170,7 +160,6 @@ function ItemPicker({
   );
 }
 
-/** Waits for typing to pause before searching tasks. */
 function useDebounced(value: string, ms: number) {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
@@ -278,18 +267,12 @@ function PickGroup({
   );
 }
 
-/**
- * "Moves goal" on a habit or task card: the goals it moves, each with its
- * amount, a picker of the user's count goals, and a way to create a count
- * goal on the spot.
- */
 export function ItemGoalsField({
   itemType,
   value,
   onChange,
 }: {
   itemType: GoalLinkItem;
-  /** `undefined` while the saved links load. */
   value: readonly ItemGoalDraft[] | undefined;
   onChange: (goals: readonly ItemGoalDraft[]) => void;
 }) {
@@ -445,7 +428,6 @@ function GoalSearch({ taken, onPick }: { taken: readonly ItemGoalDraft[]; onPick
   );
 }
 
-/** A count goal made from a habit or task card: a name and a target. */
 function NewCountGoal({
   initialName,
   onCancel,
@@ -465,7 +447,6 @@ function NewCountGoal({
     <div
       className="flex flex-col gap-3 p-3"
       onKeyDown={(event) => {
-        // Inside a form (the habit card), Enter would submit it.
         if (event.key === "Enter") {
           event.preventDefault();
           submit();

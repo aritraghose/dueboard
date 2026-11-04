@@ -1,14 +1,7 @@
-// The today snapshot (architecture.md §7.3, step 2): a compact picture of
-// the user's day at the start of every turn, so Tibo knows the board
-// without a tool call. Built from `GetDay` and `GetActiveSession`, aimed at
-// ~300–600 tokens: long lists are cut with "+N more". Pure, so
-// `snapshot.test.ts` covers it.
-
 import type { ContextSection } from "./context.ts";
 import { addDays, weekdayOf } from "./dates.ts";
 import { importanceLabel, minutesLabel, sessionView, type DayJson, type SessionJson, type TaskJson } from "./views.ts";
 
-/** Most items per list; the rest are counted. */
 const LIST_MAX = 10;
 
 const capped = <A>(items: readonly A[], line: (item: A) => string, max = LIST_MAX) => [

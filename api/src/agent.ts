@@ -9,22 +9,12 @@ import { TiboAgent } from "./tibo/TiboAgent.ts";
 
 export { TiboAgent };
 
-/**
- * `/agents/ask-agent/<owner>~<visitor>`: one visitor's exchange with one
- * owner's Ask page (`./ask/AskAgent.ts`). The runtime constructs it with the
- * Worker's full env; this narrows it to `AskEnv` before the agent sees it.
- */
 export class AskAgent extends AskAgentBase {
   constructor(ctx: DurableObjectState, env: AgentEnv) {
     super(ctx, askEnv(env));
   }
 }
 
-/**
- * Wipes the Tibo threads of deleted accounts (`domain/tibo.ts`). Each wipe
- * is cleared only once its agent confirmed, so a failure retries on the
- * next run, and wiping an already empty agent is harmless.
- */
 async function wipeDeletedThreads(env: AgentEnv) {
   const tibo = tiboClient(env.DOMAIN);
   const { userIds } = await tibo.pendingWipes();
@@ -41,11 +31,6 @@ async function wipeDeletedThreads(env: AgentEnv) {
   if (done.length > 0) await tibo.wipesDone(done);
 }
 
-/**
- * Delivers the domain's events (`domain/tibo.ts`'s outbox) to each user's
- * agent, oldest first, and clears what was delivered. A failed delivery
- * stays queued for the next run; the outbox drops anything a day old.
- */
 async function deliverTiboEvents(env: AgentEnv) {
   const tibo = tiboClient(env.DOMAIN);
   const { events } = await tibo.pendingEvents();
@@ -67,13 +52,6 @@ async function deliverTiboEvents(env: AgentEnv) {
   if (done.length > 0) await tibo.eventsDone(done);
 }
 
-/**
- * Relays an agent hasn't heard about yet (`domain/relays.ts`): the sweep
- * first expires old ones, then hands out those still owed to a side, and
- * each side's agent reads the relay itself and catches up (`relaySync`).
- * Normally the agents reach each other directly; this is the fallback, and
- * how expiries and held deliveries get through.
- */
 async function syncRelays(env: AgentEnv) {
   const { relays } = await env.DOMAIN.relaySweep();
   const agent = (userId: string) => getAgentByName(env.TiboAgent as DurableObjectNamespace<TiboAgent>, userId);
@@ -93,14 +71,11 @@ async function syncRelays(env: AgentEnv) {
 
 export default {
   async fetch(request: Request, env: AgentEnv) {
-    // `/agents/tibo-agent/<user id>/…` and `/agents/ask-agent/<owner>~<visitor>/…`,
-    // both named by the web stack's proxy.
     return (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 });
   },
   async scheduled(controller: ScheduledController, env: AgentEnv, ctx: ExecutionContext) {
     ctx.waitUntil(deliverTiboEvents(env).catch((error: unknown) => console.error("Tibo event delivery failed", error)));
     ctx.waitUntil(syncRelays(env).catch((error: unknown) => console.error("Relay sync failed", error)));
-    // Wipes keep their old pace.
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0) ctx.waitUntil(wipeDeletedThreads(env));
   },
 };

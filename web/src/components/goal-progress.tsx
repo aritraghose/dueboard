@@ -17,16 +17,8 @@ import { type LocalDate, formatDay } from "@/lib/dates";
 import { progressText, roundPercent, targetDateHint } from "@/lib/goals";
 import { cn } from "@/lib/utils";
 
-// Goals' progress: the bar (or, for a slider goal, the slider) every goal
-// shows, and `/now`'s goal cards. Every goal wears the `goal` tag's color;
-// a completed one turns to `--success`.
-
 const cardTransition = { type: "spring", stiffness: 520, damping: 42, mass: 0.8 } as const;
 
-/**
- * A goal's progress as a thick bar in the nearest `data-tag` color, green
- * once completed. `celebrate` sends a band of light across it once.
- */
 export function GoalBar({
   goal,
   celebrate = false,
@@ -64,14 +56,12 @@ export function GoalBar({
   );
 }
 
-/** A slider goal's progress, set by dragging; it saves once it rests. */
 export function GoalSlider({
   value,
   label,
   onChange,
   className,
 }: {
-  /** The percent, 0–100. */
   value: number;
   label: string;
   onChange: (value: number) => void;
@@ -93,7 +83,6 @@ export function GoalSlider({
   );
 }
 
-/** "142 / 250" (count goals), and the target date with the days left. */
 export function GoalMeta({ goal, today, className }: { goal: Goal; today: LocalDate; className?: string }) {
   const late = goal.targetDate !== null && goal.status !== "completed" && goal.targetDate < today;
   return (
@@ -112,7 +101,6 @@ export function GoalMeta({ goal, today, className }: { goal: Goal; today: LocalD
   );
 }
 
-/** A check in a circle, bursting once when `celebrate` is on. */
 export function GoalCheck({ celebrate, size = "md" }: { celebrate: boolean; size?: "sm" | "md" }) {
   return (
     <span
@@ -135,10 +123,6 @@ export function GoalCheck({ celebrate, size = "md" }: { celebrate: boolean; size
   );
 }
 
-/**
- * A completed goal in Settled: the goal's target in its color with a small
- * green check, so it never reads as a settled task's checkbox.
- */
 function GoalDoneMark() {
   return (
     <span aria-label="Completed goal" role="img" className="relative grid size-5 shrink-0 place-items-center rounded-full bg-tag/15 text-tag">
@@ -150,7 +134,6 @@ function GoalDoneMark() {
   );
 }
 
-/** `/now`'s active goals as cards: count goals get a "Move Goal" tab, slider goals a slider. */
 export function DayGoalCards({
   goals,
   today,
@@ -161,7 +144,6 @@ export function DayGoalCards({
   onEdit: (goal: Goal) => void;
 }) {
   const color = useGoalColor();
-  // A goal completed here stays among the cards for its celebration.
   const shown = [...goals.active, ...goals.completed.filter((goal) => goals.celebrating.has(goal.id))];
   return (
     <ul data-tag={color} aria-label="Goals" className="flex flex-col gap-1.5">
@@ -244,7 +226,6 @@ function GoalCard({
         {(goal.progressMode === "count" || goal.targetDate) && <GoalMeta goal={goal} today={today} />}
       </div>
       {canMove && (
-        // A tab hanging from the card's bottom-right edge, part of the card.
         <button
           type="button"
           aria-label={`Move "${goal.name}" forward by one`}
@@ -263,7 +244,6 @@ function GoalCard({
   );
 }
 
-/** Edit, pause or reopen, from a card's corner. */
 function GoalMenu({ goal, onEdit }: { goal: Goal; onEdit: (goal: Goal) => void }) {
   const actions = useGoalActions();
   const pause = async () => {
@@ -317,7 +297,6 @@ function GoalMenu({ goal, onEdit }: { goal: Goal; onEdit: (goal: Goal) => void }
   );
 }
 
-/** Goals completed on the day: compact rows, each with its menu (to reopen). */
 export function CompletedGoals({
   goals,
   today,

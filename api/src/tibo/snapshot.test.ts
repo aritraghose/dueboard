@@ -96,7 +96,6 @@ describe("todaySnapshot", () => {
     expect(body).not.toContain("Task 12");
     const empty = todaySnapshot({ timeZone: "UTC", activeSession: null, day: day() }).body;
     expect(empty).toContain("Focus session: none running.");
-    // Roughly 4 characters a token: well under the ~600-token budget.
     expect(body.length).toBeLessThan(2400);
   });
 });

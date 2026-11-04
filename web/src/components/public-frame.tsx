@@ -4,10 +4,6 @@ import { AppLogo } from "@/components/app-logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
 
-/**
- * The chrome for logged-out visitors on public pages (`/@username`,
- * `/@username/ask`): the wordmark, theme and sign in.
- */
 export function PublicFrame({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col">

@@ -18,17 +18,6 @@ import * as TasksService from "./domain/tasks.ts";
 import * as UsageService from "./domain/usage.ts";
 import { ApiRpcs, BootstrapResult, CurrentUser, Viewer } from "./rpc.ts";
 
-/**
- * One handler per RPC in `ApiRpcs`, each running as `CurrentUser` (the
- * `PublicRpcs` ones as `Viewer`). Two Workers serve them: the ApiWorker
- * (`./api.ts`) for the browser, with the user from the cookie session, and
- * the DomainWorker (`./DomainWorker.ts`) for Tibo, as the agent's own user.
- *
- * Handlers stay thin: the rules live in the domain services (`./domain/`),
- * which take the acting user id explicitly, query through `Database`, and
- * turn database errors into defects, so each handler's error channel
- * matches its RPC schema.
- */
 export const apiHandlers = ApiRpcs.of({
   Bootstrap: ({ timeZone }) =>
     Effect.gen(function* () {

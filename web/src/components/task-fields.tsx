@@ -11,14 +11,6 @@ import { IMPORTANCE_LABEL } from "@/lib/tasks";
 import { type LocalDate, WEEK_STARTS_ON, formatDay } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-// Controls of the task card: the tag list, the date picker, stars and
-// segmented choices.
-
-/**
- * The task's tag, and a list to change it: each tag picks on click and has
- * an edit button, and "New tag" sits at the bottom. Editing and creating
- * open the tag card over the task card; a new tag is picked once created.
- */
 export function TagSelect({ value, onSelect }: { value: string; onSelect: (tag: Tag) => void }) {
   const tags = useTags();
   const [open, setOpen] = useState(false);
@@ -96,7 +88,6 @@ export function TagSelect({ value, onSelect }: { value: string; onSelect: (tag: 
         open={tagDialog.open}
         onOpenChange={(next) => setTagDialog((state) => ({ ...state, open: next }))}
         onSaved={(tag) => {
-          // A new tag is picked; an edited one stays as it was.
           if (tagDialog.target?.tag === null) onSelect(tag);
         }}
       />
@@ -110,11 +101,6 @@ const toDate = (date: LocalDate) => {
 };
 const toLocalDate = (date: Date) => format(date, "yyyy-MM-dd") as LocalDate;
 
-/**
- * A date that may be unset: a button showing the day (or "Not set") that
- * opens a calendar. `min`/`max` grey out days on the wrong side of the other
- * date, so the assigned date stays on or before the deadline.
- */
 export function DateField({
   label,
   value,
@@ -129,7 +115,6 @@ export function DateField({
   today: LocalDate;
   min?: LocalDate | null | undefined;
   max?: LocalDate | null | undefined;
-  /** No clear button (a habit's start date). */
   required?: boolean;
   onChange: (date: LocalDate | null) => void;
 }) {
@@ -178,11 +163,6 @@ export function DateField({
   );
 }
 
-/**
- * 1–5 stars on a pill track, with the level in words beside them ("High").
- * Clicking the current value clears it; arrow keys move it while the group
- * has focus. A picked star pops, so the change reads at a glance.
- */
 export function StarRating({
   value,
   onChange,
@@ -221,7 +201,6 @@ export function StarRating({
             className="grid size-7 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <StarIcon
-              // Re-mounts when this star becomes the value, which replays the pop.
               key={value === star ? "picked" : "idle"}
               aria-hidden="true"
               className={cn(
@@ -247,7 +226,6 @@ export function StarRating({
   );
 }
 
-/** A small row of mutually exclusive options (status, privacy). */
 export function Segmented<T extends string>({
   label,
   value,
@@ -259,7 +237,6 @@ export function Segmented<T extends string>({
   options: readonly { readonly value: T; readonly label: string }[];
   onChange: (value: T) => void;
 }) {
-  // Arrow keys move the choice and the focus together, like native radios.
   const move = (group: HTMLElement, step: number) => {
     const index = options.findIndex((option) => option.value === value);
     const nextIndex = (index + step + options.length) % options.length;

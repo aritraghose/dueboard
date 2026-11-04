@@ -20,7 +20,6 @@ export const Route = createFileRoute("/_auth/onboarding")({
   component: Onboarding,
 });
 
-// The same rules Better Auth's `username` plugin enforces on the server.
 const MIN = 3;
 const MAX = 30;
 const ALLOWED = /^[a-zA-Z0-9_.]+$/;
@@ -45,8 +44,6 @@ function Onboarding() {
   const trimmed = username.trim();
   const invalid = trimmed ? validate(trimmed) : null;
 
-  // Check availability as the user types (debounced). The server checks
-  // again on save, so this only gives early feedback.
   useEffect(() => {
     if (!trimmed || invalid) {
       setAvailability(null);
@@ -116,8 +113,6 @@ function Onboarding() {
                 aria-describedby="username-hint"
               />
             </InputGroup>
-            {/* Announced politely: FieldError's own role="alert" would
-                interrupt on every keystroke. */}
             <div id="username-hint" aria-live="polite">
               {fieldError ? (
                 <FieldError role={undefined}>{fieldError}</FieldError>

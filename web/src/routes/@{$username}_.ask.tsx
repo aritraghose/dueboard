@@ -19,18 +19,10 @@ import { readSidebarOpen } from "@/lib/sidebar-state";
 import { canonical, seo } from "@/lib/seo";
 import { getSessionUser } from "../session.ts";
 
-/**
- * `/@username/ask` (architecture.md §7.6): anyone, signed in or not, asks the
- * owner's Ask agent, which appears as Tibo "answering for @username" and
- * knows only what the owner wrote in Settings → Ask page. Laid out like the
- * Inbox (`./_app/inbox.tsx`), with a button to the owner's profile. Off by
- * default ("not available"); the owner can always preview it.
- */
 export const Route = createFileRoute("/@{$username}_/ask")({
   beforeLoad: async ({ cause }): Promise<{ user: OnboardedUser | null; sidebarOpen: boolean }> => {
     const checked = lastCheckedUser();
     if (cause === "stay" && checked) return { user: checked, sidebarOpen: readSidebarOpen() };
-    // The session only picks the chrome; the proxy reads it again for the questions.
     const session = await getSessionUser().catch(() => null);
     const user = session?.username ? { ...session, username: session.username } : null;
     if (user) rememberCheckedUser(user);
@@ -49,7 +41,6 @@ export const Route = createFileRoute("/@{$username}_/ask")({
       links: [canonical(path)],
     };
   },
-  // Like the Inbox: the thread draws its own header (profile button and bell); Tibo's own button would confuse.
   staticData: { topBar: { tibo: false, notifications: false } },
   component: AskRoute,
 });
@@ -63,7 +54,6 @@ function AskRoute() {
         <AskView
           username={username.toLowerCase()}
           signedIn
-          // The whole screen, as on the Inbox.
           height="h-[calc(100dvh-6.375rem-env(safe-area-inset-bottom))] md:h-[calc(100dvh-0.75rem)]"
         />
       </AppShell>
@@ -79,7 +69,6 @@ function AskRoute() {
 function AskView({ username, signedIn, height }: { username: string; signedIn: boolean; height: string }) {
   const result = useAtomValue(askPageAtom(username));
   const { reload } = useSocialActions();
-  // The server render can't reach `/rpc`; only a failure in the browser is real.
   const mounted = useMounted();
 
   if (AsyncResult.isFailure(result) && mounted) {
@@ -114,7 +103,6 @@ function AskView({ username, signedIn, height }: { username: string; signedIn: b
   return (
     <main className="flex flex-1 flex-col pt-1.5">
       <h1 className="sr-only">Ask @{username}</h1>
-      {/* The thread lives in the visitor's own agent instance, so it renders in the browser only. */}
       <ClientOnly fallback={<div className={height} />}>
         {page ? (
           <AskThread

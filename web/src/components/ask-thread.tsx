@@ -23,14 +23,6 @@ import { useAskThread, type AskError } from "@/hooks/use-ask";
 import { loadTurnstile, type TurnstileApi } from "@/lib/turnstile";
 import { cn } from "@/lib/utils";
 
-/**
- * An Ask page's thread (`/@username/ask`), laid out like Tibo's own
- * (`./tibo-thread.tsx`, the Inbox): Tibo floating at the top, here answering
- * for the owner ("Answers for @username"), your questions in your bubbles,
- * the answers in Tibo's, the message box at the bottom. It's the owner's
- * Ask agent behind it, not the visitor's Tibo: it knows only what the owner
- * wrote for it. Turnstile checks the first question of a visitor session.
- */
 export function AskThread({
   page,
   signedIn,
@@ -45,7 +37,6 @@ export function AskThread({
   const { person } = page;
   const { state, pending, ask } = useAskThread(person.username, page.available);
   const [error, setError] = React.useState<AskError | null>(null);
-  // The question waiting on the Turnstile check, and a fresh widget per check (tokens are single-use).
   const [waiting, setWaiting] = React.useState<string | null>(null);
   const [check, setCheck] = React.useState(0);
   const [draft, setDraft] = React.useState("");
@@ -58,7 +49,6 @@ export function AskThread({
       setWaiting(null);
       return;
     }
-    // Hand the question back, so nothing typed is lost.
     setDraft((current) => current || question);
     if (result.error === "verify") {
       setWaiting(question);
@@ -105,7 +95,6 @@ export function AskThread({
             <AskMessages exchanges={exchanges} pending={pending} />
           )}
         </div>
-        {/* As on the Inbox: from `md` up, half the thread's width, centered. */}
         <div className="flex flex-col gap-2 px-3 pt-2 pb-3 md:mx-auto md:w-1/2 md:px-0">
           {waiting !== null && state.status === "ready" && (
             <TurnstileCheck key={check} siteKey={state.siteKey} onToken={(token) => void send(waiting, token)} />
@@ -137,7 +126,6 @@ export function AskThread({
 
 const firstName = (person: Person) => person.name.trim().split(/\s+/)[0] || `@${person.username}`;
 
-/** What the page says when a question gets no answer. Never more than this. */
 const ERROR_LINE: Record<AskError, string> = {
   off: "This Ask page isn't available right now.",
   unavailable: "Answers are unavailable right now. Try again later.",
@@ -149,10 +137,6 @@ const ERROR_LINE: Record<AskError, string> = {
   network: "Couldn't send your question. Check your connection and try again.",
 };
 
-/**
- * Tibo floats over the top of the thread as on the Inbox, with whom it
- * answers for under its name ("typing…" while it answers).
- */
 function AskHeader({ person, typing, headerEnd }: { person: Person; typing: boolean; headerEnd?: React.ReactNode }) {
   const [spins, setSpins] = React.useState(0);
   React.useEffect(() => {
@@ -178,7 +162,6 @@ function AskHeader({ person, typing, headerEnd }: { person: Person; typing: bool
   );
 }
 
-/** One control in the header's top right corner, on its own pill like the Inbox's bell. */
 export function HeaderPill({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("rounded-full border border-bubble-tibo-border bg-bubble-tibo shadow-md", className)}>
@@ -187,11 +170,8 @@ export function HeaderPill({ children, className }: { children: React.ReactNode;
   );
 }
 
-/** The header's link to the owner's profile. */
 export function ProfileButton({ person }: { person: Person }) {
   return (
-    // In the ink color, not the bell's quiet gray: on Tibo's light cream it
-    // otherwise all but disappears in light mode.
     <Button
       asChild
       variant="ghost"
@@ -282,7 +262,6 @@ function Answer({ text }: { text: string }) {
   );
 }
 
-/** Three dots in a small Tibo bubble, as on the Inbox, while the answer comes. */
 function TypingBubble() {
   return (
     <div role="status" aria-label="Tibo is typing" className="flex pl-9">
@@ -300,7 +279,6 @@ function TypingBubble() {
   );
 }
 
-/** The Inbox's message box, for one question at a time. */
 function AskComposer({
   name,
   draft,
@@ -348,7 +326,6 @@ function AskComposer({
               {draft.length}/{ASK_QUESTION_MAX_LENGTH}
             </span>
           )}
-          {/* `aria-disabled`, as on the Inbox: a disabled control fades the whole box. */}
           <InputGroupButton
             type="submit"
             variant="ghost"
@@ -365,12 +342,6 @@ function AskComposer({
   );
 }
 
-/**
- * Turnstile, before a visitor's first question: loads Cloudflare's script,
- * renders the widget (managed: most people just see it pass), and sends the
- * waiting question with the token. Tokens are single-use, so the widget is
- * removed once it gives one; a failed check gets a fresh one.
- */
 function TurnstileCheck({ siteKey, onToken }: { siteKey: string; onToken: (token: string) => void }) {
   const container = React.useRef<HTMLDivElement>(null);
   const callback = React.useRef(onToken);

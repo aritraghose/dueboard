@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { Agent, getAgentByName, type Connection, type ConnectionContext, type WSMessage } from "agents";
-import { asSchema, isStepCount, streamText, type ToolSet } from "ai";
+import { asSchema, generateText, isStepCount, streamText, type ToolSet } from "ai";
 import type { AgentEnv } from "../AgentWorker.ts";
 import { RELAY_UNITS_PER_SIDE } from "../domain/relay-constants.ts";
 import { AI_UNITS_PER_MESSAGE } from "../domain/usage-constants.ts";
@@ -16,7 +16,7 @@ import {
 import { MAX_CHAT_MESSAGE_LENGTH } from "../limits.ts";
 import { MAX_TOOL_STEPS, PendingActions, TurnLedger, receiptFor, type PendingAction } from "./actions.ts";
 import { Activity, ActivityLog } from "./activity.ts";
-import { memoryRunDetail, toolLabel } from "./activity-rules.ts";
+import { memoryRunDetail, thinkingDetail, toolLabel } from "./activity-rules.ts";
 import {
   TIBO_STORAGE_MAX_BYTES,
   TIBO_UPLOADS_PER_DAY,
@@ -33,7 +33,9 @@ import { devSeedThread } from "./dev-seed.ts";
 import { MemoryJobs, type JobContext } from "./memory-jobs.ts";
 import { MemoryStore } from "./memory.ts";
 import { DAILY_JOB_CAP, DEV_DAILY_JOB_CAP, SETTLE_MS, estimateTokens } from "./memory-rules.ts";
-import { MODEL, museSpark } from "../muse.ts";
+import { IMAGE_SHAPES, museImage, type ImageReference, type ImageShape } from "../muse-image.ts";
+import { IMAGE_REFUSAL_TEXT, IMAGE_UNITS, imageFileName, imageRef, imageRefusal, parseImageRef } from "./image-rules.ts";
+import { MODEL, logMuseUsage, museOptions, museSpark } from "../muse.ts";
 import { PERSONA } from "./persona.ts";
 import { ProactiveStore, type CheckInOutcome } from "./proactive.ts";
 import {
@@ -112,73 +114,41 @@ import { Thread, type MessageMeta } from "./thread.ts";
 import { tiboTools, type RelayTools } from "./tools.ts";
 import type { DayJson, SessionJson } from "./views.ts";
 
-/** Lines Tibo "says" when something breaks. Shown once, never stored or charged. */
 const ERROR_BUBBLES = {
   model: "Okay, my brain just blue-screened. Nothing got sent, nothing got charged. Try me again in a sec?",
   rateLimit: "Whoa, you're typing faster than I can think, and I think FAST. Give me a minute, then hit me again.",
 } as const;
 
-/** Said when a turn changed things or held them but wrote no text of its own. */
 const QUIET_BUBBLES = {
   done: "Done!",
   held: "Just need your go-ahead on this one.",
   capped: "That's as much as I can do in one go. Want me to keep going?",
 } as const;
 
-/**
- * Frames one socket may send per `FRAME_WINDOW_MS` (architecture.md §9).
- * Chat turns have their own limit (`CHAT_RATE_LIMIT`); this bounds the
- * rest (paging, reactions, read marks, confirms), which reach the agent
- * past the website's HTTP limits. The app sends a handful a minute.
- */
 const FRAME_BUDGET = 60;
 const FRAME_WINDOW_MS = 10_000;
 
-/** The longest a browser-made `clientId` may be. */
 const MAX_CLIENT_ID_LENGTH = 64;
 
-/** Memory jobs run this long after a turn, so a burst of turns shares one run. */
 const MEMORY_JOB_DELAY_S = 60;
-/** …and this long after a run that stopped with work left. */
 const MEMORY_JOB_CONTINUE_S = 5;
-/** Past the user's midnight, so a finished day gets its summary. */
 const DAY_END_GRACE_MS = 5 * 60_000;
 
-/** Messages of the thread a relay turn sees (for tone; the relay is in its own section). */
 const RELAY_TURN_WINDOW = 12;
-/** A relay turn that finds another turn running tries again this much later (s). */
 const RELAY_TURN_RETRY_S = 10;
 
-/** A turn a relay causes: telling the recipient, telling the sender the answer, or an expiry line. */
 interface RelayTurn {
   readonly relayId: string;
   readonly kind: "deliver" | "outcome" | "expired";
 }
 
-/** A check-in about to be considered (`./proactive-rules.ts`). */
 interface CheckInTrigger {
-  /** Its log id: `morning_plan:2026-11-04`. */
   readonly id: string;
   readonly kind: ProactiveKind;
-  /** Its local day. */
   readonly day: string;
-  /** When it was meant for (ms). */
   readonly at: number;
 }
 
-/**
- * Tibo: one Durable Object per user, named by their user id (the web
- * stack's `/agents/*` proxy pins the name to the session's user, whatever the
- * browser asks for). It holds the user's single, never-ending thread in its
- * SQLite (`./thread.ts`) and talks to every open tab over WebSockets with
- * the frames in `./protocol.ts`, broadcasting so the side panel, `/inbox`
- * and other devices stay in sync.
- *
- * It extends the base `Agent`, not `AIChatAgent`: that one keeps the whole
- * history in memory and sends all of it to the model every turn, and this
- * thread lasts for years. Each turn's context is built fresh
- * (`./context.ts`) from the persona and the latest messages.
- */
 export class TiboAgent extends Agent<AgentEnv> {
   private threadStore: Thread | undefined;
   private actionStore: PendingActions | undefined;
@@ -188,17 +158,11 @@ export class TiboAgent extends Agent<AgentEnv> {
   private relayCardStore: RelayCards | undefined;
   private attachmentStore: AttachmentStore | undefined;
   private activityStore: ActivityLog | undefined;
-  /** Frames per socket in the current window (`FRAME_BUDGET`), in memory. */
   private frameCounts = new Map<string, { windowStart: number; count: number }>();
-  /** A memory job is running (in memory: a restart drops it, and its schedule retries). */
   private memoryJobRunning = false;
-  /** Another job run was asked for while one ran. */
   private memoryJobOwed = false;
-  /** Memories the jobs just wrote, with vectors, until Vectorize can find them (`JobContext.fresh`). */
   private readonly freshMemories: JobContext["fresh"] = [];
-  /** A turn is running; others wait for it. In memory: a restart drops it with the turn. */
   private running = false;
-  /** A message arrived during the running turn, so another follows it. */
   private owed = false;
 
   private get thread() {
@@ -209,7 +173,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.threadStore;
   }
 
-  /** Actions held for the user's go-ahead (`./actions.ts`). */
   private get actions() {
     if (!this.actionStore) {
       this.actionStore = new PendingActions(this.ctx.storage.sql);
@@ -218,7 +181,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.actionStore;
   }
 
-  /** Summaries, memories and thread chunks (`./memory.ts`). */
   private get memory() {
     if (!this.memoryStore) {
       this.memoryStore = new MemoryStore(this.ctx.storage.sql);
@@ -227,7 +189,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.memoryStore;
   }
 
-  /** Check-ins sent and the agent's own facts (`./proactive.ts`). */
   private get proactive() {
     if (!this.proactiveStore) {
       this.proactiveStore = new ProactiveStore(this.ctx.storage.sql);
@@ -236,7 +197,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.proactiveStore;
   }
 
-  /** Reminders the user asked for in chat (`./reminders.ts`). */
   private get reminders() {
     if (!this.reminderStore) {
       this.reminderStore = new ReminderStore(this.ctx.storage.sql);
@@ -245,7 +205,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.reminderStore;
   }
 
-  /** The relays this thread shows a card for (`./relays.ts`). */
   private get cards() {
     if (!this.relayCardStore) {
       this.relayCardStore = new RelayCards(this.ctx.storage.sql);
@@ -254,7 +213,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.relayCardStore;
   }
 
-  /** Files sent in the chat (`./attachments.ts`): rows here, bytes in the private R2 bucket. */
   private get files() {
     if (!this.attachmentStore) {
       this.attachmentStore = new AttachmentStore(this.ctx.storage.sql, this.env.TIBO_FILES, this.name);
@@ -263,7 +221,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.attachmentStore;
   }
 
-  /** What Tibo is doing and has done (`./activity.ts`), broadcast as it changes. */
   private get activity() {
     if (!this.activityStore) {
       this.activityStore = new ActivityLog(this.ctx.storage.sql, (activity) => this.send({ type: "activity", activity }));
@@ -283,22 +240,18 @@ export class TiboAgent extends Agent<AgentEnv> {
     void this.reminders;
     void this.cards;
     void this.files;
-    // Whatever was running died with the last instance.
     this.activity.interruptRunning();
     this.activity.prune(Date.now());
     this.proactive.prune(Date.now());
     void this.files.pruneOrphans(Date.now()).catch((error: unknown) => console.error("Pruning unsent files failed", error));
   }
 
-  /** The thread lives in SQL, not in Agent state; browsers may not write state. */
   validateStateChange(_next: unknown, source: Connection | "server") {
     if (source !== "server") throw new Error("Read-only");
   }
 
   onConnect(connection: Connection, _ctx: ConnectionContext) {
-    // Every open app tab keeps a socket, so this is when the user was last around.
     this.proactive.set("last_seen_at", Date.now());
-    // A thread with no read mark yet (before step 20) starts all read.
     let readSeq = this.proactive.getNumber("read_seq");
     if (readSeq === null) {
       readSeq = this.thread.lastSeq();
@@ -312,7 +265,6 @@ export class TiboAgent extends Agent<AgentEnv> {
       unread: this.thread.tiboAfter(readSeq),
       activity: this.activity.running(),
     });
-    // The first time (a new user, or one from before check-ins), arm them.
     if (this.proactive.get("proactive_plan") === null) {
       void this.planProactive().catch((error: unknown) => console.error("Planning check-ins failed", error));
     }
@@ -344,7 +296,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
 
     if (frame.type === "react") {
-      // Only on Tibo's messages, and only for the UI: the model never sees these.
       if (frame.emoji !== null && reactionOf(reactionLine(frame.emoji)) === null) return;
       const message = this.thread.react(frame.messageId, "tibo", frame.emoji);
       if (message) this.send({ type: "reaction", messageId: message.id, emoji: frame.emoji });
@@ -352,8 +303,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
 
     const text = frame.text.trim();
-    // Files uploaded by this user's own requests and not sent yet; any
-    // other id is dropped. Checked before anything is stored.
     const unsent = this.files.unsent(frame.attachments ?? []);
     if (!text && unsent.length === 0) return;
     if (text.length > MAX_CHAT_MESSAGE_LENGTH) {
@@ -363,8 +312,6 @@ export class TiboAgent extends Agent<AgentEnv> {
       });
       return;
     }
-    // 1. Save the user's message, and show it in every tab. A reply's quote
-    // is built here from the stored message, never taken from the browser.
     const replyTo = frame.replyTo ? this.thread.quote(frame.replyTo) : null;
     const messageId = crypto.randomUUID();
     const attachments: TiboAttachment[] = unsent.length > 0 ? this.files.claim(unsent.map((file) => file.id), messageId) : [];
@@ -387,7 +334,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     this.frameCounts.delete(connection.id);
   }
 
-  /** One more frame from this socket fits its budget; extra frames are dropped. */
   private allowFrame(connectionId: string) {
     const now = Date.now();
     const current = this.frameCounts.get(connectionId);
@@ -399,17 +345,9 @@ export class TiboAgent extends Agent<AgentEnv> {
     return current.count <= FRAME_BUDGET;
   }
 
-  /**
-   * Account deletion (`domain/tibo.ts`): drops the thread and everything
-   * else this agent stored. Called over RPC by the AgentWorker's wipe cron.
-   */
   async wipe() {
     for (const connection of this.getConnections()) connection.close(4000, "Account deleted");
-    // Its vectors first: Vectorize can't drop a namespace, so every vector
-    // id this agent ever wrote is deleted (a failure throws, and the wipe
-    // cron retries before anything else is gone).
     await this.deleteAllVectors();
-    // Same for the files: every object under the user's prefix in R2.
     await this.files.deleteAll();
     await this.destroy();
   }
@@ -421,13 +359,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  // ─── HTTP: Settings → Tibo → Memory, and dev tools ───────────────────────
-
-  /**
-   * `/agents/tibo-agent/<user id>/…` over HTTP. The web stack's proxy signs
-   * the user in and pins the name to them, so these only ever reach the
-   * caller's own memories. See `TIBO_MEMORIES_PATH` in `./protocol.ts`.
-   */
   async onRequest(request: Request): Promise<Response> {
     const [, , , , ...rest] = new URL(request.url).pathname.split("/");
     const route = rest.map(decodeURIComponent);
@@ -461,14 +392,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return new Response("Not found", { status: 404 });
   }
 
-  /**
-   * `POST files`: one file for the chat, raw bytes in the body, its name in
-   * `x-file-name`. The website's proxy has checked the session, the origin,
-   * the per-user burst limit and the size; this checks the size again, the
-   * daily count and the user's storage. What the file is comes from its
-   * bytes (`sniff`). It's stored under this agent's own user and stays
-   * unsent until a `send` frame names it (unsent files go after a day).
-   */
   private async upload(request: Request): Promise<Response> {
     const answer = (body: TiboUpload, status = 200) => Response.json(body, { status });
     const bytes = new Uint8Array(await request.arrayBuffer());
@@ -490,7 +413,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  /** A document's or PDF's text, from Workers AI's `toMarkdown` (no metadata, images skipped); `null` if it can't. */
   private async readDocument(name: string, bytes: Uint8Array<ArrayBuffer>): Promise<string | null> {
     const activity = this.activity.start({ kind: "file", label: `Reading ${name}` });
     try {
@@ -507,11 +429,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  /**
-   * `GET files/<id>`: one of this user's files. Only ids stored here exist,
-   * and the proxy pins this agent to the signed-in user, so no one else's
-   * file can be named. Served with the headers in `serveHeaders`.
-   */
   private async serveFile(id: string, download: boolean, head: boolean): Promise<Response> {
     const stored = id.length <= 64 ? this.files.get(id) : null;
     if (!stored) return new Response("Not found", { status: 404 });
@@ -520,12 +437,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return new Response(object?.body ?? null, { headers: serveHeaders(stored.attachment, download) });
   }
 
-  /**
-   * Development only (`alchemy dev`): `POST dev/seed` replaces this thread
-   * and its memory with the synthetic one in `./dev-seed.ts` and starts the
-   * memory jobs; `POST dev/memory-jobs` runs them now; `GET dev/memory`
-   * shows what they've built.
-   */
   private async devRoute(action: string | undefined, request: Request): Promise<Response> {
     if (action === "seed" && request.method === "POST") {
       await this.deleteAllVectors();
@@ -543,11 +454,12 @@ export class TiboAgent extends Agent<AgentEnv> {
       await this.scheduleMemoryJobs(1, "dev");
       return Response.json({ inserted: seeded.length });
     }
+    if (action === "muse-probe" && request.method === "POST") return this.devMuseProbe(request);
+    if (action === "image" && request.method === "POST") return this.devImage(request);
     if (action === "check-in" && request.method === "POST") return this.devCheckIn(request);
     if (action === "check-ins" && request.method === "GET") return this.devCheckIns();
     if (action === "alarm" && request.method === "POST") return this.devAlarm(request);
     if (action === "relay-expire" && request.method === "POST") {
-      // Makes one of this user's sent relays due now; the cron's next sweep expires it.
       const relayId = new URL(request.url).searchParams.get("id") ?? "";
       const result = await relayClient(this.env.DOMAIN, this.name).expireNow(relayId);
       return Response.json(result, { status: result.ok ? 200 : 404 });
@@ -562,8 +474,6 @@ export class TiboAgent extends Agent<AgentEnv> {
       return Response.json({ scheduled: true });
     }
     if (action === "memory" && request.method === "GET") {
-      // The whole index (dev has one user), as Vectorize last counted it: it
-      // lags writes and deletes by a few seconds.
       const index = await this.env.MEMORY.describe().catch((error: unknown) => {
         console.error("Describing the memory index failed", error);
         return null;
@@ -585,11 +495,63 @@ export class TiboAgent extends Agent<AgentEnv> {
     return new Response("Not found", { status: 404 });
   }
 
-  /**
-   * Development only: `POST dev/check-in?kind=<kind>[&bypass=quiet,stale|all]`
-   * runs a check-in now, through the same rules as an alarm (or past the
-   * named ones), and answers its outcome.
-   */
+  private async devMuseProbe(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const effort = url.searchParams.get("effort") ?? "default";
+    const question = url.searchParams.get("q") ?? "what should I focus on this afternoon? I have a report due friday and haven't gone to the gym in a week";
+    const started = Date.now();
+    const result = await generateText({
+      model: museSpark(this.env, this.name),
+      system: PERSONA,
+      prompt: question,
+      providerOptions:
+        effort === "default"
+          ? {}
+          : {
+              openai: {
+                forceReasoning: true,
+                systemMessageMode: "system",
+                reasoningEffort: effort,
+                reasoningSummary: url.searchParams.has("summary") ? "auto" : null,
+              },
+            },
+      abortSignal: AbortSignal.timeout(120_000),
+    }).catch((error: unknown) => error as Error & { responseBody?: string; requestBodyValues?: unknown });
+    if (result instanceof Error) {
+      return Response.json(
+        { effort, error: result.message, responseBody: result.responseBody, request: result.requestBodyValues },
+        { status: 502 },
+      );
+    }
+    const raw = result.response.body as { output?: { type: string; summary?: unknown }[] } | undefined;
+    return Response.json({
+      effort,
+      ms: Date.now() - started,
+      usage: result.usage,
+      reasoning: result.reasoningText ?? null,
+      reasoningItems: raw?.output?.filter((item) => item.type === "reasoning") ?? null,
+      text: result.text,
+      warnings: result.warnings,
+    });
+  }
+
+  private async devImage(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const prompt = url.searchParams.get("prompt") ?? "a small orange cat napping in a sunbeam on a wooden desk, soft watercolor";
+    const shape = (url.searchParams.get("shape") ?? "square") as ImageShape;
+    const from = url.searchParams.get("from");
+    const stored = from ? this.files.get(from) : null;
+    const bytes = from ? await this.files.bytes(from) : null;
+    if (from && (!stored || !bytes)) return Response.json({ error: "No such file" }, { status: 404 });
+    const result = await museImage(this.env, this.name, {
+      prompt,
+      shape: IMAGE_SHAPES.includes(shape) ? shape : "square",
+      references: stored && bytes ? [{ mediaType: stored.attachment.mediaType, bytes }] : [],
+    });
+    if (!result.ok) return Response.json(result, { status: 502 });
+    return new Response(result.bytes, { headers: { "content-type": result.mediaType, "x-ms": String(result.ms) } });
+  }
+
   private async devCheckIn(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const kind = url.searchParams.get("kind") as ProactiveKind | null;
@@ -608,12 +570,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return Response.json({ outcome, sentToday: this.proactive.sentOn(day) });
   }
 
-  /**
-   * Development only: `POST dev/alarm?kind=<timed kind>&at=HH:MM` arms a real
-   * check-in alarm today at any minute (settings only take half hours), so
-   * the alarm path runs without waiting for a planned slot. It skips the
-   * "slot still planned" check and logs under a `dev:` id.
-   */
   private async devAlarm(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const kind = url.searchParams.get("kind") as ProactiveSlot["kind"] | null;
@@ -628,12 +584,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return Response.json({ armed: { ...slot, firesAt: new Date(slot.at).toISOString() } });
   }
 
-  /**
-   * Development only: drives a second test account's Tibo, to try relays
-   * end to end with one browser. `?user=<their user id>` and
-   * `POST …&do=say&text=…` (a message from them), `POST …&do=confirm&approve=true`
-   * (their tap on the waiting Confirm card) or `GET` (their latest messages).
-   */
   private async devPeer(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const userId = url.searchParams.get("user") ?? "";
@@ -646,7 +596,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return Response.json({ error: "do is say or confirm" }, { status: 400 });
   }
 
-  /** Development only (`devPeer`): this thread's latest rows and the action waiting, if any. */
   async devThread() {
     if (!this.dev) throw new Error("Development only");
     return {
@@ -658,7 +607,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     };
   }
 
-  /** Development only (`devPeer`): a message from this agent's user, as if typed. */
   async devSay(text: string) {
     if (!this.dev) throw new Error("Development only");
     const message = this.thread.add({ role: "user", body: text.slice(0, MAX_CHAT_MESSAGE_LENGTH), meta: { clientId: crypto.randomUUID() } });
@@ -667,7 +615,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return { ok: true };
   }
 
-  /** Development only (`devPeer`): this user's tap on the waiting Confirm or Cancel. */
   async devConfirm(approve: boolean) {
     if (!this.dev) throw new Error("Development only");
     const pending = this.actions.current(Date.now());
@@ -675,7 +622,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.answerPending(pending.id, approve);
   }
 
-  /** Development only: `GET dev/check-ins`: the armed alarms, the log and the facts they read. */
   private async devCheckIns(): Promise<Response> {
     const lastSeenAt = this.proactive.getNumber("last_seen_at");
     const lastMessageAt = this.thread.lastMessageAt();
@@ -694,37 +640,18 @@ export class TiboAgent extends Agent<AgentEnv> {
     });
   }
 
-  // ─── Long-term memory jobs ───────────────────────────────────────────────
-
-  /**
-   * Schedules a memory job run `delaySeconds` from now (Agents SDK
-   * `schedule`, on the DO's alarm). Runs asked for within the same minute
-   * share one schedule.
-   */
   private async scheduleMemoryJobs(delaySeconds: number, reason: string) {
     const at = Date.now() + delaySeconds * 1000;
     await this.schedule(new Date(at), "runMemoryJobs", { reason, minute: Math.floor(at / 60_000) }, { idempotent: true });
   }
 
-  /**
-   * One run of the memory jobs (`./memory-jobs.ts`), then the next one: soon
-   * if work is left, tomorrow if today's budget ran out, and otherwise when
-   * the thread goes quiet and when the user's day ends, while anything is
-   * unread. Never during a reply's critical path, and never charged.
-   */
   async runMemoryJobs(_payload?: { reason: string; minute: number }) {
     if (this.memoryJobRunning) {
       this.memoryJobOwed = true;
       return;
     }
     this.memoryJobRunning = true;
-    // If the agent restarts mid-run (a deploy, an eviction), nothing would
-    // schedule the next one: this fallback does, and finds nothing to do
-    // when the run ended well.
     await this.scheduleMemoryJobs(15 * 60, "watchdog");
-    // A run takes minutes (each model call 15–30 s), and a schedule callback
-    // that runs long holds up the agent's other jobs: detach it, kept alive
-    // until it ends.
     void this.keepAliveWhile(() => this.memoryJobRun());
   }
 
@@ -741,7 +668,6 @@ export class TiboAgent extends Agent<AgentEnv> {
       }
       const timeZone = profile?.timeZone ?? this.memory.get("time_zone") ?? "UTC";
       const now = new Date();
-      // Shown only once there's real work: most runs find nothing to do.
       const before = this.memory.stats();
       const progress = (label: string) => {
         memoryAct ??= this.activity.start({ kind: "memory", label: "Tidying up my memory" });
@@ -783,7 +709,6 @@ export class TiboAgent extends Agent<AgentEnv> {
       } else if (outcome.more || this.memoryJobOwed) {
         await this.scheduleMemoryJobs(MEMORY_JOB_CONTINUE_S, "continue");
       } else if (this.thread.countAfter(this.memory.getNumber("summarized_seq")) > 0) {
-        // Unread messages wait for the thread to settle, and for the day to end.
         const last = this.thread.latest(1).messages[0];
         const settle = (last?.createdAt ?? Date.now()) + SETTLE_MS + 60_000;
         const unread = Math.min(this.memory.getNumber("chunked_seq"), this.memory.getNumber("extracted_seq"));
@@ -802,17 +727,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  // ─── Check-ins: Tibo messages first (step 20) ─────────────────────────────
-
-  /**
-   * Arms the check-in alarms from the user's settings, in their zone:
-   * cancels every armed one, then schedules the next slot of each timed
-   * kind that's on (Agents SDK `schedule`, on the DO's alarm). Runs on the
-   * first connect, when a `settings_changed` event arrives (a setting or
-   * the zone changed), and when an alarm finds the plan out of date.
-   * `firing` is the alarm running now: it's left alone, and its kind moves
-   * to its next slot.
-   */
   private async planProactive(given?: TiboProactiveContext, firing?: { slot: ProactiveSlot; scheduleId: string }) {
     const context = given ?? (await tiboClient(this.env.DOMAIN).proactive(this.name));
     for (const schedule of await this.listSchedules()) {
@@ -827,7 +741,7 @@ export class TiboAgent extends Agent<AgentEnv> {
       await this.armSlot(
         firing?.slot.kind === kind
           ? nextSlot(kind, context.timeZone, time, Math.max(now, firing.slot.at))
-          : // A slot that came due a moment ago is kept: the log stops a repeat.
+          :
             nextSlot(kind, context.timeZone, time, now, PLAN_GRACE_MS),
       );
     }
@@ -839,25 +753,18 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.schedule(new Date(slot.at), "proactiveFire", slot, { idempotent: true });
   }
 
-  /** The armed check-in alarms (dev route, logs). */
   private async armedSlots() {
     return (await this.listSchedules())
       .filter((schedule) => schedule.callback === "proactiveFire")
       .map((schedule) => ({ ...(schedule.payload as ProactiveSlot), firesAt: new Date(schedule.time * 1000).toISOString() }));
   }
 
-  /**
-   * A check-in alarm (scheduled by `planProactive`). Returns at once: the
-   * turn takes a model call, longer than a schedule callback should hold
-   * the agent's other jobs.
-   */
   async proactiveFire(slot: ProactiveSlot, schedule?: { id: string }) {
     void this.keepAliveWhile(() =>
       this.runSlot(slot, schedule?.id ?? "").catch((error: unknown) => console.error("Tibo check-in alarm failed", slot, error)),
     );
   }
 
-  /** Retries planning after the settings couldn't be read. */
   async replanProactive() {
     await this.planProactive().catch((error: unknown) => {
       console.error("Re-planning check-ins failed", error);
@@ -870,17 +777,13 @@ export class TiboAgent extends Agent<AgentEnv> {
     try {
       context = await tiboClient(this.env.DOMAIN).proactive(this.name);
     } catch (error) {
-      // Today's goes unsent; the retry re-arms the next ones.
       console.error("Reading check-in settings failed", error);
       await this.schedule(5 * 60, "replanProactive", { retry: true }, { idempotent: true });
       return;
     }
     if (this.proactive.get("proactive_plan") !== planFingerprint(context.proactive, context.timeZone)) {
-      // Settings or the zone moved and the event saying so was lost: re-plan,
-      // and send this one only if it still stands.
       await this.planProactive(context, { slot, scheduleId });
     } else {
-      // Re-arm: the same kind, at its next slot (tomorrow, or later if this one fired late).
       const time = slotTime(slot.kind, context.proactive);
       if (time) await this.armSlot(nextSlot(slot.kind, context.timeZone, time, Math.max(Date.now(), slot.at)));
     }
@@ -889,24 +792,11 @@ export class TiboAgent extends Agent<AgentEnv> {
     await this.checkIn({ id, kind: slot.kind, day: slot.day, at: slot.at }, context);
   }
 
-  /**
-   * Domain events from the outbox (`domain/tibo.ts`), delivered by the
-   * AgentWorker's cron over RPC: a changed setting or zone re-plans the
-   * check-ins. Throws if the settings can't be read, so the cron delivers
-   * them again.
-   */
   async deliverEvents(events: readonly TiboEventJson[]) {
     if (events.some((event) => event.kind === "settings_changed")) await this.planProactive();
     return { ok: true as const };
   }
 
-  /**
-   * Considers one check-in: the log (never twice), the rules
-   * (`gate`: switches, staleness, dormancy, a running turn,
-   * mid-conversation quiet), whether the user's day gives Tibo something
-   * useful to say, and the quota. Skips silently; otherwise runs the turn.
-   * `bypass` is for the dev route only.
-   */
   private async checkIn(
     trigger: CheckInTrigger,
     context: TiboProactiveContext,
@@ -936,12 +826,10 @@ export class TiboAgent extends Agent<AgentEnv> {
     const board = await this.board(dayIn(context.timeZone, new Date(now)));
     const focus = checkInFocus(trigger.kind, board?.day ?? null);
     if (!focus) return skip(board ? "nothing" : "failed");
-    // Out of quota: silently nothing (the composer's notice covers it).
     const { allowed } = await usageClient(this.env.DOMAIN)
       .check(this.name, AI_UNITS_PER_MESSAGE)
       .catch(() => ({ allowed: false }));
     if (!allowed) return skip("quota");
-    // A turn may have started while this waited.
     if (this.running) return skip("busy");
     const { outcome } = await this.exclusive(
       () => this.checkInTurn(trigger, context, focus, board),
@@ -950,12 +838,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return outcome;
   }
 
-  /**
-   * A turn Tibo starts: an app event row (hidden in the app) records why,
-   * then the reply streams as normal bubbles to every tab, with no tools.
-   * Charged as one `tibo_proactive` message once a bubble showed. A turn
-   * that showed nothing takes its event row back and isn't charged.
-   */
   private async checkInTurn(
     trigger: CheckInTrigger,
     context: TiboProactiveContext,
@@ -1022,9 +904,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  // ─── Reminders the user asks for ─────────────────────────────────────────
-
-  /** The reminder tools' backends for one turn (`./tools.ts`). */
   private reminderTools(timeZone: string, today: string) {
     return {
       set: async (input: { date: string; time: string; about: string; message: string }) => {
@@ -1041,7 +920,6 @@ export class TiboAgent extends Agent<AgentEnv> {
           now,
         });
         await this.schedule(new Date(when.at), "reminderFire", { id: reminder.id });
-        // No receipt line: Tibo says it in its own words (like memories).
         return { status: "done", id: reminder.id, when: reminderWhen(when.at, timeZone, today) };
       },
       list: async () => ({
@@ -1052,7 +930,6 @@ export class TiboAgent extends Agent<AgentEnv> {
         })),
       }),
       cancel: async ({ id }: { id: string }) => {
-        // Its alarm stays and finds it cancelled.
         const reminder = this.reminders.settle(id, "cancelled");
         if (!reminder) return { error: "No reminder to come has that id. List them first." };
         return { status: "done", cancelled: reminder.about };
@@ -1060,13 +937,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     };
   }
 
-  /**
-   * A reminder's alarm: sends the words Tibo wrote when it was set, as a
-   * Tibo bubble after a short typing pause. No model call and no charge
-   * (the turn that set it was charged), so quota can't stop it; the user
-   * asked, so the check-in rules don't apply. Waits for a running reply to
-   * finish; one delayed past `REMINDER_LATE_MS` is marked missed.
-   */
   async reminderFire(payload: { id: string }) {
     const reminder = this.reminders.get(payload.id);
     if (!reminder || reminder.status !== "pending") return;
@@ -1080,7 +950,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
     if (!this.reminders.settle(reminder.id, "sent")) return;
     const turnId = crypto.randomUUID();
-    // Why Tibo spoke, for later turns (hidden in the app).
     this.thread.add({
       role: "system_event",
       body: `A reminder the user asked for came due (${reminder.about}); it was sent as written.`,
@@ -1099,21 +968,8 @@ export class TiboAgent extends Agent<AgentEnv> {
     if (this.dev) console.log("Tibo reminder sent", reminder.id);
   }
 
-  /**
-   * Tells the user Tibo wrote first. In the app only for now: the bubbles
-   * were broadcast to every open tab, and the unread dot lights there or on
-   * their next visit (`read_seq`). Step 23 adds web push here, for when no
-   * tab is open (`this.getConnections()` is empty).
-   */
   private async notifyUser(_note: { kind: ProactiveKind | "reminder" | "relay"; turnId: string }) {}
 
-  // ─── Turns ───────────────────────────────────────────────────────────────
-
-  /**
-   * Runs a turn, or marks one owed if a turn is already running: messages
-   * sent mid-reply wait, then get one reply together, so two turns never
-   * overlap.
-   */
   private requestTurn() {
     if (this.running) {
       this.owed = true;
@@ -1126,17 +982,9 @@ export class TiboAgent extends Agent<AgentEnv> {
     );
   }
 
-  /**
-   * Runs `job` (a reply turn or a check-in) holding the turn lock, then a
-   * reply turn while the user is owed one. Resolves with `job`'s result
-   * while the queue goes on. `sinceSeq` is where `job`'s own exchange
-   * started: a message the user sent after it is answered next, even though
-   * Tibo's bubbles came after that message.
-   */
   private exclusive<T>(job: () => Promise<T>, sinceSeq: (value: T) => number): Promise<T> {
     this.running = true;
     const result = job();
-    // Kept alive (and off hibernation) until the queue drains.
     void this.keepAliveWhile(async () => {
       try {
         const value = await result;
@@ -1152,7 +1000,6 @@ export class TiboAgent extends Agent<AgentEnv> {
         console.error("Tibo's turn queue failed", error);
       } finally {
         this.running = false;
-        // Fold the new messages into memory soon, off the reply's path.
         await this.scheduleMemoryJobs(MEMORY_JOB_DELAY_S, "turn").catch((error: unknown) =>
           console.error("Scheduling memory jobs failed", error),
         );
@@ -1168,8 +1015,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     const act = this.activity.start({ kind: "reply", label: "Replying to you" });
     const reading = act.step("reading", "Reading your message");
     try {
-      // 2. The per-user chat rate limit, then the monthly quota. Out of
-      // either, no model call.
       const { success } = await this.env.CHAT_RATE_LIMIT.limit({ key: userId });
       if (!success) {
         this.send({
@@ -1191,26 +1036,20 @@ export class TiboAgent extends Agent<AgentEnv> {
         return;
       }
 
-      // Tibo has read everything so far: double ticks.
       const seen = this.thread.markSeen();
       if (seen.length > 0) this.send({ type: "seen", messageIds: seen });
       if (seen.length > 1) reading.set({ label: `Reading your ${seen.length} messages` });
       reading.end();
 
-      // 3. The context, built fresh, with the user's day as it is now, and
-      // what Tibo remembers that bears on what the user just said.
       const now = new Date();
       const today = dayIn(profile.timeZone, now);
       this.memory.set("time_zone", profile.timeZone);
       this.memory.set("first_name", profile.firstName);
-      // The zone moved and the event saying so hasn't arrived yet: the
-      // check-ins follow it now.
       const plan = this.proactive.get("proactive_plan");
       if (plan !== null && (JSON.parse(plan) as { timeZone?: string }).timeZone !== profile.timeZone) {
         void this.planProactive().catch((error: unknown) => console.error("Re-planning check-ins failed", error));
       }
       const recent = this.thread.latest(RECENT_WINDOW).messages;
-      // Tibo may react to the newest thing the user said.
       const latestUserMessage = recent.findLast((message) => message.role === "user");
       const recall: RecallContext = {
         env: this.env,
@@ -1237,12 +1076,8 @@ export class TiboAgent extends Agent<AgentEnv> {
         sections: [snapshot, story, remembered].filter((section): section is ContextSection => section !== null),
         fileNote: (id) => this.files.notes([id]).get(id)?.note ?? null,
       });
-      // The files the user just sent, as they are: images and PDFs, or text.
       const context = { ...built, messages: withFiles(built.messages, await this.newFiles(recent, act)) };
 
-      // Held actions can be answered in words only by a message the user
-      // typed after they were held. Turns started any other way (check-ins,
-      // relays) have no tools at all, so they can't offer this.
       const pending = this.actions.current(now.getTime());
       const confirmable = pending !== null && this.thread.lastUserSeq() > pending.afterSeq;
       const ledger = new TurnLedger();
@@ -1255,22 +1090,18 @@ export class TiboAgent extends Agent<AgentEnv> {
         confirmPending: confirmable ? (approve) => this.answerPending(pending.id, approve) : null,
         memory: {
           search: (input) => searchConversation(recall, refs, input),
-          // No receipts: a "Remembered: …" line under the chat read as
-          // unnatural; Tibo says it in its own words, and Settings lists them.
           remember: async (input) =>
             (await remember(recall, refs, { ...input, sourceMessageId: latestUserMessage?.id ?? null })).answer,
           forget: async (input) => (await forget(recall, refs, input)).answer,
         },
         reminders: this.reminderTools(profile.timeZone, today),
         relays: this.relayTools(unansweredText(recent)),
+        images: { make: (input) => this.makeImage(ledger, input) },
       });
       if (this.dev) void this.logContextSizes(context, tools);
 
-      // 4–6. Stream the reply, and deliver it bubble by bubble.
       const answered = await this.reply(turnId, context, latestUserMessage?.id ?? null, tools, ledger, act);
 
-      // 7. One message of usage for the turn, however many bubbles. A reply
-      // that failed before its first bubble (or reaction) isn't charged.
       if (answered) {
         const after = await usage
           .record(userId, AI_UNITS_PER_MESSAGE, "tibo_reply", turnId)
@@ -1291,26 +1122,22 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  /**
-   * Streams the model's reply and shows each bubble after a typing pause
-   * based on its length. The model keeps writing while a bubble "types",
-   * so the pause and the model's latency overlap. A reaction line (the
-   * model's choice, `./bubbles.ts`) is applied to `reactTo` as soon as it
-   * streams in. Returns whether anything was shown (a bubble or a
-   * reaction); throws if the model failed before that.
-   */
   private async reply(
     turnId: string,
     context: TurnContext,
     reactTo: string | null,
     tools: ToolSet,
     ledger: TurnLedger,
-    /** The thread its steps (thinking, tools, writing) are logged under. */
     act?: Activity,
   ): Promise<boolean> {
-    const bubbles = new Channel<string>();
-    // The step the model is on: thinking before it writes or calls a tool,
-    // writing while its words come (until they're all delivered).
+    const bubbles = new Channel<string | { picture: TiboAttachment }>();
+    let picturesShown = 0;
+    const showPictures = () => {
+      if (picturesShown >= ledger.images.length) return;
+      for (const bubble of splitter.push(`\n${BUBBLE_DELIMITER}\n`)) bubbles.put(bubble);
+      for (const picture of ledger.images.slice(picturesShown)) bubbles.put({ picture });
+      picturesShown = ledger.images.length;
+    };
     let phase: { kind: "thinking" | "writing"; step: Activity } | null = null;
     const enter = (kind: "thinking" | "writing") => {
       if (!act || phase?.kind === kind) return;
@@ -1320,6 +1147,9 @@ export class TiboAgent extends Agent<AgentEnv> {
     const leave = () => {
       phase?.step.end();
       phase = null;
+    };
+    const noteThought = (summary: string) => {
+      if (phase?.kind === "thinking" && summary.trim()) phase.step.set({ detail: thinkingDetail(summary) });
     };
     const toolSteps = new Map<string, { step: Activity; receipts: number; held: number }>();
     const splitter = new BubbleSplitter(TIBO_MAX_BUBBLES);
@@ -1333,19 +1163,32 @@ export class TiboAgent extends Agent<AgentEnv> {
       this.send({ type: "reaction", messageId: message.id, emoji });
     };
 
-    // Tools run in steps; the whole turn is still one message of quota.
     const result = streamText({
       model: museSpark(this.env, this.name),
       system: context.system,
       messages: context.messages,
       tools,
       stopWhen: isStepCount(MAX_TOOL_STEPS),
+      providerOptions: museOptions("reply", { summary: act !== undefined }),
     });
     let capped = false;
+    let step = 0;
+    let stepStarted = Date.now();
+    let thought = "";
     const produce = (async () => {
       for await (const part of result.fullStream) {
         if (part.type === "error") throw part.error;
-        if (part.type === "start-step") enter("thinking");
+        if (part.type === "start-step") {
+          step += 1;
+          stepStarted = Date.now();
+          thought = "";
+          enter("thinking");
+        }
+        if (part.type === "reasoning-delta") thought += part.text;
+        if (part.type === "reasoning-end") noteThought(thought);
+        if (part.type === "tool-call" && part.toolName === "make_image") {
+          for (const bubble of splitter.push(`\n${BUBBLE_DELIMITER}\n`)) bubbles.put(bubble);
+        }
         if (part.type === "tool-call" && act) {
           leave();
           toolSteps.set(part.toolCallId, {
@@ -1363,26 +1206,23 @@ export class TiboAgent extends Agent<AgentEnv> {
             const held = ledger.held.length > tool.held ? ["Waiting for your go-ahead"] : [];
             tool.step.end("done", [...made, ...held].join("; ") || undefined);
           }
+          showPictures();
         }
         if (part.type === "text-delta") {
           enter("writing");
           for (const bubble of splitter.push(part.text)) bubbles.put(bubble);
           takeReaction();
         }
-        // Text before a tool call ("On it!") and after it ("Done!") are
-        // separate bubbles, not one run-on line.
         if (part.type === "finish-step") {
+          logMuseUsage("reply", part.usage, Date.now() - stepStarted, step);
           for (const bubble of splitter.push(`\n${BUBBLE_DELIMITER}\n`)) bubbles.put(bubble);
           capped = part.finishReason === "tool-calls";
         }
       }
+      showPictures();
       for (const bubble of splitter.finish()) bubbles.put(bubble);
       takeReaction();
-      // Stopped by the step limit mid-work: its last words may promise
-      // something that never ran, so say where things stand.
       if (capped) bubbles.put(QUIET_BUBBLES.capped);
-      // Changes with nothing said about them still get a line to hang the
-      // receipts or the confirm buttons on.
       else if (!splitter.emittedAny && (ledger.receipts.length > 0 || ledger.held.length > 0)) {
         bubbles.put(ledger.held.length > 0 ? QUIET_BUBBLES.held : QUIET_BUBBLES.done);
       }
@@ -1406,19 +1246,21 @@ export class TiboAgent extends Agent<AgentEnv> {
           if (lastBubbleId) this.settleTurnActions(lastBubbleId, ledger);
           return true;
         }
-        // The pause counts from when typing showed, so a slow model doesn't add to it.
-        const wait = typingDelayMs(next.value) - (Date.now() - typingSince);
+        const picture = typeof next.value === "string" ? null : next.value.picture;
+        const wait = picture ? 0 : typingDelayMs(next.value as string) - (Date.now() - typingSince);
         if (wait > 0) await sleep(wait);
+        const messageId = crypto.randomUUID();
+        const attachments = picture ? this.files.claim([picture.id], messageId) : [];
         const message = this.thread.add({
+          id: messageId,
           role: "tibo",
-          body: next.value,
+          body: picture ? "" : (next.value as string),
           turnId,
-          meta: { model: MODEL },
+          meta: { model: MODEL, ...(attachments.length > 0 ? { attachments } : {}) },
         });
         delivered += 1;
         lastBubbleId = message.id;
         this.send({ type: "bubble", message });
-        // More may come: keep typing until the stream says otherwise.
         typingSince = Date.now();
         if (!bubbles.drained) this.send({ type: "typing", on: true });
       }
@@ -1430,10 +1272,55 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  /**
-   * The contents of the files in the user's messages since Tibo last spoke,
-   * within one turn's caps. Older files read as their names and notes.
-   */
+  private async makeImage(
+    ledger: TurnLedger,
+    input: { prompt: string; from: readonly string[]; shape: ImageShape },
+  ): Promise<unknown> {
+    const userId = this.name;
+    const now = Date.now();
+    const refusal = imageRefusal({
+      madeThisTurn: ledger.images.length,
+      madeToday: this.files.madeSince(now - 24 * 60 * 60 * 1000),
+      storedBytes: this.files.usage(now).bytes,
+      storageMaxBytes: TIBO_STORAGE_MAX_BYTES,
+    });
+    if (refusal) return { error: IMAGE_REFUSAL_TEXT[refusal] };
+
+    const references: ImageReference[] = [];
+    for (const raw of input.from) {
+      const ref = parseImageRef(raw);
+      const stored = ref ? this.files.findImage(ref) : null;
+      const bytes = stored ? await this.files.bytes(stored.attachment.id) : null;
+      if (!stored || !bytes) return { error: IMAGE_REFUSAL_TEXT.unknown_image, ref: raw };
+      references.push({ mediaType: stored.attachment.mediaType, bytes });
+    }
+
+    const usage = usageClient(this.env.DOMAIN);
+    const { allowed } = await usage.check(userId, AI_UNITS_PER_MESSAGE + IMAGE_UNITS);
+    if (!allowed) return { error: IMAGE_REFUSAL_TEXT.no_quota };
+
+    const result = await museImage(this.env, userId, { prompt: input.prompt, references, shape: input.shape });
+    if (!result.ok) {
+      console.error("Muse image failed", result.reason, result.detail);
+      return { error: IMAGE_REFUSAL_TEXT[result.reason] };
+    }
+    const attachment = await this.files.createMade(
+      imageFileName(input.prompt, result.mediaType),
+      result.bytes,
+      input.prompt,
+      references.length > 0,
+    );
+    await usage.record(userId, IMAGE_UNITS, "tibo_image", attachment.id).catch((error: unknown) => {
+      console.error("Recording image usage failed", error);
+    });
+    ledger.images.push(attachment);
+    return {
+      ok: true,
+      ref: imageRef(attachment.id),
+      note: "The picture shows in the chat right after what you've said so far. Don't describe it at length or write its ref; a short line about it is plenty.",
+    };
+  }
+
   private async newFiles(recent: readonly TiboMessage[], act?: Activity) {
     const lastTibo = recent.findLastIndex((message) => message.role === "tibo");
     const attachments = recent
@@ -1455,7 +1342,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  /** Development: the estimated tokens of each part of the context, to tune the budget. */
   private async logContextSizes(context: TurnContext, tools: ToolSet) {
     try {
       const schemas = await Promise.all(
@@ -1471,15 +1357,11 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  // ─── Acting on the user's data ───────────────────────────────────────────
-
-  /** The today snapshot, or `null` (logged) if the domain couldn't answer. */
   private async snapshot(today: string, timeZone: string): Promise<ContextSection | null> {
     const board = await this.board(today);
     return board ? todaySnapshot({ ...board, timeZone }) : null;
   }
 
-  /** The user's day and running session, or `null` (logged) if the domain couldn't answer. */
   private async board(today: string): Promise<{ day: DayJson; activeSession: SessionJson | null } | null> {
     try {
       const [day, active] = await Promise.all([
@@ -1497,10 +1379,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
-  /**
-   * After a turn's bubbles: its receipts and held actions go on its last
-   * bubble, and every tab learns which lists changed.
-   */
   private settleTurnActions(lastBubbleId: string, ledger: TurnLedger) {
     if (ledger.receipts.length > 0) this.setMeta(lastBubbleId, "receipts", ledger.receipts);
     if (ledger.held.length > 0) {
@@ -1516,12 +1394,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     if (ledger.changed.size > 0) this.send({ type: "changed", keys: [...ledger.changed] });
   }
 
-  /**
-   * The user's answer to a held action: from the Confirm or Cancel buttons,
-   * or in words through `confirm_action`. On a yes, runs the stored calls as
-   * they were summarized, in order, with no model call. Answers stale
-   * actions with their state, so the buttons can't run anything twice.
-   */
   private async answerPending(actionId: string, approve: boolean) {
     const action = this.actions.get(actionId);
     if (!action) return { error: "Nothing is waiting for the user's go-ahead." };
@@ -1532,7 +1404,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
     const settled = this.actions.settle(action.id, approve ? "confirmed" : "cancelled");
     if (!settled) {
-      // Already answered (another tab, a double tap): resend its state.
       const message = this.thread.get(action.messageId);
       if (message) this.send({ type: "updated", message });
       return { error: "That was already answered." };
@@ -1582,16 +1453,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     if (message) this.send({ type: "updated", message });
   }
 
-  // ─── Relays: messages between people, through their Tibos (step 21) ──────
-
-  /**
-   * The relay tools' backends for one turn (`./tools.ts`). No confirm step,
-   * like a chat between friends, so the guarantee is in code: a message or
-   * an answer goes to the other person only if it's made of the user's own
-   * words (`ownWords`): what they wrote since Tibo last spoke for a new
-   * relay, what they wrote since the relay came for an answer. `unanswered`
-   * is the first of those.
-   */
   private relayTools(unanswered: string): RelayTools {
     const relays = relayClient(this.env.DOMAIN, this.name);
     const failure = (error: { tag: string; message: string; details?: Record<string, unknown> }) => ({
@@ -1606,7 +1467,6 @@ export class TiboAgent extends Agent<AgentEnv> {
         .join(", ")}. Use their words, or ask them what to say.`,
       code: "NotUsersWords",
     });
-    /** A relay the user may answer now: from someone else, still waiting, and they've written since it came. */
     const answerable = (relayId: string) => {
       const card = this.cards.get(relayId);
       const shown = card ? this.thread.get(card.messageId)?.relay : undefined;
@@ -1668,7 +1528,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     };
   }
 
-  /** The sender's card, once the relay is stored. Synchronous: one card per relay. */
   private showSent(relay: RelayJson) {
     if (this.cards.get(relay.id)) return;
     const message = this.thread.add({
@@ -1683,7 +1542,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     this.send({ type: "bubble", message });
   }
 
-  /** The recipient's card, as their Tibo takes the relay. Synchronous: one card per relay. */
   private showReceived(relay: RelayJson): boolean {
     if (this.cards.get(relay.id)) return false;
     const message = this.thread.add({
@@ -1699,7 +1557,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     return true;
   }
 
-  /** Updates a relay's card to `relay`'s status, if that's news. Whether it was. */
   private updateCard(relay: RelayJson): boolean {
     const card = this.cards.get(relay.id);
     if (!card || !this.cards.advance(relay.id, relay.status, Date.now())) return false;
@@ -1707,17 +1564,12 @@ export class TiboAgent extends Agent<AgentEnv> {
     return true;
   }
 
-  /** The user answered or declined a relay here: their card updates and the sender's Tibo hears. */
   private relayClosedHere(relay: RelayJson) {
     this.updateCard(relay);
     void relayClient(this.env.DOMAIN, this.name).ack(relay.id, relay.status);
     this.reachPeer(relay);
   }
 
-  /**
-   * Tells the other side's Tibo about the relay now, without waiting. If it
-   * can't be reached, the AgentWorker's cron tries again (`relaySweep`).
-   */
   private reachPeer(relay: RelayJson) {
     void this.keepAliveWhile(async () => {
       try {
@@ -1732,13 +1584,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     });
   }
 
-  /**
-   * A relay this user is part of changed: called over RPC by the other
-   * side's Tibo, or by the AgentWorker's cron for changes not yet heard
-   * (`relaySweep`). Reads the relay from the domain as this user (so it can
-   * only ever see its own relays), acts on what's new, then tells the domain
-   * it caught up. Safe to call any number of times.
-   */
   async relaySync(relayId: string) {
     const relays = relayClient(this.env.DOMAIN, this.name);
     const got = await relays.get(relayId);
@@ -1748,13 +1593,10 @@ export class TiboAgent extends Agent<AgentEnv> {
     return { ok: true as const };
   }
 
-  /** The recipient's side: take a new relay (card, then a turn telling the user), or update its card. */
   private async syncReceived(relay: RelayJson) {
     const relays = relayClient(this.env.DOMAIN, this.name);
     if (relay.status === "pending" || relay.status === "delivered") {
       if (!this.cards.get(relay.id)) {
-        // The turn telling the user costs half a message to each side: hold
-        // the relay until both can pay (the sweep tries again later).
         const usage = usageClient(this.env.DOMAIN);
         const affordable = await Promise.all([
           usage.check(this.name, RELAY_UNITS_PER_SIDE),
@@ -1769,36 +1611,29 @@ export class TiboAgent extends Agent<AgentEnv> {
           return;
         }
       }
-      // The card first, then the relay is delivered: a crash between the two
-      // retries (the card isn't shown twice) rather than losing it.
       const shown = this.showReceived(relay);
       const delivered = await relays.delivered(relay.id);
       if (delivered.ok && delivered.value.status !== "delivered") {
-        // It ran out of time while held.
         this.updateCard(delivered.value);
         return;
       }
       if (shown) await this.schedule(1, "relayTurnFire", { relayId: relay.id, kind: "deliver" } satisfies RelayTurn);
       return;
     }
-    // Answered or declined here, expired or cancelled: the card follows.
     if (this.updateCard(relay) && relay.status === "expired") {
       this.thread.add({ role: "system_event", body: outcomeEventBody(relay), meta: { relayEvent: relay.id } });
     }
     await relays.ack(relay.id, relay.status);
   }
 
-  /** The sender's side: the answer, a decline or an expiry came back. */
   private async syncSent(relay: RelayJson) {
     const relays = relayClient(this.env.DOMAIN, this.name);
     if (relay.status === "pending" || relay.status === "delivered") {
       await relays.ack(relay.id, relay.status);
       return;
     }
-    // The card is missing if sending was cut short after the relay was stored.
     this.showSent(relay);
     if (this.updateCard(relay) && relay.status !== "cancelled") {
-      // Why Tibo speaks next, for later turns (hidden in the app; the card shows it).
       this.thread.add({ role: "system_event", body: outcomeEventBody(relay), meta: { relayEvent: relay.id } });
       await this.schedule(1, "relayTurnFire", {
         relayId: relay.id,
@@ -1808,10 +1643,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     await relays.ack(relay.id, relay.status);
   }
 
-  /**
-   * A relay turn's alarm. Waits for a running turn; otherwise runs under the
-   * turn lock, so its bubbles never mix with another reply's.
-   */
   async relayTurnFire(payload: RelayTurn) {
     if (this.running) {
       await this.schedule(RELAY_TURN_RETRY_S, "relayTurnFire", payload);
@@ -1824,16 +1655,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     void job.catch((error: unknown) => console.error("Tibo relay turn failed", payload, error));
   }
 
-  /**
-   * A turn a relay caused: telling the recipient about it, or telling the
-   * sender the answer. It runs with **no tools** (nothing the relayed text
-   * says can make Tibo act) and a small context with the relay in its own
-   * section, wrapped as another person's words. Charged half a message to
-   * each side once a bubble showed (`relay`); if either side can't pay, or
-   * the model fails, a fixed line points at the card instead, uncharged.
-   * An expiry is always a fixed line. Returns where it started (the turn
-   * queue's `sinceSeq`).
-   */
   private async relayTurn({ relayId, kind }: RelayTurn): Promise<number> {
     const sinceSeq = this.thread.lastSeq();
     const turnId = crypto.randomUUID();
@@ -1842,7 +1663,7 @@ export class TiboAgent extends Agent<AgentEnv> {
     const relay = got.value;
     const due =
       kind === "deliver"
-        ? // Still pending only if marking it delivered failed; the card is up either way.
+        ?
           relay.direction === "in" && (relay.status === "delivered" || relay.status === "pending")
         : kind === "outcome"
           ? relay.direction === "out" && (relay.status === "answered" || relay.status === "declined")
@@ -1885,7 +1706,6 @@ export class TiboAgent extends Agent<AgentEnv> {
           recent: this.thread.latest(RELAY_TURN_WINDOW).messages,
           sections: [kind === "deliver" ? deliverySection(relay) : outcomeSection(relay)],
         });
-        // No tools, and nothing to react to.
         answered = await this.reply(turnId, context, null, {}, new TurnLedger(), act);
       } catch (error) {
         console.error("Tibo relay turn failed; sending the fixed line", relayId, error);
@@ -1907,13 +1727,11 @@ export class TiboAgent extends Agent<AgentEnv> {
       act.end("failed");
       throw error;
     } finally {
-      // Ends it unless it failed above (an activity ends once).
       act.end();
       this.send({ type: "turnDone", turnId });
     }
   }
 
-  /** One fixed Tibo bubble after a short typing pause: no model call, no charge. */
   private async sayLine(body: string, turnId: string, meta: MessageMeta = {}) {
     this.send({ type: "typing", on: true });
     await sleep(typingDelayMs(body));
@@ -1922,9 +1740,6 @@ export class TiboAgent extends Agent<AgentEnv> {
     this.send({ type: "bubble", message });
   }
 
-  // ─── Frames ──────────────────────────────────────────────────────────────
-
-  /** To every open tab of this user. */
   private send(frame: TiboServerFrame) {
     this.broadcast(JSON.stringify(frame));
   }
@@ -1934,14 +1749,12 @@ export class TiboAgent extends Agent<AgentEnv> {
   }
 }
 
-/** A check-in, as its activity thread reads. */
 const CHECK_IN_LABEL: Record<ProactiveKind, string> = {
   morning_plan: "Morning check-in",
   deadline_nudge: "Deadline nudge",
   habit_check: "Evening habit check",
 };
 
-/** "Made 2 changes, 1 waiting for you": what a reply did, if anything. */
 function turnDetail(ledger: TurnLedger): string | undefined {
   const made = ledger.receipts.filter((receipt) => !receipt.failed).length;
   const parts = [
@@ -1951,7 +1764,6 @@ function turnDetail(ledger: TurnLedger): string | undefined {
   return parts.length > 0 ? parts.join(", ") : undefined;
 }
 
-/** What the user wrote since Tibo last spoke (what memories are recalled for), at most 1,000 characters. */
 function unansweredText(recent: readonly TiboMessage[]): string {
   const lastTibo = recent.findLastIndex((message) => message.role === "tibo");
   return recent
@@ -1962,7 +1774,6 @@ function unansweredText(recent: readonly TiboMessage[]): string {
     .slice(-1000);
 }
 
-/** A client frame, or `null` for anything malformed (dropped silently). */
 function parseFrame(raw: WSMessage): TiboClientFrame | null {
   if (typeof raw !== "string") return null;
   let value: unknown;
@@ -2016,10 +1827,6 @@ function parseFrame(raw: WSMessage): TiboClientFrame | null {
   return null;
 }
 
-/**
- * `gate`, past the reasons in `bypass` (the dev route's; `all` passes
- * everything but a running turn). Empty in production.
- */
 function gateWith(input: GateInput, bypass: ReadonlySet<SkipReason | "all">): SkipReason | null {
   let current = input;
   for (let round = 0; round < 10; round++) {
@@ -2041,7 +1848,6 @@ function gateWith(input: GateInput, bypass: ReadonlySet<SkipReason | "all">): Sk
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** A one-reader queue: `take` waits for the next value, or the end (with its error). */
 class Channel<T> {
   #items: T[] = [];
   #closed = false;
@@ -2053,7 +1859,6 @@ class Channel<T> {
     this.#wake();
   }
 
-  /** Closed with nothing left to take. */
   get drained() {
     return this.#closed && this.#items.length === 0;
   }

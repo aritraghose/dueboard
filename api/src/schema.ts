@@ -72,16 +72,6 @@ import {
 } from "./domain/model.ts";
 import type { LocalDate } from "./domain/dates.ts";
 
-// The app's Drizzle tables. Define each table here with `pgTable(...)` and
-// add it to `defineRelations` below. Better Auth owns (and migrates) its own
-// tables, so they aren't declared here; reference its `user.id` as a plain
-// text column, without a foreign key, because Drizzle's migrations run
-// before Better Auth's.
-//
-// Ids are `crypto.randomUUID()` strings in `text` columns, made by the
-// domain services (see architecture.md §4). Timestamps are `timestamptz`;
-// calendar days are `date` in the owner's time zone.
-
 const id = () => text("id").primaryKey();
 const userId = () => text("user_id").notNull();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -106,15 +96,9 @@ export const connectionRequestStatus = pgEnum(
   CONNECTION_REQUEST_STATUS,
 );
 
-/** One row per user, created by `ensureUserSetup` on the first app load. */
 export const UserSettings = pgTable("user_settings", {
   userId: text("user_id").primaryKey(),
-  /** IANA zone, kept in sync with the browser's on every app load. */
   timeZone: text("time_zone").notNull(),
-  /**
-   * A key of `USER_COLOR`, picked by `ensureUserSetup`. The random default
-   * only backfills rows that existed before this column.
-   */
   color: text("color")
     .$type<UserColor>()
     .notNull()
@@ -126,17 +110,12 @@ export const UserSettings = pgTable("user_settings", {
   defaultPrivacy: privacy("default_privacy").notNull().default("connections"),
   defaultShareToLive: boolean("default_share_to_live").notNull().default(true),
   relayPolicy: relayPolicy("relay_policy").notNull().default("connections"),
-  /** Replaces `AI_MONTHLY_MESSAGE_QUOTA` for this user when set. */
   aiQuotaOverride: integer("ai_quota_override"),
-  // Tibo's check-ins (step 20): the master switch, then each kind. Read by
-  // the user's `TiboAgent`, which re-plans its alarms when they change.
   tiboProactive: boolean("tibo_proactive").notNull().default(true),
   tiboMorningPlan: boolean("tibo_morning_plan").notNull().default(true),
-  /** `HH:MM`, local, one of `TIBO_MORNING_TIMES`. */
   tiboMorningTime: text("tibo_morning_time").$type<TiboMorningTime>().notNull().default(TIBO_MORNING_TIME_DEFAULT),
   tiboDeadlineNudges: boolean("tibo_deadline_nudges").notNull().default(true),
   tiboHabitCheck: boolean("tibo_habit_check").notNull().default(true),
-  /** `HH:MM`, local, one of `TIBO_EVENING_TIMES`. */
   tiboEveningTime: text("tibo_evening_time").$type<TiboEveningTime>().notNull().default(TIBO_EVENING_TIME_DEFAULT),
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -161,14 +140,12 @@ export const Tags = pgTable(
     id: id(),
     userId: userId(),
     name: text("name").notNull(),
-    /** A key of the palette in `domain/model.ts` (`TAG_COLOR`). */
     color: text("color").$type<TagColor>().notNull(),
     systemKind: systemTagKind("system_kind"),
     createdAt: createdAt(),
   },
   (t) => [
     uniqueIndex("tags_user_name_idx").on(t.userId, sql`lower(${t.name})`),
-    // At most one tag of each system kind per user.
     uniqueIndex("tags_user_system_kind_idx")
       .on(t.userId, t.systemKind)
       .where(sql`${t.systemKind} is not null`),
@@ -176,10 +153,6 @@ export const Tags = pgTable(
 );
 export type TagRow = typeof Tags.$inferSelect;
 
-/**
- * A task appears on its assigned date, its deadline date, or both; with
- * neither it's "unscheduled". The rules live in `domain/tasks.ts`.
- */
 export const Tasks = pgTable(
   "tasks",
   {
@@ -189,7 +162,6 @@ export const Tasks = pgTable(
     description: text("description"),
     assignedDate: date("assigned_date", { mode: "string" }).$type<LocalDate>(),
     deadlineDate: date("deadline_date", { mode: "string" }).$type<LocalDate>(),
-    /** Deleting a tag first moves its tasks to `default` (`domain/tags.ts`). */
     tagId: text("tag_id")
       .notNull()
       .references(() => Tags.id, { onDelete: "restrict" }),
@@ -242,10 +214,6 @@ export const Tasks = pgTable(
 );
 export type TaskRow = typeof Tasks.$inferSelect;
 
-/**
- * A habit stores its rule only; nothing is generated ahead of time. The
- * rules live in `domain/habit-rules.ts` (pure) and `domain/habits.ts`.
- */
 export const Habits = pgTable(
   "habits",
   {
@@ -255,12 +223,9 @@ export const Habits = pgTable(
     description: text("description"),
     scheduleKind: habitScheduleKind("schedule_kind").notNull(),
     targetCount: smallint("target_count").notNull(),
-    /** `day` × 1 for `specific_days`. */
     periodUnit: habitPeriodUnit("period_unit").notNull(),
     periodLength: smallint("period_length").notNull(),
-    /** 0 = Sun … 6 = Sat. Set only for weekday habits. */
     weekdays: smallint("weekdays").array(),
-    /** 1–31. Set only for month-day habits. */
     monthDays: smallint("month_days").array(),
     startDate: date("start_date", { mode: "string" }).$type<LocalDate>().notNull(),
     status: habitStatus("status").notNull().default("active"),
@@ -291,8 +256,6 @@ export const Habits = pgTable(
       "habits_period_length_range",
       sql`${t.periodLength} between 1 and ${sql.raw(String(HABIT_PERIOD_LENGTH_MAX))}`,
     ),
-    // Flexible habits have no days; specific-days habits have exactly one
-    // non-empty list of valid days, and a day × 1 period.
     check(
       "habits_schedule_shape",
       sql`(${t.scheduleKind} = 'flexible' and ${t.weekdays} is null and ${t.monthDays} is null)
@@ -305,11 +268,6 @@ export const Habits = pgTable(
 );
 export type HabitRow = typeof Habits.$inferSelect;
 
-/**
- * Pause and resume history. A pause covers `[start_date, end_date)`: the
- * resume day is due again. `end_date` is null while it's open, which
- * `paused` and `archived` habits always have (at most one per habit).
- */
 export const HabitPauses = pgTable(
   "habit_pauses",
   {
@@ -328,7 +286,6 @@ export const HabitPauses = pgTable(
 );
 export type HabitPauseRow = typeof HabitPauses.$inferSelect;
 
-/** Taps per habit and day (the owner's zone). An undo to zero keeps the row at 0. */
 export const HabitCheckins = pgTable(
   "habit_checkins",
   {
@@ -347,20 +304,12 @@ export const HabitCheckins = pgTable(
   (t) => [
     uniqueIndex("habit_checkins_habit_date_idx").on(t.habitId, t.localDate),
     index("habit_checkins_user_date_idx").on(t.userId, t.localDate),
-    // The leaderboard counts every user's checked days in a period
-    // (`domain/points.ts`), so it reads by day, not by user.
     index("habit_checkins_points_idx").on(t.localDate, t.userId).where(sql`${t.count} > 0`),
     check("habit_checkins_count", sql`${t.count} >= 0`),
   ],
 );
 export type HabitCheckinRow = typeof HabitCheckins.$inferSelect;
 
-/**
- * A goal's progress is a slider percent or a count toward a target; the
- * rules live in `domain/goal-rules.ts` (pure) and `domain/goals.ts`.
- * `progress_percent` is stored for both modes (derived for `count`), so a
- * goal reads the same everywhere.
- */
 export const Goals = pgTable(
   "goals",
   {
@@ -397,7 +346,6 @@ export const Goals = pgTable(
       sql`char_length(${t.description}) <= ${sql.raw(String(GOAL_DESCRIPTION_MAX_LENGTH))}`,
     ),
     check("goals_percent_range", sql`${t.progressPercent} between 0 and 100`),
-    // Counts exactly for count goals, in range.
     check(
       "goals_progress_shape",
       sql`(${t.progressMode} = 'slider' and ${t.targetCount} is null and ${t.currentCount} is null)
@@ -406,7 +354,6 @@ export const Goals = pgTable(
           and ${t.currentCount} between 0 and ${sql.raw(String(GOAL_COUNT_MAX))})`,
     ),
     check("goals_completed_at", sql`(${t.status} = 'completed') = (${t.completedAt} is not null)`),
-    // A completed goal is at its target (an active one may be too, after a reopen).
     check(
       "goals_completed_reached",
       sql`${t.status} <> 'completed' or (case ${t.progressMode}
@@ -417,11 +364,6 @@ export const Goals = pgTable(
 );
 export type GoalRow = typeof Goals.$inferSelect;
 
-/**
- * Habits and tasks that move a count goal: each tap (or settle) adds
- * `amount`. `item_id` has no foreign key (it names a habit or a task);
- * deleting either deletes its links (`domain/goals.ts`).
- */
 export const GoalLinks = pgTable(
   "goal_links",
   {
@@ -446,11 +388,6 @@ export const GoalLinks = pgTable(
 );
 export type GoalLinkRow = typeof GoalLinks.$inferSelect;
 
-/**
- * Every change to a goal's progress, in the goal's unit (percent points or
- * count). Linked undos read the net a habit day or a task added from here,
- * so they never take back more than was added.
- */
 export const GoalProgressEvents = pgTable(
   "goal_progress_events",
   {
@@ -462,9 +399,7 @@ export const GoalProgressEvents = pgTable(
     delta: numeric("delta", { precision: 12, scale: 2, mode: "number" }).notNull(),
     valueAfter: numeric("value_after", { precision: 12, scale: 2, mode: "number" }).notNull(),
     source: goalProgressSource("source").notNull(),
-    /** The habit or task, for linked changes. */
     sourceId: text("source_id"),
-    /** The check-in's day, for habit changes. */
     sourceDate: date("source_date", { mode: "string" }).$type<LocalDate>(),
     createdAt: createdAt(),
   },
@@ -481,10 +416,6 @@ export const GoalProgressEvents = pgTable(
 );
 export type GoalProgressEventRow = typeof GoalProgressEvents.$inferSelect;
 
-/**
- * Short notes, several a day, written for the user's local day
- * (`domain/notes.ts`). `local_date` is fixed at creation; edits keep it.
- */
 export const Notes = pgTable(
   "notes",
   {
@@ -501,7 +432,6 @@ export const Notes = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
-    // Serves `ListNotesForDay`, the per-day cap and (scanned backwards) `ListNotes`' order.
     index("notes_user_local_date_idx").on(t.userId, t.localDate, t.createdAt, t.id),
     check(
       "notes_body_length",
@@ -511,12 +441,6 @@ export const Notes = pgTable(
 );
 export type NoteRow = typeof Notes.$inferSelect;
 
-/**
- * Focus sessions (`domain/sessions.ts`, architecture.md §11). `ends_at` is
- * set exactly while running and recomputed on resume and extend, so the
- * sweep finds expired sessions by it. A partial unique index keeps at most
- * one running or paused session per user.
- */
 export const FocusSessions = pgTable(
   "focus_sessions",
   {
@@ -525,7 +449,6 @@ export const FocusSessions = pgTable(
     label: text("label"),
     plannedMinutes: integer("planned_minutes").notNull(),
     status: focusSessionStatus("status").notNull(),
-    /** `started_at`'s day in the user's zone; per-day reads use it. */
     localDate: date("local_date", { mode: "string" }).$type<LocalDate>().notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }),
@@ -542,9 +465,7 @@ export const FocusSessions = pgTable(
     uniqueIndex("focus_sessions_one_active_idx")
       .on(t.userId)
       .where(sql`${t.status} in ('running', 'paused')`),
-    // Serves `ListSessionsForDay` and (scanned backwards) `ListSessions`' order.
     index("focus_sessions_user_local_date_idx").on(t.userId, t.localDate, t.startedAt, t.id),
-    // The sweep's lookup.
     index("focus_sessions_expiry_idx").on(t.endsAt).where(sql`${t.status} = 'running'`),
     check(
       "focus_sessions_label_length",
@@ -563,11 +484,6 @@ export const FocusSessions = pgTable(
 );
 export type FocusSessionRow = typeof FocusSessions.$inferSelect;
 
-/**
- * Each running stretch of a session. Pausing closes the open one, resuming
- * opens a new one; elapsed time is their sum. At most one is open per
- * session, and only while it's running.
- */
 export const FocusSessionSegments = pgTable(
   "focus_session_segments",
   {
@@ -591,22 +507,15 @@ export const FocusSessionSegments = pgTable(
 );
 export type FocusSessionSegmentRow = typeof FocusSessionSegments.$inferSelect;
 
-/**
- * The single feed behind the live feed, diary and contribution graph
- * (architecture.md §5). Rows never copy titles, privacy or share flags:
- * readers join the subject for those.
- */
 export const Activity = pgTable(
   "activity",
   {
     id: id(),
-    /** The actor. */
     userId: userId(),
     kind: activityKind("kind").notNull(),
     subjectType: activitySubject("subject_type").notNull(),
     subjectId: text("subject_id").notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-    /** `occurred_at`'s day in the actor's time zone. */
     localDate: date("local_date", { mode: "string" }).notNull(),
     meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
   },
@@ -614,8 +523,6 @@ export const Activity = pgTable(
     index("activity_user_occurred_idx").on(t.userId, t.occurredAt.desc()),
     index("activity_user_local_date_idx").on(t.userId, t.localDate),
     index("activity_subject_idx").on(t.subjectType, t.subjectId),
-    // The leaderboard's "everyone" scope counts the scored kinds across all
-    // users from a period's first day (`domain/points.ts`).
     index("activity_points_idx")
       .on(t.localDate, t.userId)
       .where(sql`${t.kind} in ('task_settled', 'goal_progressed', 'session_completed')`),
@@ -623,11 +530,6 @@ export const Activity = pgTable(
 );
 export type ActivityRow = typeof Activity.$inferSelect;
 
-/**
- * Connection requests (`domain/social.ts`). Answered and cancelled rows are
- * kept: the sender's 24-hour cap counts every row they sent. A partial
- * unique index keeps at most one pending request per ordered pair.
- */
 export const ConnectionRequests = pgTable(
   "connection_requests",
   {
@@ -642,9 +544,7 @@ export const ConnectionRequests = pgTable(
     uniqueIndex("connection_requests_pending_idx")
       .on(t.fromUserId, t.toUserId)
       .where(sql`${t.status} = 'pending'`),
-    // Outgoing lists and the daily cap.
     index("connection_requests_from_idx").on(t.fromUserId, t.createdAt),
-    // Incoming lists.
     index("connection_requests_to_idx").on(t.toUserId, t.status, t.createdAt),
     check("connection_requests_not_self", sql`${t.fromUserId} <> ${t.toUserId}`),
     check(
@@ -655,7 +555,6 @@ export const ConnectionRequests = pgTable(
 );
 export type ConnectionRequestRow = typeof ConnectionRequests.$inferSelect;
 
-/** Mutual connections, one row per pair with the smaller id first. Removing one deletes the row. */
 export const Connections = pgTable(
   "connections",
   {
@@ -666,14 +565,11 @@ export const Connections = pgTable(
   (t) => [
     primaryKey({ columns: [t.userLow, t.userHigh] }),
     index("connections_user_high_idx").on(t.userHigh),
-    // Byte order, so it agrees with JavaScript's `<` on ids (`orderedPair`)
-    // whatever the database's collation.
     check("connections_order", sql`${t.userLow} < ${t.userHigh} collate "C"`),
   ],
 );
 export type ConnectionRow = typeof Connections.$inferSelect;
 
-/** `blocker_id` blocked `blocked_id`. Hides everything between them, both ways. */
 export const Blocks = pgTable(
   "blocks",
   {
@@ -691,13 +587,6 @@ export type BlockRow = typeof Blocks.$inferSelect;
 
 export const notificationKind = pgEnum("notification_kind", NOTIFICATION_KIND);
 
-/**
- * In-app notifications (`domain/notifications.ts`): `actor_id` asked
- * `user_id` to connect, or accepted their request. Written in the same
- * transaction as the request or the accept; one per request and kind.
- * `seen_at` is set when `/notifications` lists it. Deleted with the request,
- * with either account, and when either user blocks the other.
- */
 export const Notifications = pgTable(
   "notifications",
   {
@@ -712,11 +601,8 @@ export const Notifications = pgTable(
     seenAt: timestamp("seen_at", { withTimezone: true }),
   },
   (t) => [
-    // The list, newest first.
     index("notifications_user_idx").on(t.userId, t.createdAt.desc(), t.id.desc()),
-    // The unseen count behind the nav dot.
     index("notifications_unseen_idx").on(t.userId).where(sql`${t.seenAt} is null`),
-    // Account deletion and blocks, by the other side.
     index("notifications_actor_idx").on(t.actorId),
     uniqueIndex("notifications_request_kind_idx").on(t.requestId, t.kind),
     check("notifications_not_self", sql`${t.userId} <> ${t.actorId}`),
@@ -724,11 +610,6 @@ export const Notifications = pgTable(
 );
 export type NotificationRow = typeof Notifications.$inferSelect;
 
-/**
- * AI usage per user and month (`domain/usage.ts`, architecture.md §8), in
- * units (one message = 2). `period` is `YYYY-MM` in the user's time zone
- * when the charge was made, so a new month starts a new row.
- */
 export const AiUsageTotals = pgTable(
   "ai_usage",
   {
@@ -747,7 +628,6 @@ export const AiUsageTotals = pgTable(
 );
 export type AiUsageTotalRow = typeof AiUsageTotals.$inferSelect;
 
-/** One row per charge, for audits and (later) per-feature reports. */
 export const AiUsageEvents = pgTable(
   "ai_usage_events",
   {
@@ -755,7 +635,6 @@ export const AiUsageEvents = pgTable(
     userId: userId(),
     units: integer("units").notNull(),
     reason: aiUsageReason("reason").notNull(),
-    /** What was charged for, such as a turn or relay id. */
     ref: text("ref"),
     createdAt: createdAt(),
   },
@@ -768,16 +647,6 @@ export type AiUsageEventRow = typeof AiUsageEvents.$inferSelect;
 
 export const relayStatus = pgEnum("relay_status", RELAY_STATUS);
 
-/**
- * Tibo relays (architecture.md §7.5, `domain/relays.ts`): a message one
- * user's Tibo passes to another user through theirs, and the answer.
- *
- * Each side's `TiboAgent` shows the relay as a card and tells its user when
- * it changes. `sender_synced` / `recipient_synced` say whether that side's
- * agent has caught up with `status`: a change that side must hear about
- * clears it, the agent sets it again once it has acted, and the
- * AgentWorker's cron retries any left behind (`retry_at` spaces the tries).
- */
 export const Relays = pgTable(
   "relays",
   {
@@ -789,7 +658,6 @@ export const Relays = pgTable(
     answer: text("answer"),
     createdAt: createdAt(),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-    /** When it was answered or declined. */
     answeredAt: timestamp("answered_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -801,15 +669,11 @@ export const Relays = pgTable(
     retryAt: timestamp("retry_at", { withTimezone: true }),
   },
   (t) => [
-    // The daily cap and the sender's list.
     index("relays_from_idx").on(t.fromUserId, t.createdAt),
-    // Open relays per recipient, and the recipient's list.
     index("relays_to_idx").on(t.toUserId, t.status, t.createdAt),
-    // The expiry sweep.
     index("relays_open_expires_idx")
       .on(t.expiresAt)
       .where(sql`${t.status} in ('pending', 'delivered')`),
-    // The sync sweep.
     index("relays_unsynced_idx")
       .on(t.updatedAt)
       .where(sql`not ${t.senderSynced} or not ${t.recipientSynced}`),
@@ -831,32 +695,17 @@ export const Relays = pgTable(
 );
 export type RelayRow = typeof Relays.$inferSelect;
 
-/**
- * Tibo threads still to wipe: account deletion queues the user here in its
- * transaction, and the AgentWorker's cron deletes their `TiboAgent`'s
- * storage, then the row (`domain/tibo.ts`). The ApiWorker can't call the
- * agent itself: the AgentWorker binds it, so binding back would be a cycle.
- * Kept after the account is gone, on purpose.
- */
 export const TiboWipes = pgTable("tibo_wipes", {
   userId: text("user_id").primaryKey(),
   requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/**
- * Domain changes a user's `TiboAgent` should hear about (step 20): written
- * in the change's own transaction, delivered by the AgentWorker's
- * every-minute cron through the DomainWorker, then deleted. An outbox
- * because neither the ApiWorker nor the DomainWorker can call the agent
- * (the AgentWorker binds the DomainWorker, so a binding back is a cycle).
- */
 export const TiboEvents = pgTable(
   "tibo_events",
   {
     id: id(),
     userId: userId(),
     kind: text("kind").$type<TiboEventKind>().notNull(),
-    /** Nothing yet (`settings_changed` carries `{}`); room for events that need data. */
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: createdAt(),
   },
@@ -866,11 +715,6 @@ export const TiboEvents = pgTable(
   ],
 );
 
-/**
- * The owner's Ask page (architecture.md §7.6, `domain/ask.ts`): off by
- * default. The Ask agent reads only `instructions`, `shared_context` and the
- * owner's display name, through `DomainWorker.askPrepare`.
- */
 export const AskSettingsTable = pgTable(
   "ask_settings",
   {
@@ -899,7 +743,6 @@ export const AskSettingsTable = pgTable(
 );
 export type AskSettingsRow = typeof AskSettingsTable.$inferSelect;
 
-/** Ask answers per owner and month (`YYYY-MM` in the owner's zone), for `monthly_answer_cap`. */
 export const AskUsage = pgTable(
   "ask_usage",
   {
@@ -914,18 +757,10 @@ export const AskUsage = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.period] }), check("ask_usage_answers", sql`${t.answers} >= 0`)],
 );
 
-/**
- * Questions visitors asked an owner's Ask page, with the answers, so the
- * owner can improve their instructions (Settings → Ask page). Kept
- * `ASK_QUESTION_RETENTION_DAYS`: older rows are hidden at once and deleted
- * by the ApiWorker's cron. `asker_id` is the signed-in visitor (shown to the
- * owner by username), `null` when logged out.
- */
 export const AskQuestions = pgTable(
   "ask_questions",
   {
     id: id(),
-    /** The owner whose page was asked. */
     userId: userId(),
     askerId: text("asker_id"),
     question: text("question").notNull(),
@@ -942,12 +777,6 @@ export const AskQuestions = pgTable(
 );
 export type AskQuestionRow = typeof AskQuestions.$inferSelect;
 
-/**
- * Files the owner added for their Ask agent, as text only (the website
- * converts each PDF and the owner reviews it before saving; the file itself
- * is never kept). At most `ASK_DOCUMENTS_MAX` per owner, checked under a
- * lock in `domain/ask.ts`. The Ask agent reads them through `prepareAsk`.
- */
 export const AskDocuments = pgTable(
   "ask_documents",
   {

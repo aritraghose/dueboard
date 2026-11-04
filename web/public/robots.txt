@@ -1,6 +1,3 @@
-# Only the landing page is meant for search results. Profiles and Ask pages
-# carry `noindex` (people's diaries shouldn't be searchable), and the app
-# itself needs a sign-in. Link previews ignore this file.
 User-agent: *
 Allow: /
 Disallow: /rpc
