@@ -7,7 +7,7 @@ import type * as Effect from "effect/Effect";
 // `../limits.ts`.
 
 /** A limit a service checks, keyed by user. */
-export type UserLimit = "connectionRequest" | "peopleSearch";
+export type UserLimit = "connectionRequest" | "peopleSearch" | "relay";
 
 export class RateLimiter extends Context.Service<
   RateLimiter,

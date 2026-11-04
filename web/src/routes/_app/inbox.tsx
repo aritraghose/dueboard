@@ -1,13 +1,15 @@
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
+import { NotificationsButton } from "@/components/notifications-button";
 import { TiboThread } from "@/components/tibo-thread";
 
 /**
  * Tibo, full-page: the same thread as the side panel. It fills the whole
- * space with no card behind it, and the top row's Tibo button is off.
+ * space with no card behind it, and the top row is off: the notifications
+ * bell sits in the thread's own header.
  */
 export const Route = createFileRoute("/_app/inbox")({
   head: () => ({ meta: [{ title: "Inbox · Dueboard" }] }),
-  staticData: { topBar: { tibo: false } },
+  staticData: { topBar: { tibo: false, notifications: false } },
   component: Inbox,
 });
 
@@ -21,7 +23,7 @@ function Inbox() {
       <h1 className="sr-only">Inbox</h1>
       {/* The thread comes over Tibo's WebSocket, so it renders in the browser only. */}
       <ClientOnly fallback={<div className={height} />}>
-        <TiboThread className={`${height} min-h-96 text-foreground`} />
+        <TiboThread className={`${height} min-h-96 text-foreground`} headerEnd={<NotificationsButton />} />
       </ClientOnly>
     </main>
   );

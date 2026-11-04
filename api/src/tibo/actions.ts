@@ -14,7 +14,8 @@
 // `confirm_action` tool. That tool only works when the turn was started by
 // a message the user typed after the action was held, so Tibo can't confirm
 // its own request, and text that reached the thread any other way (relayed
-// messages, app events) can't confirm anything.
+// messages, app events) can't confirm anything. Turns a relay causes have
+// no tools at all, so they can't confirm either.
 
 import type { TiboRpc } from "../domain-client.ts";
 import {

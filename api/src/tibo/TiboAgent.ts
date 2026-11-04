@@ -1,12 +1,15 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { Agent, type Connection, type ConnectionContext, type WSMessage } from "agents";
+import { Agent, getAgentByName, type Connection, type ConnectionContext, type WSMessage } from "agents";
 import { asSchema, isStepCount, streamText, type ToolSet } from "ai";
 import type { AgentEnv } from "../AgentWorker.ts";
+import { RELAY_UNITS_PER_SIDE } from "../domain/relay-constants.ts";
 import { AI_UNITS_PER_MESSAGE } from "../domain/usage-constants.ts";
 import {
+  relayClient,
   tiboClient,
   usageClient,
+  type RelayJson,
   type TiboEventJson,
   type TiboProactiveContext,
 } from "../domain-client.ts";
@@ -71,9 +74,23 @@ import {
   type TiboReceipt,
   type TiboServerFrame,
 } from "./protocol.ts";
+import {
+  RelayCards,
+  cardOf,
+  deliveryFallback,
+  deliverySection,
+  expiredLine,
+  outcomeEventBody,
+  outcomeFallback,
+  outcomeSection,
+  ownWords,
+  receivedEventBody,
+  relayListView,
+  sentEventBody,
+} from "./relays.ts";
 import { todaySnapshot } from "./snapshot.ts";
-import { Thread } from "./thread.ts";
-import { tiboTools } from "./tools.ts";
+import { Thread, type MessageMeta } from "./thread.ts";
+import { tiboTools, type RelayTools } from "./tools.ts";
 import type { DayJson, SessionJson } from "./views.ts";
 
 /** Lines Tibo "says" when something breaks. Shown once, never stored or charged. */
@@ -98,6 +115,17 @@ const MEMORY_JOB_DELAY_S = 60;
 const MEMORY_JOB_CONTINUE_S = 5;
 /** Past the user's midnight, so a finished day gets its summary. */
 const DAY_END_GRACE_MS = 5 * 60_000;
+
+/** Messages of the thread a relay turn sees (for tone; the relay is in its own section). */
+const RELAY_TURN_WINDOW = 12;
+/** A relay turn that finds another turn running tries again this much later (s). */
+const RELAY_TURN_RETRY_S = 10;
+
+/** A turn a relay causes: telling the recipient, telling the sender the answer, or an expiry line. */
+interface RelayTurn {
+  readonly relayId: string;
+  readonly kind: "deliver" | "outcome" | "expired";
+}
 
 /** A check-in about to be considered (`./proactive-rules.ts`). */
 interface CheckInTrigger {
@@ -129,6 +157,7 @@ export class TiboAgent extends Agent<AgentEnv> {
   private memoryStore: MemoryStore | undefined;
   private proactiveStore: ProactiveStore | undefined;
   private reminderStore: ReminderStore | undefined;
+  private relayCardStore: RelayCards | undefined;
   /** A memory job is running (in memory: a restart drops it, and its schedule retries). */
   private memoryJobRunning = false;
   /** Another job run was asked for while one ran. */
@@ -184,6 +213,15 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.reminderStore;
   }
 
+  /** The relays this thread shows a card for (`./relays.ts`). */
+  private get cards() {
+    if (!this.relayCardStore) {
+      this.relayCardStore = new RelayCards(this.ctx.storage.sql);
+      this.relayCardStore.migrate();
+    }
+    return this.relayCardStore;
+  }
+
   private get dev() {
     return this.env.TIBO_DEV === "true";
   }
@@ -193,6 +231,7 @@ export class TiboAgent extends Agent<AgentEnv> {
     void this.actions;
     void this.memory;
     void this.reminders;
+    void this.cards;
     this.proactive.prune(Date.now());
   }
 
@@ -345,6 +384,17 @@ export class TiboAgent extends Agent<AgentEnv> {
     if (action === "check-in" && request.method === "POST") return this.devCheckIn(request);
     if (action === "check-ins" && request.method === "GET") return this.devCheckIns();
     if (action === "alarm" && request.method === "POST") return this.devAlarm(request);
+    if (action === "relay-expire" && request.method === "POST") {
+      // Makes one of this user's sent relays due now; the cron's next sweep expires it.
+      const relayId = new URL(request.url).searchParams.get("id") ?? "";
+      const result = await relayClient(this.env.DOMAIN, this.name).expireNow(relayId);
+      return Response.json(result, { status: result.ok ? 200 : 404 });
+    }
+    if (action === "peer") return this.devPeer(request);
+    if (action === "relays" && request.method === "GET") {
+      const result = await relayClient(this.env.DOMAIN, this.name).list();
+      return Response.json(result);
+    }
     if (action === "memory-jobs" && request.method === "POST") {
       await this.scheduleMemoryJobs(1, "dev");
       return Response.json({ scheduled: true });
@@ -414,6 +464,53 @@ export class TiboAgent extends Agent<AgentEnv> {
     const slot: ProactiveSlot = { kind, day, at: instantIn(context.timeZone, day, time), dev: true };
     await this.armSlot(slot);
     return Response.json({ armed: { ...slot, firesAt: new Date(slot.at).toISOString() } });
+  }
+
+  /**
+   * Development only: drives a second test account's Tibo, to try relays
+   * end to end with one browser. `?user=<their user id>` and
+   * `POST …&do=say&text=…` (a message from them), `POST …&do=confirm&approve=true`
+   * (their tap on the waiting Confirm card) or `GET` (their latest messages).
+   */
+  private async devPeer(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const userId = url.searchParams.get("user") ?? "";
+    if (!userId || userId === this.name) return Response.json({ error: "user is another account's id" }, { status: 400 });
+    const peer = await getAgentByName(this.env.TiboAgent as unknown as DurableObjectNamespace<TiboAgent>, userId);
+    if (request.method === "GET") return Response.json(await peer.devThread());
+    const what = url.searchParams.get("do");
+    if (what === "say") return Response.json(await peer.devSay(url.searchParams.get("text") ?? ""));
+    if (what === "confirm") return Response.json(await peer.devConfirm(url.searchParams.get("approve") === "true"));
+    return Response.json({ error: "do is say or confirm" }, { status: 400 });
+  }
+
+  /** Development only (`devPeer`): this thread's latest rows and the action waiting, if any. */
+  async devThread() {
+    if (!this.dev) throw new Error("Development only");
+    return {
+      messages: this.thread.latest(20).messages.map(({ role, body, relay, confirm }) => ({ role, body, relay, confirm })),
+      pending: this.actions.current(Date.now()),
+      usage: await usageClient(this.env.DOMAIN)
+        .get(this.name)
+        .catch(() => null),
+    };
+  }
+
+  /** Development only (`devPeer`): a message from this agent's user, as if typed. */
+  async devSay(text: string) {
+    if (!this.dev) throw new Error("Development only");
+    const message = this.thread.add({ role: "user", body: text.slice(0, MAX_CHAT_MESSAGE_LENGTH), meta: { clientId: crypto.randomUUID() } });
+    this.send({ type: "bubble", message });
+    this.requestTurn();
+    return { ok: true };
+  }
+
+  /** Development only (`devPeer`): this user's tap on the waiting Confirm or Cancel. */
+  async devConfirm(approve: boolean) {
+    if (!this.dev) throw new Error("Development only");
+    const pending = this.actions.current(Date.now());
+    if (!pending) return { error: "Nothing is waiting." };
+    return this.answerPending(pending.id, approve);
   }
 
   /** Development only: `GET dev/check-ins`: the armed alarms, the log and the facts they read. */
@@ -816,7 +913,7 @@ export class TiboAgent extends Agent<AgentEnv> {
    * their next visit (`read_seq`). Step 23 adds web push here, for when no
    * tab is open (`this.getConnections()` is empty).
    */
-  private async notifyUser(_note: { kind: ProactiveKind | "reminder"; turnId: string }) {}
+  private async notifyUser(_note: { kind: ProactiveKind | "reminder" | "relay"; turnId: string }) {}
 
   // ─── Turns ───────────────────────────────────────────────────────────────
 
@@ -941,9 +1038,8 @@ export class TiboAgent extends Agent<AgentEnv> {
       });
 
       // Held actions can be answered in words only by a message the user
-      // typed after they were held. Every turn is started by the user's own
-      // messages today; a turn started any other way (relays, step 21)
-      // must not offer this.
+      // typed after they were held. Turns started any other way (check-ins,
+      // relays) have no tools at all, so they can't offer this.
       const pending = this.actions.current(now.getTime());
       const confirmable = pending !== null && this.thread.lastUserSeq() > pending.afterSeq;
       const ledger = new TurnLedger();
@@ -963,6 +1059,7 @@ export class TiboAgent extends Agent<AgentEnv> {
           forget: async (input) => (await forget(recall, refs, input)).answer,
         },
         reminders: this.reminderTools(profile.timeZone, today),
+        relays: this.relayTools(unansweredText(recent)),
       });
       if (this.dev) void this.logContextSizes(context, tools);
 
@@ -1208,9 +1305,335 @@ export class TiboAgent extends Agent<AgentEnv> {
     this.setMeta(action.messageId, "confirm", confirm);
   }
 
-  private setMeta(messageId: string, key: "receipts" | "confirm", value: unknown) {
+  private setMeta(messageId: string, key: "receipts" | "confirm" | "relay", value: unknown) {
     const message = this.thread.setMeta(messageId, key, value);
     if (message) this.send({ type: "updated", message });
+  }
+
+  // ─── Relays: messages between people, through their Tibos (step 21) ──────
+
+  /**
+   * The relay tools' backends for one turn (`./tools.ts`). No confirm step,
+   * like a chat between friends, so the guarantee is in code: a message or
+   * an answer goes to the other person only if it's made of the user's own
+   * words (`ownWords`): what they wrote since Tibo last spoke for a new
+   * relay, what they wrote since the relay came for an answer. `unanswered`
+   * is the first of those.
+   */
+  private relayTools(unanswered: string): RelayTools {
+    const relays = relayClient(this.env.DOMAIN, this.name);
+    const failure = (error: { tag: string; message: string; details?: Record<string, unknown> }) => ({
+      error: error.message,
+      code: error.tag,
+      ...(error.details?.candidates ? { candidates: error.details.candidates } : {}),
+    });
+    const notTheirs = (foreign: readonly string[]) => ({
+      error: `Not sent: only the user's own words go to another person, and they didn't say ${foreign
+        .slice(0, 6)
+        .map((word) => `“${word}”`)
+        .join(", ")}. Use their words, or ask them what to say.`,
+      code: "NotUsersWords",
+    });
+    /** A relay the user may answer now: from someone else, still waiting, and they've written since it came. */
+    const answerable = (relayId: string) => {
+      const card = this.cards.get(relayId);
+      const shown = card ? this.thread.get(card.messageId)?.relay : undefined;
+      if (!card || card.direction !== "in" || !shown) {
+        return { error: "No message from someone else has that id. Use list_relays to find it." } as const;
+      }
+      if (card.status !== "delivered") {
+        return { error: `That message from @${shown.person.username} isn't waiting for an answer any more (${card.status}).` } as const;
+      }
+      const since = this.thread
+        .after(card.cardSeq, 200)
+        .filter((message) => message.role === "user")
+        .map((message) => message.body)
+        .join("\n");
+      if (!since) return { error: "The user hasn't said what to answer yet. Ask them first." } as const;
+      return { username: shown.person.username, name: shown.person.name, since };
+    };
+    return {
+      send: async (to, message) => {
+        const target = await relays.check(to);
+        if (!target.ok) return failure(target.error);
+        const own = ownWords(message, `${unanswered}\n${target.value.username} ${target.value.name}`);
+        if (!own.ok) return notTheirs(own.foreign);
+        const sent = await relays.send(target.value.username, message);
+        if (!sent.ok) return failure(sent.error);
+        this.showSent(sent.value);
+        this.reachPeer(sent.value);
+        return {
+          status: "done",
+          to: `@${target.value.username}`,
+          next: "Sent. Tell the user in a few words that you're on it (\"Okay, I'll ask them for you.\"); you'll tell them when the answer comes back.",
+        };
+      },
+      answer: async (relayId, answer) => {
+        const allowed = answerable(relayId);
+        if ("error" in allowed) return allowed;
+        const own = ownWords(answer, `${allowed.since}\n${allowed.username} ${allowed.name}`);
+        if (!own.ok) return notTheirs(own.foreign);
+        const result = await relays.answer(relayId, answer);
+        if (!result.ok) {
+          if (result.error.tag === "RelayClosed") void this.relaySync(relayId);
+          return failure(result.error);
+        }
+        this.relayClosedHere(result.value);
+        return { status: "done", sent: `@${allowed.username} gets: “${answer}”` };
+      },
+      decline: async (relayId) => {
+        const allowed = answerable(relayId);
+        if ("error" in allowed) return allowed;
+        const result = await relays.decline(relayId);
+        if (!result.ok) return failure(result.error);
+        this.relayClosedHere(result.value);
+        return { status: "done", declined: `@${allowed.username} will only hear that it was declined.` };
+      },
+      list: async () => {
+        const result = await relays.list();
+        return result.ok ? relayListView(result.value) : failure(result.error);
+      },
+    };
+  }
+
+  /** The sender's card, once the relay is stored. Synchronous: one card per relay. */
+  private showSent(relay: RelayJson) {
+    if (this.cards.get(relay.id)) return;
+    const message = this.thread.add({
+      role: "system_event",
+      body: sentEventBody(relay),
+      meta: { relay: cardOf(relay, "pending") },
+    });
+    this.cards.add(
+      { relayId: relay.id, direction: "out", messageId: message.id, cardSeq: this.thread.lastSeq(), status: "pending" },
+      Date.now(),
+    );
+    this.send({ type: "bubble", message });
+  }
+
+  /** The recipient's card, as their Tibo takes the relay. Synchronous: one card per relay. */
+  private showReceived(relay: RelayJson): boolean {
+    if (this.cards.get(relay.id)) return false;
+    const message = this.thread.add({
+      role: "system_event",
+      body: receivedEventBody(relay),
+      meta: { relay: cardOf(relay, "delivered") },
+    });
+    this.cards.add(
+      { relayId: relay.id, direction: "in", messageId: message.id, cardSeq: this.thread.lastSeq(), status: "delivered" },
+      Date.now(),
+    );
+    this.send({ type: "bubble", message });
+    return true;
+  }
+
+  /** Updates a relay's card to `relay`'s status, if that's news. Whether it was. */
+  private updateCard(relay: RelayJson): boolean {
+    const card = this.cards.get(relay.id);
+    if (!card || !this.cards.advance(relay.id, relay.status, Date.now())) return false;
+    this.setMeta(card.messageId, "relay", cardOf(relay));
+    return true;
+  }
+
+  /** The user answered or declined a relay here: their card updates and the sender's Tibo hears. */
+  private relayClosedHere(relay: RelayJson) {
+    this.updateCard(relay);
+    void relayClient(this.env.DOMAIN, this.name).ack(relay.id, relay.status);
+    this.reachPeer(relay);
+  }
+
+  /**
+   * Tells the other side's Tibo about the relay now, without waiting. If it
+   * can't be reached, the AgentWorker's cron tries again (`relaySweep`).
+   */
+  private reachPeer(relay: RelayJson) {
+    void this.keepAliveWhile(async () => {
+      try {
+        const peer = await getAgentByName(
+          this.env.TiboAgent as unknown as DurableObjectNamespace<TiboAgent>,
+          relay.person.userId,
+        );
+        await peer.relaySync(relay.id);
+      } catch (error) {
+        console.error("Reaching the other Tibo failed; the sweep will retry", relay.id, error);
+      }
+    });
+  }
+
+  /**
+   * A relay this user is part of changed: called over RPC by the other
+   * side's Tibo, or by the AgentWorker's cron for changes not yet heard
+   * (`relaySweep`). Reads the relay from the domain as this user (so it can
+   * only ever see its own relays), acts on what's new, then tells the domain
+   * it caught up. Safe to call any number of times.
+   */
+  async relaySync(relayId: string) {
+    const relays = relayClient(this.env.DOMAIN, this.name);
+    const got = await relays.get(relayId);
+    if (!got.ok) return { ok: false as const };
+    if (got.value.direction === "in") await this.syncReceived(got.value);
+    else await this.syncSent(got.value);
+    return { ok: true as const };
+  }
+
+  /** The recipient's side: take a new relay (card, then a turn telling the user), or update its card. */
+  private async syncReceived(relay: RelayJson) {
+    const relays = relayClient(this.env.DOMAIN, this.name);
+    if (relay.status === "pending" || relay.status === "delivered") {
+      if (!this.cards.get(relay.id)) {
+        // The turn telling the user costs half a message to each side: hold
+        // the relay until both can pay (the sweep tries again later).
+        const usage = usageClient(this.env.DOMAIN);
+        const affordable = await Promise.all([
+          usage.check(this.name, RELAY_UNITS_PER_SIDE),
+          usage.check(relay.person.userId, RELAY_UNITS_PER_SIDE),
+        ]).then(
+          (checks) => checks.every((check) => check.allowed),
+          () => false,
+        );
+        if (!affordable) {
+          await relays.hold(relay.id);
+          if (this.dev) console.log("Tibo relay held for quota", relay.id);
+          return;
+        }
+      }
+      // The card first, then the relay is delivered: a crash between the two
+      // retries (the card isn't shown twice) rather than losing it.
+      const shown = this.showReceived(relay);
+      const delivered = await relays.delivered(relay.id);
+      if (delivered.ok && delivered.value.status !== "delivered") {
+        // It ran out of time while held.
+        this.updateCard(delivered.value);
+        return;
+      }
+      if (shown) await this.schedule(1, "relayTurnFire", { relayId: relay.id, kind: "deliver" } satisfies RelayTurn);
+      return;
+    }
+    // Answered or declined here, expired or cancelled: the card follows.
+    if (this.updateCard(relay) && relay.status === "expired") {
+      this.thread.add({ role: "system_event", body: outcomeEventBody(relay), meta: { relayEvent: relay.id } });
+    }
+    await relays.ack(relay.id, relay.status);
+  }
+
+  /** The sender's side: the answer, a decline or an expiry came back. */
+  private async syncSent(relay: RelayJson) {
+    const relays = relayClient(this.env.DOMAIN, this.name);
+    if (relay.status === "pending" || relay.status === "delivered") {
+      await relays.ack(relay.id, relay.status);
+      return;
+    }
+    // The card is missing if sending was cut short after the relay was stored.
+    this.showSent(relay);
+    if (this.updateCard(relay) && relay.status !== "cancelled") {
+      // Why Tibo speaks next, for later turns (hidden in the app; the card shows it).
+      this.thread.add({ role: "system_event", body: outcomeEventBody(relay), meta: { relayEvent: relay.id } });
+      await this.schedule(1, "relayTurnFire", {
+        relayId: relay.id,
+        kind: relay.status === "expired" ? "expired" : "outcome",
+      } satisfies RelayTurn);
+    }
+    await relays.ack(relay.id, relay.status);
+  }
+
+  /**
+   * A relay turn's alarm. Waits for a running turn; otherwise runs under the
+   * turn lock, so its bubbles never mix with another reply's.
+   */
+  async relayTurnFire(payload: RelayTurn) {
+    if (this.running) {
+      await this.schedule(RELAY_TURN_RETRY_S, "relayTurnFire", payload);
+      return;
+    }
+    const job = this.exclusive(
+      () => this.relayTurn(payload),
+      (sinceSeq) => sinceSeq,
+    );
+    void job.catch((error: unknown) => console.error("Tibo relay turn failed", payload, error));
+  }
+
+  /**
+   * A turn a relay caused: telling the recipient about it, or telling the
+   * sender the answer. It runs with **no tools** (nothing the relayed text
+   * says can make Tibo act) and a small context with the relay in its own
+   * section, wrapped as another person's words. Charged half a message to
+   * each side once a bubble showed (`relay`); if either side can't pay, or
+   * the model fails, a fixed line points at the card instead, uncharged.
+   * An expiry is always a fixed line. Returns where it started (the turn
+   * queue's `sinceSeq`).
+   */
+  private async relayTurn({ relayId, kind }: RelayTurn): Promise<number> {
+    const sinceSeq = this.thread.lastSeq();
+    const turnId = crypto.randomUUID();
+    const got = await relayClient(this.env.DOMAIN, this.name).get(relayId);
+    if (!got.ok) return sinceSeq;
+    const relay = got.value;
+    const due =
+      kind === "deliver"
+        ? // Still pending only if marking it delivered failed; the card is up either way.
+          relay.direction === "in" && (relay.status === "delivered" || relay.status === "pending")
+        : kind === "outcome"
+          ? relay.direction === "out" && (relay.status === "answered" || relay.status === "declined")
+          : relay.direction === "out" && relay.status === "expired";
+    if (!due) return sinceSeq;
+    try {
+      if (kind === "expired") {
+        await this.sayLine(expiredLine(relay), turnId, { relayTurn: relayId });
+        return sinceSeq;
+      }
+      const fallback = kind === "deliver" ? deliveryFallback(relay) : outcomeFallback(relay);
+      const usage = usageClient(this.env.DOMAIN);
+      const affordable = await Promise.all([
+        usage.check(this.name, RELAY_UNITS_PER_SIDE),
+        usage.check(relay.person.userId, RELAY_UNITS_PER_SIDE),
+      ]).then(
+        (checks) => checks.every((check) => check.allowed),
+        () => false,
+      );
+      if (!affordable) {
+        await this.sayLine(fallback, turnId, { relayTurn: relayId });
+        return sinceSeq;
+      }
+      let answered = false;
+      try {
+        const profile = await tiboClient(this.env.DOMAIN).profile(this.name);
+        const context = buildTurnContext({
+          persona: PERSONA,
+          profile,
+          now: new Date(),
+          recent: this.thread.latest(RELAY_TURN_WINDOW).messages,
+          sections: [kind === "deliver" ? deliverySection(relay) : outcomeSection(relay)],
+        });
+        // No tools, and nothing to react to.
+        answered = await this.reply(turnId, context, null, {}, new TurnLedger());
+      } catch (error) {
+        console.error("Tibo relay turn failed; sending the fixed line", relayId, error);
+        await this.sayLine(fallback, turnId, { relayTurn: relayId });
+        return sinceSeq;
+      }
+      if (answered) {
+        const [from, to] = relay.direction === "out" ? [this.name, relay.person.userId] : [relay.person.userId, this.name];
+        await usage
+          .chargeSplit(from, to, RELAY_UNITS_PER_SIDE, "relay", relayId)
+          .catch((error: unknown) => console.error("Charging a relay turn failed", relayId, error));
+        const after = await usage.get(this.name).catch(() => null);
+        if (after) this.send({ type: "usage", remaining: after.remaining, limit: after.limit });
+      }
+      await this.notifyUser({ kind: "relay", turnId });
+      if (this.dev) console.log("Tibo relay turn sent", kind, relayId);
+      return sinceSeq;
+    } finally {
+      this.send({ type: "turnDone", turnId });
+    }
+  }
+
+  /** One fixed Tibo bubble after a short typing pause: no model call, no charge. */
+  private async sayLine(body: string, turnId: string, meta: MessageMeta = {}) {
+    this.send({ type: "typing", on: true });
+    await sleep(typingDelayMs(body));
+    const message = this.thread.add({ role: "tibo", body, turnId, meta });
+    this.send({ type: "typing", on: false });
+    this.send({ type: "bubble", message });
   }
 
   // ─── Frames ──────────────────────────────────────────────────────────────

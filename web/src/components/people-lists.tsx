@@ -15,7 +15,7 @@ export function PeopleSection({
   count,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   description?: string;
   count?: number;
   children: ReactNode;

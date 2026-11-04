@@ -7,11 +7,13 @@ import { TiboProvider } from "@/components/tibo-panel";
 import { TopBar } from "@/components/top-bar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useRunBootstrap } from "@/hooks/use-bootstrap";
+import { NotificationsSync } from "@/hooks/use-notifications";
 import type { OnboardedUser } from "@/lib/session-cache";
 
 /**
  * The signed-in app's chrome: sidebar, top row, phone nav, Tibo, and the
- * app-wide Bootstrap and session sync. The `_app` layout wraps every app
+ * app-wide Bootstrap, session sync and notifications polling. The `_app`
+ * layout wraps every app
  * page in it; `/@username` uses it too when the viewer is signed in.
  */
 export function AppShell({
@@ -28,6 +30,7 @@ export function AppShell({
   return (
     <TiboProvider userId={user.id}>
       <SessionSync />
+      <NotificationsSync />
       <SidebarProvider defaultOpen={sidebarOpen}>
         <AppSidebar user={user} />
         <div className="flex min-h-svh min-w-0 flex-1 flex-col">

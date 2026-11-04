@@ -14,6 +14,7 @@ import {
   type TiboMessage,
   type TiboQuote,
   type TiboReceipt,
+  type TiboRelayCard,
   type TiboRole,
 } from "./protocol.ts";
 
@@ -51,6 +52,7 @@ export type MessageMeta = {
   readonly replyTo?: TiboQuote;
   readonly receipts?: readonly TiboReceipt[];
   readonly confirm?: TiboConfirm;
+  readonly relay?: TiboRelayCard;
 } & Record<string, unknown>;
 
 type Row = {
@@ -77,6 +79,7 @@ const toMessage = (row: Row): TiboMessage => {
     ...(meta.replyTo ? { replyTo: meta.replyTo } : {}),
     ...(Array.isArray(meta.receipts) && meta.receipts.length > 0 ? { receipts: meta.receipts } : {}),
     ...(meta.confirm ? { confirm: meta.confirm } : {}),
+    ...(meta.relay ? { relay: meta.relay } : {}),
   };
 };
 
@@ -170,7 +173,7 @@ export class Thread {
   }
 
   /** Sets one meta key on a message (JSON value); `null` if there's no such message. */
-  setMeta(id: string, key: "receipts" | "confirm", value: unknown): TiboMessage | null {
+  setMeta(id: string, key: "receipts" | "confirm" | "relay", value: unknown): TiboMessage | null {
     const row = this.sql
       .exec<Row>(
         `UPDATE messages SET meta = json_set(coalesce(meta, '{}'), '$.' || ?, json(?))

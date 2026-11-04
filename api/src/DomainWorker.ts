@@ -11,8 +11,9 @@ import { Hyperdrive } from "./database.ts";
 import { AuthAccounts } from "./domain/account.ts";
 import { Database } from "./domain/database.ts";
 import { DEV_PORTS } from "./dev-ports.ts";
-import { AI_UNITS_PER_CHARGE_MAX, AiUsageReason, Id, type AiUsage } from "./domain/model.ts";
+import { AI_UNITS_PER_CHARGE_MAX, AiUsageReason, Id, RelayStatus, type AiUsage } from "./domain/model.ts";
 import { RateLimiter } from "./domain/rate-limiter.ts";
+import * as RelayService from "./domain/relays.ts";
 import * as TiboService from "./domain/tibo.ts";
 import * as UsageService from "./domain/usage.ts";
 import { AiQuota } from "./domain/usage.ts";
@@ -24,6 +25,7 @@ import {
   type TiboRpc,
 } from "./domain-client.ts";
 import { apiHandlers } from "./handlers.ts";
+import { LIMITS, bindingProps } from "./limits.ts";
 import { AI_MONTHLY_MESSAGE_QUOTA_DEFAULT, ApiRpcs, CurrentUser, Viewer } from "./rpc.ts";
 import { relations } from "./schema.ts";
 
@@ -79,19 +81,31 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
     const monthlyMessages = yield* Config.Int("AI_MONTHLY_MESSAGE_QUOTA").pipe(
       Config.withDefault(AI_MONTHLY_MESSAGE_QUOTA_DEFAULT),
     );
+    // Relays sent, per user (architecture.md §9): Tibo is the only way to
+    // send one, so this Worker binds their burst limit.
+    const relayLimit = yield* Cloudflare.RateLimit(LIMITS.relay.name, bindingProps(LIMITS.relay));
     const services = Layer.mergeAll(
       Layer.succeed(Database, db),
       Layer.succeed(AiQuota, { monthlyMessages }),
       // Not in `TIBO_RPCS`: connection requests, people search and account
-      // deletion. Refuse them here too.
-      Layer.succeed(RateLimiter, { allow: () => Effect.succeed(false) }),
+      // deletion. Refuse them here too; relays have their own limit.
+      Layer.succeed(RateLimiter, {
+        allow: (limit, userId) =>
+          limit === "relay"
+            ? relayLimit.limit({ key: userId }).pipe(
+                Effect.map(({ success }) => success),
+                Effect.orDie,
+                Effect.provide(RuntimeContext.phantom),
+              )
+            : Effect.succeed(false),
+      }),
       Layer.succeed(AuthAccounts, {
         deleteUser: () => Effect.die(new Error("Tibo can't delete accounts")),
       }),
     );
 
     /** Runs a domain effect, turning defects into a logged, rejected call. */
-    const exec = <A, E>(effect: Effect.Effect<A, E, Database | AiQuota>) =>
+    const exec = <A, E>(effect: Effect.Effect<A, E, Database | AiQuota | RateLimiter>) =>
       effect.pipe(
         Effect.provide(services),
         Effect.catchDefect((defect) =>
@@ -101,6 +115,17 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
         ),
         Effect.provide(RuntimeContext.phantom),
       );
+
+    /** A domain call as `DomainResult`: its value, or its typed failure as plain data. */
+    const result = <A, E>(effect: Effect.Effect<A, E, Database | AiQuota | RateLimiter>) =>
+      exec(
+        effect.pipe(
+          Effect.map((value): DomainResult => ({ ok: true, value: value ?? null })),
+          Effect.catch((error) => Effect.succeed<DomainResult>({ ok: false, error: errorOf(plain(error)) })),
+        ),
+      );
+    /** The acting user's id, checked. */
+    const actor = (userId: string) => Schema.decodeUnknownEffect(Id)(userId).pipe(Effect.orDie);
 
     let nextRequestId = 0;
 
@@ -208,6 +233,33 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           ),
         ),
 
+      // ─── Relays (`./domain/relays.ts`), always as the acting user ──────────
+      relayCheck: (fromUserId: string, to: string) =>
+        result(actor(fromUserId).pipe(Effect.flatMap((id) => RelayService.checkRelay(id, to)))),
+      relaySend: (fromUserId: string, toUsername: string, message: string) =>
+        result(actor(fromUserId).pipe(Effect.flatMap((id) => RelayService.sendRelay(id, { toUsername, message })))),
+      relayGet: (actorId: string, relayId: string) =>
+        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.getRelay(id, relayId)))),
+      relayDelivered: (actorId: string, relayId: string) =>
+        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.markRelayDelivered(id, relayId)))),
+      relayHold: (actorId: string, relayId: string) =>
+        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.holdRelay(id, relayId)))),
+      relayAnswer: (actorId: string, relayId: string, answer: string) =>
+        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.answerRelay(id, relayId, answer)))),
+      relayDecline: (actorId: string, relayId: string) =>
+        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.declineRelay(id, relayId)))),
+      relayAck: (actorId: string, relayId: string, status: string) =>
+        result(
+          Effect.all({ id: actor(actorId), status: Schema.decodeUnknownEffect(RelayStatus)(status).pipe(Effect.orDie) }).pipe(
+            Effect.flatMap(({ id, status }) => RelayService.ackRelay(id, relayId, status)),
+          ),
+        ),
+      relayList: (actorId: string) =>
+        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.listRelays(id)))),
+      relayExpireNow: (actorId: string, relayId: string) =>
+        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.expireRelayNow(id, relayId)))),
+      relaySweep: () => exec(RelayService.sweepRelays().pipe(Effect.map((relays) => ({ relays })))),
+
       // ─── Tibo's own facts, the event outbox and the wipe queue (`./domain/tibo.ts`)
       tiboProfile: (userId: string) =>
         exec(Schema.decodeUnknownEffect(Id)(userId).pipe(Effect.flatMap(TiboService.getTiboProfile), Effect.orDie)),
@@ -234,7 +286,10 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           ),
         ),
     };
-  }).pipe(Effect.provide(Cloudflare.Hyperdrive.ConnectBinding)),
+  }).pipe(
+    Effect.provide(Cloudflare.Workers.RateLimitBinding),
+    Effect.provide(Cloudflare.Hyperdrive.ConnectBinding),
+  ),
 ) {}
 
 /** An `ApiRpcs` handler with its payload and services erased (they're checked at runtime). */
@@ -242,6 +297,13 @@ type AnyHandler = (
   payload: unknown,
   options: { client: Rpc.ServerClient; requestId: RpcMessage.RequestId; headers: Headers.Headers },
 ) => Effect.Effect<unknown, unknown, CurrentUser | Viewer>;
+
+/** A typed domain error as plain data (its own fields, JSON-safe), for `errorOf`. */
+function plain(error: unknown): unknown {
+  if (typeof error !== "object" || error === null) return { _tag: "Error", message: String(error) };
+  const { _tag, message, ...fields } = error as Record<string, unknown>;
+  return { _tag, message, ...(JSON.parse(JSON.stringify(fields)) as Record<string, unknown>) };
+}
 
 /** A typed error as `{ tag, message }` plus its other fields (an `ActiveSessionExists`'s session). */
 function errorOf(encoded: unknown): DomainError {

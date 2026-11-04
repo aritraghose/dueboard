@@ -245,6 +245,7 @@ const dayKey = (at: number) => new Date(at).toDateString();
 function groupEntries(thread: TiboThreadState): Group[] {
   const entries: Entry[] = [
     ...thread.messages
+      // App events (check-ins, relays) are for Tibo: relays read as plain chat.
       .filter((message) => message.role !== "system_event")
       .flatMap((message: TiboMessage): Entry[] => [
         {

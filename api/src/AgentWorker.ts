@@ -86,7 +86,8 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     TIBO_DEV: Effect.map(ALCHEMY_DEV, (dev) => (dev ? "true" : "false")),
   },
   // Every minute: delivers domain events to the agents (changed check-in
-  // settings), and wipes deleted accounts' threads (`./agent.ts`).
+  // settings), expires relays and catches agents up on them, and wipes
+  // deleted accounts' threads (`./agent.ts`).
   crons: ["* * * * *"],
 });
 

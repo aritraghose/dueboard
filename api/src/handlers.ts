@@ -6,6 +6,7 @@ import * as GoalsService from "./domain/goals.ts";
 import * as HabitsService from "./domain/habits.ts";
 import * as LiveService from "./domain/live.ts";
 import * as NotesService from "./domain/notes.ts";
+import * as NotificationsService from "./domain/notifications.ts";
 import * as PointsService from "./domain/points.ts";
 import * as ProfileItemsService from "./domain/profile-items.ts";
 import * as SessionsService from "./domain/sessions.ts";
@@ -347,6 +348,21 @@ export const apiHandlers = ApiRpcs.of({
     Effect.gen(function* () {
       const user = yield* CurrentUser;
       return yield* SocialService.searchPeople(user.id, input);
+    }),
+  ListNotifications: () =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* NotificationsService.listNotifications(user.id);
+    }),
+  GetUnseenNotifications: () =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* NotificationsService.countUnseenNotifications(user.id);
+    }),
+  MarkNotificationsSeen: () =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* NotificationsService.markNotificationsSeen(user.id);
     }),
   DeleteAccount: (input) =>
     Effect.gen(function* () {

@@ -22,7 +22,8 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+    // Phones keep the top right corner free for the floating bell (`TopBar`).
+    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 max-md:pr-11">
       <div className="flex min-w-0 flex-col gap-1.5">
         <h1 className="text-title font-semibold">{title}</h1>
         {description && <p className="max-w-prose text-muted-foreground">{description}</p>}

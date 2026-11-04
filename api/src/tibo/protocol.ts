@@ -4,7 +4,7 @@
 // (`@dueboard/api/tibo`). The Agents SDK's own frames (`cf_agent_*`, `rpc`)
 // share the socket; `useAgent` consumes those before ours arrive.
 
-/** Who wrote a row. `system_event` rows (relays, proactive triggers) come in later steps. */
+/** Who wrote a row. `system_event` rows are app events (relays, check-in triggers): hidden in the app, read by the model. */
 export type TiboRole = "user" | "tibo" | "system_event";
 
 /** One row of the thread: a user message, or one of Tibo's bubbles. */
@@ -31,6 +31,33 @@ export interface TiboMessage {
   readonly receipts?: readonly TiboReceipt[];
   /** Actions Tibo is holding for the user's go-ahead, on the turn's last bubble. */
   readonly confirm?: TiboConfirm;
+  /**
+   * On a relay's app event row: who it's from or to, and where it stands.
+   * Tibo's own record (the app hides app events; relays read as plain chat).
+   */
+  readonly relay?: TiboRelayCard;
+}
+
+/** Where a relay stands (the domain's `relay_status`). */
+export type TiboRelayStatus = "pending" | "delivered" | "answered" | "declined" | "expired" | "cancelled";
+
+/**
+ * A message passed between two people through their Tibos (a relay), as
+ * each side's agent records it: one per relay, updated in place as it's
+ * answered, declined, expires or is cancelled.
+ */
+export interface TiboRelayCard {
+  readonly id: string;
+  /** `out`: the user sent it; `in`: someone sent it to the user. */
+  readonly direction: "in" | "out";
+  /** The other person. */
+  readonly person: { readonly username: string; readonly name: string };
+  readonly message: string;
+  readonly status: TiboRelayStatus;
+  /** Their answer (`out`) or the user's (`in`), once answered. */
+  readonly answer?: string;
+  /** Milliseconds since the epoch. */
+  readonly expiresAt: number;
 }
 
 /** What a receipt or a held action is about, so the app can show the item's own card. */

@@ -25,6 +25,7 @@ import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppLeaderboardRouteImport } from './routes/_app/leaderboard'
 import { Route as AppLiveRouteImport } from './routes/_app/live'
 import { Route as AppNotesRouteImport } from './routes/_app/notes'
+import { Route as AppNotificationsRouteImport } from './routes/_app/notifications'
 import { Route as AppNowRouteImport } from './routes/_app/now'
 import { Route as AppSessionsRouteImport } from './routes/_app/sessions'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
@@ -113,6 +114,11 @@ const AppNotesRoute = AppNotesRouteImport.update({
   path: '/notes',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppNowRoute = AppNowRouteImport.update({
   id: '/now',
   path: '/now',
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/leaderboard': typeof AppLeaderboardRoute
   '/live': typeof AppLiveRoute
   '/notes': typeof AppNotesRoute
+  '/notifications': typeof AppNotificationsRoute
   '/now': typeof AppNowRoute
   '/sessions': typeof AppSessionsRoute
   '/settings': typeof AppSettingsRoute
@@ -198,6 +205,7 @@ export interface FileRoutesByTo {
   '/leaderboard': typeof AppLeaderboardRoute
   '/live': typeof AppLiveRoute
   '/notes': typeof AppNotesRoute
+  '/notifications': typeof AppNotificationsRoute
   '/now': typeof AppNowRoute
   '/sessions': typeof AppSessionsRoute
   '/settings': typeof AppSettingsRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/_app/leaderboard': typeof AppLeaderboardRoute
   '/_app/live': typeof AppLiveRoute
   '/_app/notes': typeof AppNotesRoute
+  '/_app/notifications': typeof AppNotificationsRoute
   '/_app/now': typeof AppNowRoute
   '/_app/sessions': typeof AppSessionsRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -252,6 +261,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/live'
     | '/notes'
+    | '/notifications'
     | '/now'
     | '/sessions'
     | '/settings'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/live'
     | '/notes'
+    | '/notifications'
     | '/now'
     | '/sessions'
     | '/settings'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/_app/leaderboard'
     | '/_app/live'
     | '/_app/notes'
+    | '/_app/notifications'
     | '/_app/now'
     | '/_app/sessions'
     | '/_app/settings'
@@ -437,6 +449,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotesRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/notifications': {
+      id: '/_app/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/now': {
       id: '/_app/now'
       path: '/now'
@@ -514,6 +533,7 @@ interface AppRouteRouteChildren {
   AppLeaderboardRoute: typeof AppLeaderboardRoute
   AppLiveRoute: typeof AppLiveRoute
   AppNotesRoute: typeof AppNotesRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
   AppNowRoute: typeof AppNowRoute
   AppSessionsRoute: typeof AppSessionsRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -532,6 +552,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppLeaderboardRoute: AppLeaderboardRoute,
   AppLiveRoute: AppLiveRoute,
   AppNotesRoute: AppNotesRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
   AppNowRoute: AppNowRoute,
   AppSessionsRoute: AppSessionsRoute,
   AppSettingsRoute: AppSettingsRoute,

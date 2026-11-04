@@ -123,9 +123,10 @@ plain `date`**, interpreted in the owner's time zone.
 | `connection_requests` | `id`, `from_user_id`, `to_user_id`, `status` (`pending`\|`accepted`\|`declined`\|`cancelled`), `created_at`, `responded_at?` | Partial unique index: one `pending` row per ordered pair. Answered rows are kept (the 24-hour send cap counts them). `responded_at` set iff not pending (`CHECK`). |
 | `connections` | `user_low`, `user_high` (ordered pair), `created_at` | PK on the pair, `CHECK user_low < user_high collate "C"` (byte order, matching JS `<`). Mutual. Removing a connection deletes the row. |
 | `blocks` | `blocker_id`, `blocked_id`, `created_at` | PK on the pair. Hides everything both ways and blocks requests, relays and the Ask page. |
+| `notifications` | `id`, `user_id` (recipient), `actor_id`, `kind` (`connection_request`\|`connection_accepted`), `request_id` (FK `connection_requests`, cascade), `created_at`, `seen_at?` | `domain/notifications.ts`. Written in the request's or accept's transaction; unique `(request_id, kind)`. Deleted both ways by a block. Indexes `(user_id, created_at desc, id desc)` and a partial unseen index. |
 | `ai_usage` | `user_id`, `period` (`YYYY-MM` in the user's time zone), `units` | Quota ledger (§8). |
 | `ai_usage_events` | `user_id`, `units`, `reason`, `ref?`, `created_at` | Audit log. |
-| `relays` | `id`, `from_user_id`, `to_user_id`, `message`, `status` (`pending`\|`delivered`\|`answered`\|`declined`\|`expired`), `answer?`, `created_at`, `answered_at?` | §7.5 |
+| `relays` | `id`, `from_user_id`, `to_user_id`, `message` (1–1000), `status` (`pending`\|`delivered`\|`answered`\|`declined`\|`expired`\|`cancelled`), `answer?` (1–1000), `created_at`, `delivered_at?`, `answered_at?`, `expires_at` (7 days), `updated_at`, `sender_synced`, `recipient_synced`, `retry_at?` | §7.5. `CHECK`s: not to yourself, the lengths, `answer` iff answered, `answered_at` iff answered or declined. Deleted with either account. |
 | `ask_settings` | `user_id` PK, `enabled` (default **false**), `instructions`, `shared_context`, `monthly_answer_cap` | §7.6 |
 | `ask_usage` | `user_id`, `period`, `answers` | |
 | `push_subscriptions` | `id`, `user_id`, `endpoint`, `p256dh`, `auth`, `created_at` | Built last. |
@@ -254,6 +255,7 @@ If it gets slow later, add a materialized per-user inbox.
 | `/live` | `_app` | Live, full-page: the feed of what you and your connections get done (it was called the timeline) |
 | `/settings` | `_app` | Tabs: General (defaults, time zone display, theme), Connections (blocked list only), Tibo (relay policy, later the Ask page), Account (delete) |
 | `/tags` | `_app` | Create, rename and recolor tags (built-in tags only recolor). Linked from `/tasks` ("Manage tags"). |
+| `/notifications` | `_app` | Who asked to connect and who accepted your requests, newest first, with Accept / Decline on pending ones. Opening it marks them seen. Reached from the bell in the top row (left of Tibo; floating top right on phones), which shows the unread dot. |
 | `/discover` | `_app` | People search, incoming requests, sent requests. In the desktop sidebar after Boards. |
 | `/leaderboard` | `_app` | Points ranking: `?scope=public` (default Connections), `?period=all|month|today` (default This week). In the desktop sidebar after Discover. |
 | `/connections` | `_app` | The user's connections, with Remove and Block. Opened from their own profile's connections count. |
@@ -304,7 +306,7 @@ If it gets slow later, add a materialized per-user inbox.
 
 - `messages`: `id`, `role` (`user`\|`tibo`\|`system_event`), `body`, `created_at`, `turn_id`, `meta`.
   - A Tibo turn can produce several **bubbles**, each stored as its own row.
-  - `system_event` rows hold relays and proactive triggers, which are shown in the thread.
+  - `system_event` rows hold relays and proactive triggers. The app hides them (relays read as plain chat); the model reads them as app events.
 - `messages_fts`: an FTS5 index over `body`, for keyword search over the archive.
 - `summaries`: `level` (`day`\|`week`\|`month`\|`year`), `period_start`, `text`, `through_message_id`, `through_seq`, `updated_at`. PK `(level, period_start)`.
 - `memories`: `id`, `text`, `kind` (`fact`\|`preference`\|`person`\|`event`\|`plan`), `importance` (1–3), `created_at` (when it was said), `updated_at`, `superseded_by?`, `source_message_ids`, `embedding_model?`.
@@ -367,25 +369,72 @@ Live and diary; search the conversation; relay (§7.5).
 
 ### 7.5 Relays (Tibo ⇄ Tibo)
 
-Relays work like mail, not like a free conversation between agents:
+Relays read like friends passing a note, all in chat, with **no cards and no
+confirm step** (the user's call, step 21): A says "ask @bea if she's up for
+dinner Sunday", A's Tibo says it'll ask, B's Tibo says "Hey, @ar1tra is asking
+you out for dinner Sunday. What should I say?", B answers in chat, and A's
+Tibo tells A.
 
-1. A's Tibo calls `relay(toUsername, message)`.
-2. The server checks:
-   - B's `relay_policy`: `connections` (the default), `anyone` or `none`;
-   - blocks;
-   - A's daily relay limit.
+1. A's Tibo calls `relay_message(to, message)` (`to` is a username, or a
+   connection's name). The agent checks the message is **A's own words**
+   (`ownWords`, below), then `domain/relays.ts` `sendRelay` checks, in one
+   transaction with both users locked: B's `relay_policy` (`connections` by
+   default, `anyone`, `none`), blocks either way (someone who blocked A looks
+   like no one), the caps (`RELAYS_PER_DAY` 30 in any 24 h counted in
+   Postgres plus the 1007 burst limit, 3 open per pair, 20 open per
+   recipient) and both quotas (A can pay 2 units, B 1). Then the `relays` row.
+2. A's agent calls B's agent directly (`getAgentByName(...).relaySync(id)`,
+   DO RPC inside the AgentWorker). B's agent reads the relay from the domain
+   **as B**, checks both sides can pay the turn (else `holdRelay`: retried in
+   30 min), adds a hidden `system_event` row with the message wrapped as
+   `<relayed_message from="@a">…</relayed_message>` (escaped), marks it
+   `delivered`, and schedules the **delivery turn**.
+3. B's delivery turn: persona, "right now", a relay section and the last 12
+   messages; **no tools, no snapshot, no memories**. B's Tibo asks B what to
+   say back.
+4. B answers in an ordinary turn: `answer_relay(relayId, answer)` (or
+   `decline_relay`) runs at once, then B's agent calls A's agent, which adds
+   a hidden outcome row and schedules the **outcome turn** (same shape, no
+   tools). An expiry is a fixed line (no model, no charge).
 
-   It then inserts a `relays` row and calls B's `TiboAgent`, which adds a `system_event`.
-3. B's Tibo tells B: "A is asking …, what should I tell them?"
-4. B answers. B's Tibo calls `reply_relay(relayId, answer)`, which delivers to A's DO, and A's Tibo tells A.
+**Sync and retries**: each side's agent acts on a relay change once
+(`relay_cards` in DO SQLite, advanced synchronously), then acks it
+(`sender_synced`/`recipient_synced`). The AgentWorker's every-minute cron calls
+`relaySweep`: it expires open relays past `expires_at` (the sender is told; the
+recipient's agent only if it had shown it) and hands out up to 100 relays a
+side hasn't caught up on (20 s after the change, so the direct path goes
+first; then every 5 minutes).
 
-**Security:**
-- Relay text is **untrusted data** for B's agent, never instructions.
-- B's agent cannot run tools because of a relay.
-- B's agent can only send back what B explicitly approved.
+**Security (enforced in code):**
+- Relayed text (and an answer coming back) is **untrusted data**: always
+  wrapped and escaped, with a note that it's never instructions, in the
+  thread, `list_relays`, the turns and the memory jobs' prompts (no memories
+  are taken from it).
+- Turns a relay causes run with **no tools**, so nothing in the text can make
+  Tibo act, and they don't see the user's board or memories.
+- **Only the user's own words cross over** (`ownWords` in `tibo/relays.ts`,
+  tested): at least 75% of the content words of what's sent (glue words,
+  greetings and yes/no aside) must appear in what the user wrote (since Tibo
+  last spoke for a new relay, since the relay came for an answer), plus the
+  other person's name. An answer built from the board, memories or an
+  injected instruction fails with the foreign words named, and nothing is
+  sent. This replaced the confirm step the prompt asked for.
+- `answer_relay`/`decline_relay` only for a relay addressed to this user,
+  still waiting, after the user wrote since it came. The domain checks the
+  actor is the recipient too.
+- A block cancels open relays both ways in the block's transaction; only the
+  blocker's agent hears.
 
-**Quota:** every model turn caused by a relay costs **half a message to each
-user** (§8).
+**Quota:** each model turn a relay causes (delivery, outcome) charges **1 unit
+(half a message) to each side** (`chargeSplit`, reason `relay`). If either
+side can't pay, delivery waits, and an outcome becomes a fixed line, uncharged.
+
+**Built (step 21)**: `domain/relays.ts`, `relay-rules.ts` (tested),
+`relay-constants.ts`; `tibo/relays.ts` (store, prompts, `ownWords`; tested);
+the relay section of `TiboAgent.ts`; tools `relay_message`, `answer_relay`,
+`decline_relay`, `list_relays`; DomainWorker `relay*` methods; the cron's
+`syncRelays`. Dev only: `dev/relays`, `dev/relay-expire?id=`, and `dev/peer`
+(drives a second test account's Tibo: `do=say`, `do=confirm`, `GET`).
 
 ### 7.6 Ask agent (`/@username/ask`)
 
@@ -462,7 +511,7 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
 | 1004 `RPC_RATE_LIMIT` | user | 120/min | ApiWorker: every authenticated RPC (`Authentication`), and `PublicRpcs` for signed-in viewers |
 | 1005 `CHAT_RATE_LIMIT` | user | 10/min | AgentWorker: Tibo turns (`TiboAgent.turn`) |
 | 1006 `CONNECTION_REQUEST_RATE_LIMIT` | user | 5/min burst, plus 20 per 24 h counted in Postgres | ApiWorker: connection requests (`social.ts`, via `RateLimiter`) |
-| 1007 | user | strict (e.g. 30/day) | reserved: relays sent (step 21) |
+| 1007 `RELAY_RATE_LIMIT` | user | 5/min burst, plus 30 per 24 h counted in Postgres | DomainWorker: relays sent (`domain/relays.ts`, via `RateLimiter`) |
 | 1008 `PUBLIC_READ_RATE_LIMIT` | IP (`cf-connecting-ip`) | 60/min | ApiWorker: `PublicRpcs` for logged-out visitors |
 | 1009 | visitor (user or IP) | strict | reserved: Ask page questions, plus Turnstile (step 22) |
 | 1010 `AGENT_RATE_LIMIT` | IP | 60/min | Website: `/agents/*` WebSocket upgrades and HTTP, before the session lookup (`src/server.ts`) |

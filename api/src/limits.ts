@@ -57,6 +57,17 @@ export const LIMITS = {
     key: "user",
     where: "ApiWorker: `domain/social.ts` through `RateLimiter`",
   }),
+  /**
+   * Relays sent through Tibo, per user: a burst limit. The 30-a-day cap
+   * (`RELAYS_PER_DAY`) is counted from `relays`.
+   */
+  relay: limit({
+    name: "RELAY_RATE_LIMIT",
+    namespaceId: 1007,
+    simple: { limit: 5, period: 60 },
+    key: "user",
+    where: "DomainWorker: `domain/relays.ts` through `RateLimiter`",
+  }),
   /** Public reads (`PublicRpcs`) by logged-out visitors, per IP. */
   publicRead: limit({
     name: "PUBLIC_READ_RATE_LIMIT",
@@ -97,7 +108,6 @@ export const LIMITS = {
 
 /** Ids taken by limits a later step adds, so nothing else claims them. */
 export const RESERVED_NAMESPACE_IDS = {
-  1007: "Relays sent, per user (step 21)",
   1009: "Ask page questions, per visitor, plus Turnstile (step 22)",
 } as const;
 

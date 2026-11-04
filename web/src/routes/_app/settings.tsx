@@ -363,9 +363,14 @@ function Connections() {
 
 // ─── Tibo ────────────────────────────────────────────────────────────────────
 
-const RELAY_OPTIONS: readonly { value: RelayPolicy; label: string }[] = RELAY_POLICY.map((value) => ({
+const RELAY_OPTIONS: readonly { value: RelayPolicy; label: string; hint: string }[] = RELAY_POLICY.map((value) => ({
   value,
   label: { connections: "My connections", anyone: "Anyone", none: "No one" }[value],
+  hint: {
+    connections: "People you're connected with.",
+    anyone: "Anyone on Dueboard who knows your username.",
+    none: "Tibo turns every message away.",
+  }[value],
 }));
 
 function Tibo() {
@@ -380,7 +385,7 @@ function Tibo() {
         <Row
           id="relay-policy"
           title="Messages through Tibo"
-          description="Who can pass you a message through their Tibo."
+          description="Who can ask their Tibo to pass you a message. Your Tibo tells you in chat and passes back only what you tell it to answer. Each message and its answer use half a message from each of you. Blocking someone closes their messages."
         >
           <Choice
             labelledBy="relay-policy"

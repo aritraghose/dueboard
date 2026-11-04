@@ -58,6 +58,8 @@ import {
   ProfileItemPage,
   SearchPeopleInput,
   SocialLimitReached,
+  NotificationItem,
+  NotificationsUnseen,
   SocialOverview,
   SocialStatus,
   ListGoalsInput,
@@ -634,6 +636,20 @@ export class ApiRpcs extends RpcGroup.make(
     success: Schema.Array(PersonResult),
     error: Schema.Union([InvalidInput, SocialLimitReached]),
   }),
+  /**
+   * `/notifications`: who asked to connect and who accepted the user's
+   * requests, newest first (at most 50), each with where its request
+   * stands now and whether the user saw it before.
+   */
+  Rpc.make("ListNotifications", {
+    success: Schema.Array(NotificationItem),
+  }),
+  /** How many notifications the user hasn't seen (the nav dot). */
+  Rpc.make("GetUnseenNotifications", {
+    success: NotificationsUnseen,
+  }),
+  /** Marks every notification seen (opening `/notifications`). */
+  Rpc.make("MarkNotificationsSeen"),
   /**
    * Deletes everything the user owns and their account, once they typed
    * their username. The client signs out afterwards.

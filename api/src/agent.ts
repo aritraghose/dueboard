@@ -54,6 +54,30 @@ async function deliverTiboEvents(env: AgentEnv) {
   if (done.length > 0) await tibo.eventsDone(done);
 }
 
+/**
+ * Relays an agent hasn't heard about yet (`domain/relays.ts`): the sweep
+ * first expires old ones, then hands out those still owed to a side, and
+ * each side's agent reads the relay itself and catches up (`relaySync`).
+ * Normally the agents reach each other directly; this is the fallback, and
+ * how expiries and held deliveries get through.
+ */
+async function syncRelays(env: AgentEnv) {
+  const { relays } = await env.DOMAIN.relaySweep();
+  const agent = (userId: string) => getAgentByName(env.TiboAgent as DurableObjectNamespace<TiboAgent>, userId);
+  await Promise.all(
+    relays.flatMap((relay) => [
+      ...(relay.recipientSynced ? [] : [relay.toUserId]),
+      ...(relay.senderSynced ? [] : [relay.fromUserId]),
+    ].map(async (userId) => {
+      try {
+        await (await agent(userId)).relaySync(relay.id);
+      } catch (error) {
+        console.error("Syncing a relay failed", relay.id, userId, error);
+      }
+    })),
+  );
+}
+
 export default {
   async fetch(request: Request, env: AgentEnv) {
     // `/agents/tibo-agent/<user id>/…`, rewritten by the web stack's proxy.
@@ -61,6 +85,7 @@ export default {
   },
   async scheduled(controller: ScheduledController, env: AgentEnv, ctx: ExecutionContext) {
     ctx.waitUntil(deliverTiboEvents(env).catch((error: unknown) => console.error("Tibo event delivery failed", error)));
+    ctx.waitUntil(syncRelays(env).catch((error: unknown) => console.error("Relay sync failed", error)));
     // Wipes keep their old pace.
     if (new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0) ctx.waitUntil(wipeDeletedThreads(env));
   },

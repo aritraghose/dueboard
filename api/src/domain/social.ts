@@ -47,6 +47,9 @@ import {
   searchPatterns,
 } from "./social-rules.ts";
 import { pointsOf } from "./points.ts";
+import { cancelRelaysBetween } from "./relays.ts";
+import { onRequestAccepted, onRequestSent } from "./notification-rules.ts";
+import { deleteNotificationsBetween, recordNotifications } from "./notifications.ts";
 
 // Connections, connection requests and blocks (planning.md "Connections",
 // architecture.md §4), people search and the public profile read. Pair
@@ -216,8 +219,9 @@ export const isBlocked = Effect.fn("isBlocked")(function* (a: string, b: string)
 // ─── Requests ────────────────────────────────────────────────────────────────
 
 /**
- * Asks `username` to connect. If they already asked the user, both requests
- * are accepted and the two are connected at once. Refused for yourself,
+ * Asks `username` to connect, and notifies them. If they already asked the
+ * user, both requests are accepted, the two are connected at once, and
+ * they're notified of the accept instead. Refused for yourself,
  * someone you blocked, or someone you're connected to; someone who blocked
  * you looks like no one (`UserNotFound`). Sending again while a request is
  * pending returns it. Limited to a burst per minute and
@@ -273,13 +277,18 @@ export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function
           ),
         );
       const now = new Date();
-      if (pending.some((row) => row.fromUserId === target.id)) {
+      const theirs = pending.find((row) => row.fromUserId === target.id);
+      if (theirs) {
         // They asked first: this request is the answer.
         yield* tx
           .update(ConnectionRequests)
           .set({ status: "accepted", respondedAt: now })
           .where(inArray(ConnectionRequests.id, pending.map((row) => row.id)));
         yield* connect(tx, userId, target.id, now);
+        yield* recordNotifications(
+          tx,
+          onRequestAccepted({ acceptorId: userId, requesterId: target.id, requestId: theirs.id }),
+        );
         return status("connected");
       }
       const outgoing = pending.find((row) => row.fromUserId === userId);
@@ -302,12 +311,16 @@ export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function
       yield* tx
         .insert(ConnectionRequests)
         .values({ id, fromUserId: userId, toUserId: target.id, createdAt: now });
+      yield* recordNotifications(tx, onRequestSent({ id, fromUserId: userId, toUserId: target.id }));
       return status("pending_out", id);
     }),
   );
 });
 
-/** Accepts a pending request to the user (and their own pending one the other way). */
+/**
+ * Accepts a pending request to the user (and their own pending one the
+ * other way), and notifies the sender.
+ */
 export const acceptConnectionRequest = Effect.fn("acceptConnectionRequest")(function* (
   userId: string,
   input: ConnectionRequestRef,
@@ -349,6 +362,10 @@ export const acceptConnectionRequest = Effect.fn("acceptConnectionRequest")(func
         .returning({ id: ConnectionRequests.id });
       if (!accepted.some((row) => row.id === requestId)) return yield* requestNotFound(requestId);
       yield* connect(tx, userId, found.fromUserId, now);
+      yield* recordNotifications(
+        tx,
+        onRequestAccepted({ acceptorId: userId, requesterId: found.fromUserId, requestId }),
+      );
       return status("connected");
     }),
   );
@@ -421,8 +438,9 @@ export const removeConnection = Effect.fn("removeConnection")(function* (
 
 /**
  * Blocks `username`: removes the connection, closes pending requests both
- * ways (the user's own are cancelled, theirs declined), and hides each from
- * the other from now on. Blocking twice is a no-op.
+ * ways (the user's own are cancelled, theirs declined), cancels open relays
+ * both ways, deletes notifications between them, and hides each from the
+ * other from now on. Blocking twice is a no-op.
  */
 export const blockUser = Effect.fn("blockUser")(function* (userId: string, input: UsernameRef) {
   const { username } = yield* decodeInput(UsernameRef)(input);
@@ -460,6 +478,10 @@ export const blockUser = Effect.fn("blockUser")(function* (userId: string, input
             eq(ConnectionRequests.toUserId, userId),
           ),
         );
+      // Open relays both ways close too (step 21).
+      yield* cancelRelaysBetween(tx, userId, target.id);
+      // Notifications between them go both ways, for good.
+      yield* deleteNotificationsBetween(tx, userId, target.id);
       return status("blocked");
     }),
   );

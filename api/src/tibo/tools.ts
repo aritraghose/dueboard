@@ -15,6 +15,7 @@ import { BULK_LIMIT, MAX_TOOL_CALLS, receiptFor, type DomainCall, type TurnLedge
 import { dayLabel } from "./dates.ts";
 import { TIBO_MEMORY_KINDS, type TiboMemoryKind } from "./protocol.ts";
 import { REMINDER_MESSAGE_MAX } from "./reminders.ts";
+import { RELAY_MESSAGE_MAX_LENGTH } from "../domain/relay-constants.ts";
 import {
   IMPORTANCE,
   goalView,
@@ -58,6 +59,21 @@ export interface ToolRuntime {
   readonly memory: MemoryTools;
   /** Reminders the user asks for (`./reminders.ts`), bound to this turn by the agent. */
   readonly reminders: ReminderTools;
+  /** Messages to and from other people through Tibo (`./relays.ts`), bound to this turn by the agent. */
+  readonly relays: RelayTools;
+}
+
+/**
+ * The relay tools' backends. Sending and answering are checked by the
+ * agent: the words must be the user's own (`ownWords` in `./relays.ts`).
+ */
+export interface RelayTools {
+  /** Sends the user's message to `to` (a username or a connection's name) through their Tibo. */
+  send(to: string, message: string): Promise<unknown>;
+  /** Sends the user's answer back to whoever sent the relay. */
+  answer(relayId: string, answer: string): Promise<unknown>;
+  decline(relayId: string): Promise<unknown>;
+  list(): Promise<unknown>;
 }
 
 /** The reminder tools' backends. Their answers go to the model as they are. */
@@ -127,7 +143,7 @@ const read = async <A>(rt: ToolRuntime, rpc: TiboRpc, payload: unknown, view: (v
  */
 const change = async <A>(
   rt: ToolRuntime,
-  call: DomainCall & { hold?: boolean; receipt?: (value: A) => string; view?: (value: A) => unknown },
+  call: DomainCall & { rpc: TiboRpc; hold?: boolean; receipt?: (value: A) => string; view?: (value: A) => unknown },
 ) => {
   const { hold, receipt, view, ...stored } = call;
   if (hold || rt.ledger.overBulkLimit) {
@@ -890,6 +906,47 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     }),
   };
 
+  // ─── Messages to and from other people (relays) ────────────────────────
+  // Like chat between friends: no confirm step. What goes to the other
+  // person must be the user's own words, which the agent checks in code.
+  const relayTools = {
+    relay_message: tool({
+      description:
+        "Pass a message to another Dueboard user through their Tibo, when the user asks you to ask or tell someone something (\"ask @bea if she's up for dinner Sunday\"). `to` is their username, or a connection's name. Write `message` as the user would say it to them, using the user's own words: short, and only what they asked you to pass on. It's sent at once.",
+      inputSchema: z.object({
+        to: z.string().trim().min(1).max(100).describe("Their username (@bea), or a connection's name"),
+        message: z
+          .string()
+          .trim()
+          .min(1)
+          .max(RELAY_MESSAGE_MAX_LENGTH)
+          .describe("The message, in the user's voice and words"),
+      }),
+      execute: counted(rt, ({ to, message }) => rt.relays.send(to, message)),
+    }),
+    answer_relay: tool({
+      description:
+        "Send the user's answer back to someone who passed them a message through Tibo (a relay), once the user has told you what to say. Use their own words, lightly tidied: never your own ideas, and nothing else about them. It's sent at once.",
+      inputSchema: z.object({
+        relayId: id.describe("The relay's id, from the message in the thread or list_relays"),
+        answer: z.string().trim().min(1).max(RELAY_MESSAGE_MAX_LENGTH).describe("Exactly what will be sent back"),
+      }),
+      execute: counted(rt, ({ relayId, answer }) => rt.relays.answer(relayId, answer)),
+    }),
+    decline_relay: tool({
+      description:
+        "Close a message someone passed to the user without answering, only when the user says they don't want to answer it. The other person only learns it was declined.",
+      inputSchema: z.object({ relayId: id }),
+      execute: counted(rt, ({ relayId }) => rt.relays.decline(relayId)),
+    }),
+    list_relays: tool({
+      description:
+        "The latest messages passed between the user and other people through Tibo, both ways, with ids and where each stands.",
+      inputSchema: z.object({}),
+      execute: counted(rt, () => rt.relays.list()),
+    }),
+  };
+
   // ─── Answering a held action in words ──────────────────────────────────
   const reminderTools = {
     set_reminder: tool({
@@ -924,6 +981,7 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
         ...tools,
         ...memoryTools,
         ...reminderTools,
+        ...relayTools,
         confirm_action: tool({
           description:
             "Run (approve: true) or drop (approve: false) the actions waiting for the user's go-ahead, when the user's latest message clearly answers your question about them. Never on your own judgment.",
@@ -931,5 +989,5 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           execute: counted(rt, ({ approve }) => confirmPending(approve)),
         }),
       }
-    : { ...tools, ...memoryTools, ...reminderTools };
+    : { ...tools, ...memoryTools, ...reminderTools, ...relayTools };
 }

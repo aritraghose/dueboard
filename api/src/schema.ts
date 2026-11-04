@@ -36,8 +36,11 @@ import {
   HABIT_TARGET_MAX,
   HABIT_TITLE_MAX_LENGTH,
   NOTE_BODY_MAX_LENGTH,
+  NOTIFICATION_KIND,
   PRIVACY,
+  RELAY_MESSAGE_MAX_LENGTH,
   RELAY_POLICY,
+  RELAY_STATUS,
   SESSION_LABEL_MAX_LENGTH,
   SESSION_MINUTES_MAX,
   SESSION_STATUS,
@@ -670,6 +673,41 @@ export const Blocks = pgTable(
 );
 export type BlockRow = typeof Blocks.$inferSelect;
 
+export const notificationKind = pgEnum("notification_kind", NOTIFICATION_KIND);
+
+/**
+ * In-app notifications (`domain/notifications.ts`): `actor_id` asked
+ * `user_id` to connect, or accepted their request. Written in the same
+ * transaction as the request or the accept; one per request and kind.
+ * `seen_at` is set when `/notifications` lists it. Deleted with the request,
+ * with either account, and when either user blocks the other.
+ */
+export const Notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    userId: userId(),
+    actorId: text("actor_id").notNull(),
+    kind: notificationKind("kind").notNull(),
+    requestId: text("request_id")
+      .notNull()
+      .references(() => ConnectionRequests.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+    seenAt: timestamp("seen_at", { withTimezone: true }),
+  },
+  (t) => [
+    // The list, newest first.
+    index("notifications_user_idx").on(t.userId, t.createdAt.desc(), t.id.desc()),
+    // The unseen count behind the nav dot.
+    index("notifications_unseen_idx").on(t.userId).where(sql`${t.seenAt} is null`),
+    // Account deletion and blocks, by the other side.
+    index("notifications_actor_idx").on(t.actorId),
+    uniqueIndex("notifications_request_kind_idx").on(t.requestId, t.kind),
+    check("notifications_not_self", sql`${t.userId} <> ${t.actorId}`),
+  ],
+);
+export type NotificationRow = typeof Notifications.$inferSelect;
+
 /**
  * AI usage per user and month (`domain/usage.ts`, architecture.md §8), in
  * units (one message = 2). `period` is `YYYY-MM` in the user's time zone
@@ -711,6 +749,71 @@ export const AiUsageEvents = pgTable(
   ],
 );
 export type AiUsageEventRow = typeof AiUsageEvents.$inferSelect;
+
+export const relayStatus = pgEnum("relay_status", RELAY_STATUS);
+
+/**
+ * Tibo relays (architecture.md §7.5, `domain/relays.ts`): a message one
+ * user's Tibo passes to another user through theirs, and the answer.
+ *
+ * Each side's `TiboAgent` shows the relay as a card and tells its user when
+ * it changes. `sender_synced` / `recipient_synced` say whether that side's
+ * agent has caught up with `status`: a change that side must hear about
+ * clears it, the agent sets it again once it has acted, and the
+ * AgentWorker's cron retries any left behind (`retry_at` spaces the tries).
+ */
+export const Relays = pgTable(
+  "relays",
+  {
+    id: id(),
+    fromUserId: text("from_user_id").notNull(),
+    toUserId: text("to_user_id").notNull(),
+    message: text("message").notNull(),
+    status: relayStatus("status").notNull().default("pending"),
+    answer: text("answer"),
+    createdAt: createdAt(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    /** When it was answered or declined. */
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    senderSynced: boolean("sender_synced").notNull().default(true),
+    recipientSynced: boolean("recipient_synced").notNull().default(false),
+    retryAt: timestamp("retry_at", { withTimezone: true }),
+  },
+  (t) => [
+    // The daily cap and the sender's list.
+    index("relays_from_idx").on(t.fromUserId, t.createdAt),
+    // Open relays per recipient, and the recipient's list.
+    index("relays_to_idx").on(t.toUserId, t.status, t.createdAt),
+    // The expiry sweep.
+    index("relays_open_expires_idx")
+      .on(t.expiresAt)
+      .where(sql`${t.status} in ('pending', 'delivered')`),
+    // The sync sweep.
+    index("relays_unsynced_idx")
+      .on(t.updatedAt)
+      .where(sql`not ${t.senderSynced} or not ${t.recipientSynced}`),
+    check("relays_not_self", sql`${t.fromUserId} <> ${t.toUserId}`),
+    check(
+      "relays_message_length",
+      sql`char_length(${t.message}) between 1 and ${sql.raw(String(RELAY_MESSAGE_MAX_LENGTH))}`,
+    ),
+    check(
+      "relays_answer",
+      sql`(${t.status} = 'answered') = (${t.answer} is not null) and (${t.answer} is null or char_length(${t.answer}) between 1 and ${sql.raw(String(RELAY_MESSAGE_MAX_LENGTH))})`,
+    ),
+    check("relays_answered_at", sql`(${t.status} in ('answered', 'declined')) = (${t.answeredAt} is not null)`),
+    check(
+      "relays_delivered_at",
+      sql`${t.status} not in ('delivered', 'answered', 'declined') or ${t.deliveredAt} is not null`,
+    ),
+  ],
+);
+export type RelayRow = typeof Relays.$inferSelect;
 
 /**
  * Tibo threads still to wipe: account deletion queues the user here in its
@@ -765,8 +868,10 @@ export const relations = defineRelations(
     ConnectionRequests,
     Connections,
     Blocks,
+    Notifications,
     AiUsageTotals,
     AiUsageEvents,
+    Relays,
   },
   () => ({}),
 );

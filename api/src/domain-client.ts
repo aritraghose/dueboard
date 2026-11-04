@@ -1,6 +1,9 @@
 import type { AiUsageReason } from "./domain/model.ts";
+import type { RelayStatus } from "./domain/relay-constants.ts";
+import type { RelayJson, RelaySyncJson } from "./domain/relays.ts";
 import type { TiboEventJson, TiboProactiveContext } from "./domain/tibo.ts";
 
+export type { RelayJson, RelayPersonJson, RelaySyncJson } from "./domain/relays.ts";
 export type { TiboEventJson, TiboProactiveContext, TiboProactiveSettings } from "./domain/tibo.ts";
 
 // The AgentWorker's side of the DomainWorker (`./DomainWorker.ts`): the RPC
@@ -95,6 +98,17 @@ export interface DomainBinding {
     reason: AiUsageReason,
     ref: string | null,
   ): Promise<{ ok: true }>;
+  relayCheck(fromUserId: string, to: string): Promise<DomainResult>;
+  relaySend(fromUserId: string, toUsername: string, message: string): Promise<DomainResult>;
+  relayGet(actorId: string, relayId: string): Promise<DomainResult>;
+  relayDelivered(actorId: string, relayId: string): Promise<DomainResult>;
+  relayHold(actorId: string, relayId: string): Promise<DomainResult>;
+  relayAnswer(actorId: string, relayId: string, answer: string): Promise<DomainResult>;
+  relayDecline(actorId: string, relayId: string): Promise<DomainResult>;
+  relayAck(actorId: string, relayId: string, status: RelayStatus): Promise<DomainResult>;
+  relayList(actorId: string): Promise<DomainResult>;
+  relayExpireNow(actorId: string, relayId: string): Promise<DomainResult>;
+  relaySweep(): Promise<{ relays: RelaySyncJson[] }>;
   tiboProfile(userId: string): Promise<{ firstName: string; timeZone: string }>;
   tiboProactive(userId: string): Promise<TiboProactiveContext>;
   pendingTiboEvents(): Promise<{ events: TiboEventJson[] }>;
@@ -126,4 +140,37 @@ export const tiboClient = (domain: DomainBinding) => ({
   eventsDone: (ids: readonly string[]) => domain.tiboEventsDone(ids),
   pendingWipes: () => domain.pendingWipes(),
   wipesDone: (userIds: readonly string[]) => domain.wipesDone(userIds),
+});
+
+/** A relay call's answer: the relay (or list), or the domain's typed failure. */
+export type RelayResult<A> = { readonly ok: true; readonly value: A } | { readonly ok: false; readonly error: DomainError };
+
+/** A broken call (the DomainWorker unreachable) as a failure, never a throw. */
+const relayCall = async <A>(call: () => Promise<DomainResult>): Promise<RelayResult<A>> => {
+  try {
+    return (await call()) as RelayResult<A>;
+  } catch (error) {
+    console.error("Relay call failed", error);
+    return { ok: false, error: { tag: "Unavailable", message: "Couldn't reach the app just now." } };
+  }
+};
+
+/**
+ * Relays (`domain/relays.ts`), always as `actorId`: the agent passes its own
+ * user id, so it can only act as its own side of a relay.
+ */
+export const relayClient = (domain: DomainBinding, actorId: string) => ({
+  /** Who a relay to `to` would reach, or why it can't be sent. Sends nothing. */
+  check: (to: string) => relayCall<{ username: string; name: string }>(() => domain.relayCheck(actorId, to)),
+  send: (toUsername: string, message: string) =>
+    relayCall<RelayJson>(() => domain.relaySend(actorId, toUsername, message)),
+  get: (relayId: string) => relayCall<RelayJson>(() => domain.relayGet(actorId, relayId)),
+  delivered: (relayId: string) => relayCall<RelayJson>(() => domain.relayDelivered(actorId, relayId)),
+  hold: (relayId: string) => relayCall<null>(() => domain.relayHold(actorId, relayId)),
+  answer: (relayId: string, answer: string) =>
+    relayCall<RelayJson>(() => domain.relayAnswer(actorId, relayId, answer)),
+  decline: (relayId: string) => relayCall<RelayJson>(() => domain.relayDecline(actorId, relayId)),
+  ack: (relayId: string, status: RelayStatus) => relayCall<null>(() => domain.relayAck(actorId, relayId, status)),
+  list: () => relayCall<RelayJson[]>(() => domain.relayList(actorId)),
+  expireNow: (relayId: string) => relayCall<null>(() => domain.relayExpireNow(actorId, relayId)),
 });

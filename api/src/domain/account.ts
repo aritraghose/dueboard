@@ -15,6 +15,8 @@ import {
   HabitCheckins,
   Habits,
   Notes,
+  Notifications,
+  Relays,
   Tags,
   Tasks,
   TiboEvents,
@@ -57,6 +59,10 @@ export const USER_OWNED_TABLES = [
   { table: FocusSessions, owner: (id: string) => eq(FocusSessions.userId, id) },
   { table: Activity, owner: (id: string) => eq(Activity.userId, id) },
   {
+    table: Notifications,
+    owner: (id: string) => or(eq(Notifications.userId, id), eq(Notifications.actorId, id)),
+  },
+  {
     table: ConnectionRequests,
     owner: (id: string) => or(eq(ConnectionRequests.fromUserId, id), eq(ConnectionRequests.toUserId, id)),
   },
@@ -65,6 +71,7 @@ export const USER_OWNED_TABLES = [
     owner: (id: string) => or(eq(Connections.userLow, id), eq(Connections.userHigh, id)),
   },
   { table: Blocks, owner: (id: string) => or(eq(Blocks.blockerId, id), eq(Blocks.blockedId, id)) },
+  { table: Relays, owner: (id: string) => or(eq(Relays.fromUserId, id), eq(Relays.toUserId, id)) },
   { table: AiUsageEvents, owner: (id: string) => eq(AiUsageEvents.userId, id) },
   { table: AiUsageTotals, owner: (id: string) => eq(AiUsageTotals.userId, id) },
   { table: TiboEvents, owner: (id: string) => eq(TiboEvents.userId, id) },

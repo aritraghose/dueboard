@@ -181,13 +181,16 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
     // 18) are held to them too.
     const rateLimiter = Layer.succeed(RateLimiter, {
       allow: (limit, userId) =>
-        (limit === "connectionRequest" ? connectionRequestLimit : peopleSearchLimit)
-          .limit({ key: userId })
-          .pipe(
-            Effect.map(({ success }) => success),
-            Effect.orDie,
-            Effect.provide(RuntimeContext.phantom),
-          ),
+        // Relays are sent only by Tibo, through the DomainWorker, which binds their limit.
+        limit === "relay"
+          ? Effect.succeed(false)
+          : (limit === "connectionRequest" ? connectionRequestLimit : peopleSearchLimit)
+              .limit({ key: userId })
+              .pipe(
+                Effect.map(({ success }) => success),
+                Effect.orDie,
+                Effect.provide(RuntimeContext.phantom),
+              ),
     });
 
     // Better Auth's side of account deletion: its internal adapter removes

@@ -1,6 +1,8 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { LocalDate } from "./dates.ts";
+import { NOTIFICATION_KIND } from "./notification-constants.ts";
+import { RELAY_MESSAGE_MAX_LENGTH, RELAY_STATUS } from "./relay-constants.ts";
 import { TIBO_EVENING_TIMES, TIBO_MORNING_TIMES } from "./tibo-constants.ts";
 
 // The domain's values and typed errors. Pure Schemas with no database code,
@@ -20,6 +22,7 @@ export type RelayPolicy = typeof RelayPolicy.Type;
 // ─── Tibo check-ins (step 20) ────────────────────────────────────────────────
 
 export * from "./tibo-constants.ts";
+export * from "./relay-constants.ts";
 export const TiboMorningTime = Schema.Literals(TIBO_MORNING_TIMES);
 export type TiboMorningTime = typeof TiboMorningTime.Type;
 export const TiboEveningTime = Schema.Literals(TIBO_EVENING_TIMES);
@@ -202,6 +205,10 @@ export type LeaderboardPeriod = typeof LeaderboardPeriod.Type;
 export const AI_USAGE_REASON = ["tibo_reply", "tibo_proactive", "relay", "ask_answer"] as const;
 export const AiUsageReason = Schema.Literals(AI_USAGE_REASON);
 export type AiUsageReason = typeof AiUsageReason.Type;
+
+/** A relay's state (`./relay-constants.ts`). */
+export const RelayStatus = Schema.Literals(RELAY_STATUS);
+export type RelayStatus = typeof RelayStatus.Type;
 
 // ─── Limits ──────────────────────────────────────────────────────────────────
 
@@ -1294,6 +1301,37 @@ export class SocialOverview extends Schema.Class<SocialOverview>("SocialOverview
   blocked: Schema.Array(BlockedPerson),
 }) {}
 
+// ─── Notifications (`./notifications.ts`) ────────────────────────────────────
+
+export * from "./notification-constants.ts";
+export const NotificationKind = Schema.Literals(NOTIFICATION_KIND);
+export type NotificationKind = typeof NotificationKind.Type;
+
+/** Where a notification's request stands now (`notification-rules.ts`). */
+export const NotificationState = Schema.Literals(["pending", "accepted", "declined"]);
+export type NotificationState = typeof NotificationState.Type;
+
+/**
+ * Something that happened to the user: `person` asked to connect, or
+ * accepted their request. `state` is where the request stands now (a
+ * `pending` one can still be answered with `requestId`); `seen` whether it
+ * was listed on `/notifications` before.
+ */
+export class NotificationItem extends Schema.Class<NotificationItem>("NotificationItem")({
+  id: Schema.String,
+  kind: NotificationKind,
+  person: Person,
+  requestId: Schema.String,
+  state: NotificationState,
+  seen: Schema.Boolean,
+  createdAt: Schema.Date,
+}) {}
+
+/** How many notifications the user hasn't seen, up to `NOTIFICATIONS_UNSEEN_CAP`. */
+export class NotificationsUnseen extends Schema.Class<NotificationsUnseen>("NotificationsUnseen")({
+  count: Schema.Number,
+}) {}
+
 /**
  * A user's AI usage this month, in messages (architecture.md §8). `period`
  * is the month (`YYYY-MM`) in their time zone, and `resetsAt` the instant
@@ -1417,6 +1455,52 @@ export class SocialLimitReached extends Schema.TaggedError<SocialLimitReached>()
   "SocialLimitReached",
   { message: Schema.String },
 ) {}
+
+// ─── Relays (architecture.md §7.5) ──────────────────────────────────────────
+
+/** A relay's text or its answer: 1–1000 characters, trimmed (the service trims before decoding). */
+export const RelayText = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isBetweenLength(1, RELAY_MESSAGE_MAX_LENGTH),
+);
+
+/** Who a relay is for: a username (`@` optional) or, among the sender's connections, a name. */
+export const RelayRecipient = Schema.String.check(Schema.isBetweenLength(1, 100));
+
+export const SendRelayInput = Schema.Struct({ toUsername: UsernameInput, message: RelayText });
+export type SendRelayInput = typeof SendRelayInput.Type;
+
+export const RELAY_REFUSAL = ["self", "blocked", "policy_none", "connections_only", "out_of_messages", "unavailable"] as const;
+export type RelayRefusal = (typeof RELAY_REFUSAL)[number];
+
+/** The recipient doesn't take relays from the sender (policy, a block, quota), or it's the sender. */
+export class RelayNotAllowed extends Schema.TaggedError<RelayNotAllowed>()("RelayNotAllowed", {
+  message: Schema.String,
+  reason: Schema.Literals(RELAY_REFUSAL),
+}) {}
+
+/** Too many relays in a minute or a day, or too many waiting for an answer. */
+export class RelayLimitReached extends Schema.TaggedError<RelayLimitReached>()("RelayLimitReached", {
+  message: Schema.String,
+}) {}
+
+/** A name that matches several of the sender's connections. */
+export class RelayRecipientUnclear extends Schema.TaggedError<RelayRecipientUnclear>()("RelayRecipientUnclear", {
+  message: Schema.String,
+  candidates: Schema.Array(Schema.Struct({ username: Schema.String, name: Schema.String })),
+}) {}
+
+/** No relay with that id between the user and anyone (or not one they may act on). */
+export class RelayNotFound extends Schema.TaggedError<RelayNotFound>()("RelayNotFound", {
+  message: Schema.String,
+  id: Schema.String,
+}) {}
+
+/** Answering or declining a relay that isn't waiting any more. Carries its status now. */
+export class RelayClosed extends Schema.TaggedError<RelayClosed>()("RelayClosed", {
+  message: Schema.String,
+  status: RelayStatus,
+}) {}
 
 /** Pausing a paused session, resuming a running one, or changing one that has ended. Carries its status now. */
 export class SessionTransitionNotAllowed extends Schema.TaggedError<SessionTransitionNotAllowed>()(
