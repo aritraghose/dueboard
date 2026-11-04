@@ -148,3 +148,29 @@ export const TIBO_CONFIRM_TTL_MS = 30 * 60 * 1000;
 export const TIBO_QUOTE_LENGTH = 280;
 /** Below this many messages left, the composer says how many. */
 export const TIBO_LOW_USAGE = 30;
+
+// ─── Long-term memory (Settings → Tibo → Memory) ───────────────────────────
+
+/** What a memory is about. */
+export const TIBO_MEMORY_KINDS = ["fact", "preference", "person", "event", "plan"] as const;
+export type TiboMemoryKind = (typeof TIBO_MEMORY_KINDS)[number];
+
+/** A lasting fact Tibo keeps about the user, as Settings lists it. */
+export interface TiboMemory {
+  readonly id: string;
+  readonly text: string;
+  readonly kind: TiboMemoryKind;
+  /** Milliseconds since the epoch. */
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+/**
+ * The agent's HTTP routes for Settings, under `/agents/tibo-agent/<name>/`
+ * (the web stack's proxy pins `<name>` to the signed-in user):
+ * `GET memories` → `{ memories: TiboMemory[] }`, newest learned first;
+ * `DELETE memories/<id>` → `{ ok: true }`, or 404.
+ */
+export const TIBO_MEMORIES_PATH = "memories";
+/** Most memories `GET memories` returns. */
+export const TIBO_MEMORIES_LIMIT = 500;

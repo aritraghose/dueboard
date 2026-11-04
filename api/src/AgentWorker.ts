@@ -1,8 +1,11 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
+import { ALCHEMY_DEV } from "alchemy";
 import * as Effect from "effect/Effect";
 import type { DomainBinding } from "./domain-client.ts";
+import { DEV_PORTS } from "./dev-ports.ts";
 import DomainWorker from "./DomainWorker.ts";
 import { LIMITS, bindingProps } from "./limits.ts";
+import { EMBEDDING_DIMENSIONS } from "./tibo/embeddings.ts";
 
 /**
  * The AI Gateway every model call goes through. The chat model is a
@@ -20,6 +23,34 @@ export const Gateway = Cloudflare.AI.Gateway("Gateway", {
 });
 
 /**
+ * Tibo's long-term memory (architecture.md §7.2): embeddings of the user's
+ * memories and of chunks of their thread, from `EMBEDDING_MODEL`
+ * (`./tibo/embeddings.ts`). One namespace per user (their id). Each vector
+ * id maps back to a row in that user's `TiboAgent` SQLite (`m:<memory id>`
+ * or `c:<chunk id>`), so the agent can list and delete its own vectors.
+ *
+ * Immutable: a new model with other dimensions means a new index and
+ * re-embedding every row (rows remember their `embedding_model`).
+ */
+export const MemoryIndex = Cloudflare.Vectorize.Index("TiboMemory", {
+  dimensions: EMBEDDING_DIMENSIONS,
+  metric: "cosine",
+  description: "Tibo memories and thread chunks, one namespace per user",
+});
+
+/**
+ * The metadata `TiboAgent` filters on: `type` (`memory` | `message`), `kind`
+ * (a memory's kind) and `created_at` (ms, for date-bounded conversation
+ * search). Only vectors written after these exist are filterable, so the
+ * stack creates them alongside the index.
+ */
+export const MEMORY_METADATA = [
+  { id: "TiboMemoryType", propertyName: "type", indexType: "string" },
+  { id: "TiboMemoryKind", propertyName: "kind", indexType: "string" },
+  { id: "TiboMemoryCreatedAt", propertyName: "created_at", indexType: "number" },
+] as const;
+
+/**
  * Tibo's Worker: a plain async Worker (`./agent.ts`) that hosts the
  * `TiboAgent` Durable Object (`./tibo/TiboAgent.ts`), one instance per user. Like the ApiWorker it
  * has no public URL; the web stack reaches it over a service binding through
@@ -32,6 +63,7 @@ export const Gateway = Cloudflare.AI.Gateway("Gateway", {
 const AgentWorker = Cloudflare.Worker("AgentWorker", {
   main: `${import.meta.dirname}/agent.ts`,
   workersDev: false,
+  dev: { port: DEV_PORTS.AgentWorker },
   env: {
     AI: Cloudflare.Workers.AI(),
     AI_GATEWAY_ID: Effect.map(Gateway, (gateway) => gateway.gatewayId),
@@ -47,6 +79,11 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     // Tibo's tools, the today snapshot, the AI quota ledger, the profile
     // facts and the wipe queue. Bound here and nowhere else.
     DOMAIN: DomainWorker,
+    // Long-term memory vectors (namespace = user id).
+    MEMORY: MemoryIndex,
+    // "true" under `alchemy dev`: logs context sizes, raises the memory
+    // jobs' daily cap and turns on the `dev/*` routes (seeding a thread).
+    TIBO_DEV: Effect.map(ALCHEMY_DEV, (dev) => (dev ? "true" : "false")),
   },
   // Wipes deleted accounts' Tibo threads (`./agent.ts`).
   crons: ["*/5 * * * *"],
@@ -56,6 +93,9 @@ export default AgentWorker;
 
 // The DomainWorker's methods are typed by `DomainBinding`: `InferEnv` would
 // give their Effect signatures, and the agent awaits plain promises.
-export type AgentEnv = Omit<Cloudflare.InferEnv<typeof AgentWorker>, "DOMAIN"> & {
+// `InferEnv` (beta.84) types a Vectorize binding as the resource, so
+// `MEMORY` is typed as the runtime binding here.
+export type AgentEnv = Omit<Cloudflare.InferEnv<typeof AgentWorker>, "DOMAIN" | "MEMORY"> & {
   DOMAIN: DomainBinding;
+  MEMORY: Vectorize;
 };

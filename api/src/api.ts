@@ -11,6 +11,7 @@ import type * as Scope from "effect/Scope";
 import { RpcSerialization, RpcServer } from "effect/rpc";
 import { Auth } from "./auth.ts";
 import { Hyperdrive } from "./database.ts";
+import { DEV_PORTS } from "./dev-ports.ts";
 import { AuthAccounts } from "./domain/account.ts";
 import { Database } from "./domain/database.ts";
 import * as SessionsService from "./domain/sessions.ts";
@@ -49,6 +50,7 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
   {
     main: import.meta.filename,
     workersDev: false, // no workers.dev URL; we use the service binding instead
+    dev: { port: DEV_PORTS.ApiWorker },
     schema: ApiRpcs,
   },
   Effect.gen(function* () {

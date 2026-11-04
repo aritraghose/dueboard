@@ -28,8 +28,16 @@ type AiRun = (
  * replies. So the AI SDK's OpenAI provider builds and parses Responses
  * requests, and its `fetch` sends them to `/run` through the AI binding and
  * the gateway, which adds the stored Meta key (BYOK).
+ *
+ * Replies and Tibo's background memory jobs (`./memory-jobs.ts`) both use
+ * it: Muse Spark is the only chat model.
  */
-export function museSpark(env: { AI: Ai; AI_GATEWAY_ID: string }, userId: string) {
+export function museSpark(
+  env: { AI: Ai; AI_GATEWAY_ID: string },
+  userId: string,
+  /** What the call is for, in the gateway's logs: a reply, or a background memory job (never charged). */
+  purpose: "reply" | "memory" = "reply",
+) {
   const run = env.AI.run.bind(env.AI) as unknown as AiRun;
   const meta = createOpenAI({
     // Never sent: the binding authenticates, and the gateway adds Meta's key.
@@ -37,7 +45,7 @@ export function museSpark(env: { AI: Ai; AI_GATEWAY_ID: string }, userId: string
     // Bun's `fetch` type adds `preconnect`, which a custom fetch never needs.
     fetch: (async (_url: unknown, init?: RequestInit) =>
       run(MODEL, JSON.parse(String(init?.body)), {
-        gateway: { id: env.AI_GATEWAY_ID, metadata: { userId } },
+        gateway: { id: env.AI_GATEWAY_ID, metadata: { userId, purpose } },
         // BYOK only: without a stored Meta key, fail instead of billing the
         // request through Unified Billing.
         extraHeaders: { "cf-aig-no-wholesale": "true" },

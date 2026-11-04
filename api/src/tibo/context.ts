@@ -2,13 +2,16 @@
 // from scratch every turn, never from the whole history. Pure, so it can be
 // tested and extended without the Durable Object.
 //
-// Extension points:
-// - Step 18 added the today snapshot (`./snapshot.ts`) as a `section`.
-// - Step 19 adds "story so far" summaries and relevant memories as more
-//   `sections`, and may shorten `recent`.
+// Sections, in order: the persona, the facts of right now, the today
+// snapshot (`./snapshot.ts`), the story so far and relevant memories
+// (`./recall.ts`), then the recent messages. Everything fits a token budget
+// (`CONTEXT_BUDGET_TOKENS`): sections are capped where they're built, and
+// the recent window drops its oldest messages (never below
+// `MIN_RECENT_MESSAGES`) to fit what's left. Tools come on top.
 
 import type { ModelMessage } from "ai";
 import { joinBubbles, reactionLine } from "./bubbles.ts";
+import { CONTEXT_BUDGET_TOKENS, MIN_RECENT_MESSAGES, estimateTokens } from "./memory-rules.ts";
 import { heldItem, type TiboConfirm, type TiboMessage, type TiboQuote, type TiboReceipt } from "./protocol.ts";
 
 /** The user facts every turn needs, read from Postgres. */
@@ -32,11 +35,25 @@ export interface TurnInputs {
   readonly recent: readonly TiboMessage[];
   /** Added after the persona and the date, in order. */
   readonly sections?: readonly ContextSection[];
+  /** Tokens for the system prompt and the messages together (`CONTEXT_BUDGET_TOKENS`). */
+  readonly budget?: number;
+}
+
+/** Estimated tokens per part of the context, logged in development to tune the budget. */
+export interface ContextSizes {
+  readonly persona: number;
+  readonly sections: Readonly<Record<string, number>>;
+  readonly recent: number;
+  readonly recentMessages: number;
+  /** Recent messages left out to stay in budget. */
+  readonly dropped: number;
+  readonly total: number;
 }
 
 export interface TurnContext {
   readonly system: string;
   readonly messages: ModelMessage[];
+  readonly sizes: ContextSizes;
 }
 
 /** Messages of the thread the model sees verbatim. */
@@ -60,6 +77,7 @@ export const buildTurnContext = ({
   now,
   recent,
   sections = [],
+  budget = CONTEXT_BUDGET_TOKENS,
 }: TurnInputs): TurnContext => {
   const facts: ContextSection = {
     title: "Right now",
@@ -68,11 +86,34 @@ export const buildTurnContext = ({
       `It's ${formatNow(now, profile.timeZone)} for them (${profile.timeZone}).`,
     ].join("\n"),
   };
-  const system = [persona, ...[facts, ...sections].map(({ title, body }) => `## ${title}\n${body}`)].join(
-    "\n\n",
-  );
-  return { system, messages: toModelMessages(recent) };
+  const blocks = [facts, ...sections].map(({ title, body }) => ({ title, text: `## ${title}\n${body}` }));
+  const system = [persona, ...blocks.map((block) => block.text)].join("\n\n");
+
+  // The recent window gets what's left, newest messages first.
+  const room = budget - estimateTokens(system);
+  let window = recent;
+  let messages = toModelMessages(window);
+  while (window.length > MIN_RECENT_MESSAGES && messageTokens(messages) > room) {
+    window = window.slice(Math.min(Math.ceil(window.length * 0.1), window.length - MIN_RECENT_MESSAGES));
+    messages = toModelMessages(window);
+  }
+  const recentTokens = messageTokens(messages);
+  return {
+    system,
+    messages,
+    sizes: {
+      persona: estimateTokens(persona),
+      sections: Object.fromEntries(blocks.map((block) => [block.title, estimateTokens(block.text)])),
+      recent: recentTokens,
+      recentMessages: window.length,
+      dropped: recent.length - window.length,
+      total: estimateTokens(system) + recentTokens,
+    },
+  };
 };
+
+const messageTokens = (messages: readonly ModelMessage[]) =>
+  messages.reduce((sum, message) => sum + estimateTokens(typeof message.content === "string" ? message.content : JSON.stringify(message.content)), 0);
 
 /** How a reply's quote reads to the model ("you" is Tibo). */
 const quoteLine = ({ role, body }: TiboQuote) =>

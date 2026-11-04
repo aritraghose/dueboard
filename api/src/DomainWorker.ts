@@ -10,6 +10,7 @@ import { Rpc, RpcMessage } from "effect/rpc";
 import { Hyperdrive } from "./database.ts";
 import { AuthAccounts } from "./domain/account.ts";
 import { Database } from "./domain/database.ts";
+import { DEV_PORTS } from "./dev-ports.ts";
 import { AI_UNITS_PER_CHARGE_MAX, AiUsageReason, Id, type AiUsage } from "./domain/model.ts";
 import { RateLimiter } from "./domain/rate-limiter.ts";
 import * as TiboService from "./domain/tibo.ts";
@@ -66,6 +67,7 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
   {
     main: import.meta.filename,
     workersDev: false,
+    dev: { port: DEV_PORTS.DomainWorker },
   },
   Effect.gen(function* () {
     const conn = yield* Cloudflare.Hyperdrive.Connect(Hyperdrive);

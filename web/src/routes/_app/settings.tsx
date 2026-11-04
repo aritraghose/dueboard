@@ -6,10 +6,20 @@ import {
   type RelayPolicy,
   type SettingsPatch,
 } from "@dueboard/api/rpc";
+import type { TiboMemory, TiboMemoryKind } from "@dueboard/api/tibo";
 import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Exit from "effect/Exit";
+import {
+  CalendarCheck2,
+  CalendarClock,
+  Heart,
+  Info,
+  Trash2,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Page, PageHeader } from "@/components/page";
@@ -35,6 +45,7 @@ import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
 import { useUpdateSettings } from "@/hooks/use-settings";
 import { socialOverviewAtom, useSocialActions } from "@/hooks/use-social";
 import { failureMessage, useRun } from "@/hooks/use-tasks";
+import { useTiboMemories } from "@/hooks/use-tibo-memories";
 import { PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_LABEL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
@@ -358,24 +369,111 @@ function Tibo() {
   const [policy, setPolicy] = useState<RelayPolicy | null>(null);
 
   return (
+    <div className="flex flex-col gap-5">
+      <Panel>
+        <AiUsageRow />
+        <Row
+          id="relay-policy"
+          title="Messages through Tibo"
+          description="Who can pass you a message through their Tibo."
+        >
+          <Choice
+            labelledBy="relay-policy"
+            options={RELAY_OPTIONS}
+            value={policy ?? settings?.relayPolicy}
+            disabled={!settings}
+            onChange={(value) => {
+              setPolicy(value);
+              void save({ relayPolicy: value }, "who can message you").then(() => setPolicy(null));
+            }}
+          />
+        </Row>
+      </Panel>
+      <TiboMemories />
+    </div>
+  );
+}
+
+const MEMORY_KIND: Record<TiboMemoryKind, { label: string; icon: LucideIcon }> = {
+  fact: { label: "Fact", icon: Info },
+  preference: { label: "Preference", icon: Heart },
+  person: { label: "Person", icon: UserRound },
+  event: { label: "Event", icon: CalendarCheck2 },
+  plan: { label: "Plan", icon: CalendarClock },
+};
+
+/** Memories shown before "Show all". */
+const MEMORIES_SHOWN = 20;
+
+/**
+ * What Tibo remembers about you: the lasting facts it picked up from your
+ * chats (or was asked to keep), newest first, each with its kind and when
+ * it was learned. Deleting one takes it out of Tibo's memory at once.
+ */
+function TiboMemories() {
+  const { state, remove } = useTiboMemories();
+  const [showAll, setShowAll] = useState(false);
+  const memories = state.status === "ready" ? state.memories : [];
+  const shown = showAll ? memories : memories.slice(0, MEMORIES_SHOWN);
+
+  const forget = async (memory: TiboMemory) => {
+    if (!(await remove(memory))) toast.error("Couldn't delete that memory. Try again.");
+  };
+
+  return (
     <Panel>
-      <AiUsageRow />
-      <Row
-        id="relay-policy"
-        title="Messages through Tibo"
-        description="Who can pass you a message through their Tibo."
-      >
-        <Choice
-          labelledBy="relay-policy"
-          options={RELAY_OPTIONS}
-          value={policy ?? settings?.relayPolicy}
-          disabled={!settings}
-          onChange={(value) => {
-            setPolicy(value);
-            void save({ relayPolicy: value }, "who can message you").then(() => setPolicy(null));
-          }}
-        />
-      </Row>
+      <div className="flex flex-col gap-0.5 py-4">
+        <h2 id="tibo-memories" className="font-medium">
+          What Tibo remembers
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Things Tibo picked up from your chats. Delete any you'd rather it forgot.
+        </p>
+      </div>
+      {state.status !== "ready" ? (
+        <p className="py-4 text-sm text-muted-foreground">
+          {state.status === "loading" ? "Loading…" : "Couldn't load what Tibo remembers. Reload to try again."}
+        </p>
+      ) : memories.length === 0 ? (
+        <p className="py-4 text-sm text-muted-foreground">
+          Nothing yet. Tibo keeps what matters as you chat, or say “remember that…”.
+        </p>
+      ) : (
+        <ul aria-labelledby="tibo-memories" className="flex flex-col divide-y">
+          {shown.map((memory) => {
+            const { label, icon: Icon } = MEMORY_KIND[memory.kind];
+            return (
+              <li key={memory.id} className="flex items-start gap-3 py-3">
+                <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <span className="sr-only">{label}:</span>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-4">
+                  <p className="min-w-0 flex-1 text-sm">{memory.text}</p>
+                  <p className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
+                    Since{" "}
+                    {new Date(memory.createdAt).toLocaleDateString(undefined, { month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="-my-1 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label={`Delete memory: ${memory.text}`}
+                  onClick={() => void forget(memory)}
+                >
+                  <Trash2 />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {!showAll && memories.length > MEMORIES_SHOWN && (
+        <div className="py-2">
+          <Button variant="ghost" size="sm" className="-mx-2.5" onClick={() => setShowAll(true)}>
+            Show all {memories.length}
+          </Button>
+        </div>
+      )}
     </Panel>
   );
 }

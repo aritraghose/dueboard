@@ -15,7 +15,7 @@ import { notesCountAtom } from "@/hooks/use-day";
 import { useLiveFeed, useLivePolling, usePath } from "@/hooks/use-live";
 import { useNow, useToday } from "@/hooks/use-now";
 import { formatDay, formatTime, localDateOf, relativeDay, type LocalDate } from "@/lib/dates";
-import { liveAction, liveRelativeTime, pathAction } from "@/lib/live";
+import { liveAction, liveRelativeTime, liveTitle, pathAction } from "@/lib/live";
 import { noteCount } from "@/lib/notes";
 import { cn } from "@/lib/utils";
 
@@ -290,9 +290,9 @@ function LiveRow({
           {actor.username}
         </Link>{" "}
         {liveAction(event)}
-        {event.title !== null && (
+        {liveTitle(event) !== null && (
           <>
-            : <span className="text-foreground">{event.title}</span>
+            : <span className="text-foreground">{liveTitle(event)}</span>
           </>
         )}
       </p>
@@ -360,9 +360,9 @@ function PathStep({ event, timeZone }: { event: PathEvent; timeZone: string }) {
       </span>
       <p className={cn("min-w-0 break-words py-1 pb-2.5 text-muted-foreground", EVENT_TEXT)}>
         {pathAction(event)}
-        {event.title !== null && (
+        {liveTitle(event) !== null && (
           <>
-            : <span className="text-foreground">{event.title}</span>
+            : <span className="text-foreground">{liveTitle(event)}</span>
           </>
         )}
       </p>

@@ -220,7 +220,7 @@ function GoalRow({
             {roundPercent(goal)}%
           </span>
           {live && goal.progressMode === "count" && (
-            <Button size="xs" className="-my-1 bg-tag! text-primary-foreground! hover:bg-tag/85!" aria-label={`Move "${goal.name}" forward by one`} onClick={onIncrement}>
+            <Button size="xs" className="-my-1 bg-goal-move! text-goal-move-foreground! hover:bg-goal-move/85!" aria-label={`Move "${goal.name}" forward by one`} onClick={onIncrement}>
               <PlusIcon />
               Move Goal
             </Button>

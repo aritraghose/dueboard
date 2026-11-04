@@ -96,6 +96,10 @@
   --focus: var(--tag-indigo);
   --focus-soft: var(--tag-indigo-soft);
   --focus-ink: var(--tag-indigo-ink);
+  /* The top bar's running-session pill: "Start a session"'s cream, a step darker. */
+  --session-pill: oklch(from var(--cream) calc(l - 0.06) c h);
+  --session-pill-foreground: var(--cream-foreground);
+  --session-pill-dot: var(--cream-foreground);
 
   /* Cream: the "Start a session" pill. */
   --cream: oklch(0.95 0.05 86);
@@ -114,7 +118,11 @@
   /* Your message's double tick once Tibo has read it: bright on your teal bubble. */
   --tick-seen: oklch(0.86 0.11 190);
   /* The dot on the Tibo button when it said something you haven't seen: a light teal. */
-  --tibo-unread: oklch(0.78 0.11 185);
+  /* The light cream, 60% of the way to black. */
+  --tibo-unread: color-mix(in oklab, oklch(0.95 0.05 86) 40%, black);
+  /* Goal cards' "Move Goal" tab: the card's own color, a little darker. */
+  --goal-move: oklch(from var(--sidebar) calc(l - 0.07) c h);
+  --goal-move-foreground: var(--sidebar-foreground);
   /* The message box's edge: a cream leaning toward the teal around it. */
   --composer-border: oklch(0.77 0.09 95);
   /* The message box's fill: a light teal, a shade under the nav's. */
@@ -366,6 +374,9 @@
   --color-focus: var(--focus);
   --color-focus-soft: var(--focus-soft);
   --color-focus-ink: var(--focus-ink);
+  --color-session-pill: var(--session-pill);
+  --color-session-pill-foreground: var(--session-pill-foreground);
+  --color-session-pill-dot: var(--session-pill-dot);
   --color-cream: var(--cream);
   --color-bubble-me: var(--bubble-me);
   --color-bubble-me-foreground: var(--bubble-me-foreground);
@@ -373,6 +384,8 @@
   --color-bubble-tibo-foreground: var(--bubble-tibo-foreground);
   --color-bubble-tibo-border: var(--bubble-tibo-border);
   --color-tibo-unread: var(--tibo-unread);
+  --color-goal-move: var(--goal-move);
+  --color-goal-move-foreground: var(--goal-move-foreground);
   --color-tick-seen: var(--tick-seen);
   --color-composer: var(--composer);
   --color-composer-border: var(--composer-border);
@@ -483,7 +496,15 @@
   --tibo-foreground: #f5f5f5;
   --tibo-soft: #1f1f1f;
   --tibo-disc: #1c1c1c;
-  --tibo-unread: oklch(0.84 0.1 185);
+  /* Light mode's cream, not dark mode's gray `--cream`. */
+  --tibo-unread: color-mix(in oklab, oklch(0.95 0.05 86) 40%, black);
+  /* Dark mode keeps the session pill in the focus colors. */
+  --session-pill: var(--focus-soft);
+  --session-pill-foreground: var(--focus-ink);
+  --session-pill-dot: var(--focus);
+  /* Dark mode keeps the goal violet. */
+  --goal-move: var(--tag-violet);
+  --goal-move-foreground: var(--primary-foreground);
   --tibo-ring-outer: #777777;
   --tibo-ring-inner: #bbbbbb;
 

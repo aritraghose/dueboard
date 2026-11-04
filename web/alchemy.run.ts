@@ -1,5 +1,5 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
-import { AgentWorker, ApiWorker, LIMITS, bindingProps } from "@dueboard/api";
+import { AgentWorker, ApiWorker, DEV_PORTS, LIMITS, bindingProps } from "@dueboard/api";
 import * as Alchemy from "alchemy";
 import * as Effect from "effect/Effect";
 
@@ -15,6 +15,8 @@ export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
     // Node.js compatibility is supplied by Alchemy's 2026-08-31 default.
     flags: ["enable_request_signal"],
   },
+  // Google's dev redirect URI is on this port, so fail rather than move.
+  dev: { port: DEV_PORTS.Website, strictPort: true },
   env: {
     API: ApiWorker,
     // The Api stack's chat agent, reached through `src/server.ts`'s

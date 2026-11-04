@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { actionNote, toModelMessages } from "./context.ts";
+import { actionNote, buildTurnContext, toModelMessages } from "./context.ts";
+import { MIN_RECENT_MESSAGES } from "./memory-rules.ts";
 import type { TiboMessage } from "./protocol.ts";
 
 const message = (patch: Partial<TiboMessage> & Pick<TiboMessage, "id" | "role" | "body">): TiboMessage => ({
@@ -90,5 +91,38 @@ describe("actions in the replay", () => {
     expect(actionNote([], { actionId: "a", items, status: "cancelled" })).toContain("didn't happen");
     expect(actionNote([{ text: "Stop it: no session", failed: true }])).toBe("Your actions: Stop it: no session (failed).");
     expect(actionNote()).toBeNull();
+  });
+});
+
+describe("buildTurnContext's budget", () => {
+  const profile = { firstName: "Sam", timeZone: "UTC" };
+  const now = new Date("2026-11-04T12:00:00Z");
+  const thread = Array.from({ length: 40 }, (_, index) =>
+    message({ id: `m${index}`, role: index % 2 === 0 ? "user" : "tibo", body: "x".repeat(400) }),
+  );
+
+  test("everything fits: nothing dropped, sizes per section", () => {
+    const context = buildTurnContext({
+      persona: "persona",
+      profile,
+      now,
+      recent: thread.slice(-4),
+      sections: [{ title: "The story so far", body: "y".repeat(400) }],
+    });
+    expect(context.sizes.dropped).toBe(0);
+    expect(context.sizes.sections["The story so far"]).toBeGreaterThanOrEqual(100);
+    expect(context.sizes.total).toBeLessThan(1000);
+  });
+
+  test("the oldest messages go first to stay under budget", () => {
+    const context = buildTurnContext({ persona: "persona", profile, now, recent: thread, budget: 2000 });
+    expect(context.sizes.dropped).toBeGreaterThan(0);
+    expect(context.sizes.total).toBeLessThanOrEqual(2000);
+    expect(context.messages.at(-1)).toEqual({ role: "assistant", content: "x".repeat(400) });
+  });
+
+  test("never below the minimum window, even over budget", () => {
+    const context = buildTurnContext({ persona: "persona", profile, now, recent: thread, budget: 10 });
+    expect(context.sizes.recentMessages).toBe(MIN_RECENT_MESSAGES);
   });
 });

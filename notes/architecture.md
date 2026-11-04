@@ -283,8 +283,9 @@ If it gets slow later, add a materialized per-user inbox.
   `openaiEndpoint: "/v1/responses"` + the `cf-aig-no-wholesale` header). The
   Agents SDK's `createAI` cannot read this model's replies.
 - **Built (step 17)**: `api/src/tibo/` (`TiboAgent.ts`, `thread.ts`, `context.ts`,
-  `bubbles.ts`, `persona.ts`, `protocol.ts`, `model.ts`). Planning's decision log
-  has the details. **Turn pipeline extension points** for steps 18 and 19:
+  `bubbles.ts`, `persona.ts`, `protocol.ts`, `model.ts`); step 19 added
+  `memory.ts`, `memory-rules.ts`, `memory-jobs.ts`, `recall.ts`,
+  `embeddings.ts` and `dev-seed.ts`. Planning's decision log has the details. **Turn pipeline extension points** for steps 18 and 19:
   - `buildTurnContext({ persona, profile, now, recent, sections })` in
     `context.ts`: step 18 adds the today snapshot as a `section`; step 19 adds
     summaries and memories as more `sections` and may shrink `recent`.
@@ -304,8 +305,11 @@ If it gets slow later, add a materialized per-user inbox.
   - A Tibo turn can produce several **bubbles**, each stored as its own row.
   - `system_event` rows hold relays and proactive triggers, which are shown in the thread.
 - `messages_fts`: an FTS5 index over `body`, for keyword search over the archive.
-- `summaries`: `level` (`day`\|`week`\|`month`\|`year`), `period_start`, `text`, `through_message_id`.
-- `memories`: `id`, `text`, `kind` (`fact`\|`preference`\|`person`\|`event`\|`plan`), `created_at`, `superseded_by?`, `source_message_ids`.
+- `summaries`: `level` (`day`\|`week`\|`month`\|`year`), `period_start`, `text`, `through_message_id`, `through_seq`, `updated_at`. PK `(level, period_start)`.
+- `memories`: `id`, `text`, `kind` (`fact`\|`preference`\|`person`\|`event`\|`plan`), `importance` (1–3), `created_at` (when it was said), `updated_at`, `superseded_by?`, `source_message_ids`, `embedding_model?`.
+- `message_chunks` (step 19): consecutive messages embedded together for search: `id`, `from_seq`, `to_seq`, `day`, `started_at`, `ended_at`, `text`, `embedding_model?`.
+- `memory_state` (step 19): the jobs' watermarks (`summarized_seq`, `extracted_seq`, `chunked_seq`), the rollups due, the zone and first name, and today's background spend.
+- **Vectorize** `TiboMemory` index (1024 dims, cosine; `MemoryIndex` in `AgentWorker.ts`), **namespace = user id**, metadata `type` (`memory`\|`message`), `kind`, `created_at` (all three metadata-indexed). Vector ids map back to rows: `m:<memory id>`, `c:<chunk id>`. A row's `embedding_model` is set once its vector is written; a row whose model isn't `EMBEDDING_MODEL` is re-embedded by the jobs (how a model change would migrate, into a new index).
 - Every message is kept forever. Nothing is truncated.
 
 ### 7.3 Building context for each turn
@@ -314,14 +318,20 @@ Context is assembled from scratch on every turn and never includes the whole his
 
 1. **Persona and rules**: the system prompt (§7.7).
 2. **Today snapshot**: today's tasks, due habits and progress, active goals, the running session, the time and date in the user's time zone. Fetched from domain services.
-3. **Story so far**: the latest year, month, week and day summaries, compact.
-4. **Relevant memories**: the top memories by meaning (Vectorize, namespace = user id) and keyword (FTS) for the incoming message. Superseded memories are excluded.
+3. **Story so far**: the latest year, month, week and day summaries (in-progress ones marked "so far"), plus last year's if it fits, compact.
+4. **Relevant memories**: the top memories by meaning (Vectorize, namespace = user id) for what the user wrote since Tibo last spoke, plus their newest importance-3 memories. Superseded memories are excluded. Each has a per-turn ref (`m1`…) for `remember`/`forget`.
 5. **Recent window**: the last ~40 messages, verbatim.
-6. **Tools** (§7.4), including `search_conversation(query, from?, to?)` for exact old messages ("what did I say in 2025…").
+6. **Tools** (§7.4), including `search_conversation(query, from?, to?)` for exact old messages ("what did I say in 2025…"), `remember` and `forget`.
 
-Background jobs, run on DO alarms after a turn and never blocking the reply:
-- **Summarize**: roll messages into day summaries, days into weeks, weeks into months.
-- **Extract memories**: pull lasting facts from new messages, embed them (Workers AI embedding model, decided in prompt 18), dedupe, and mark old memories as superseded when a fact changes.
+Everything but tools fits `CONTEXT_BUDGET_TOKENS` (12,000, estimated at 4 characters a token): the story (1,600) and memories (900) are capped where they're built (`tibo/recall.ts`), and the recent window drops its oldest messages to fit, never below 10. Under `alchemy dev` each turn logs `Tibo context tokens` per section, tools included.
+
+Background jobs (`tibo/memory-jobs.ts`), on Agents SDK schedules (one ~60 s after turns, one when a quiet thread settles, one 5 min past the user's midnight, and a 15-minute watchdog set by every run in case the agent restarts mid-run), never blocking the reply. The schedule callback returns at once and the run continues under `keepAliveWhile`: a callback running past 30 s holds up the agent's other jobs, and each Muse call takes 5–45 s (2-minute timeout).
+- **Extract memories**: from each 16 new messages (or fewer once the thread has been quiet 20 minutes), one Muse call proposes memories; each is embedded (Workers AI `@cf/qwen/qwen3-embedding-0.6b`, chosen in step 19) and compared with similar stored ones (cosine ≥ 0.5, plus ones written in the last 10 minutes that Vectorize may not show yet); if any are similar, a second call decides add, duplicate or supersede. Superseded memories keep their row (`superseded_by`) and lose their vector.
+- **Summarize**: each finished day (or today past 60 messages) into a day summary; a finished day marks its week and its month due, and a rolled month its year. Months roll up from their own days, not from weeks: a week can straddle two months, and rolling weeks into the month they start in put March 2 in February in testing. So an in-progress week, month and year are rewritten at most once a day.
+- **Chunk and embed**: the thread in chunks of up to 8 messages or 1,500 characters, never across a day, for `search_conversation`.
+- **Costs**: Muse Spark only, never charged to the quota. Per user and day: 40 model calls and 600 embedded texts (`DAILY_JOB_CAP`; 600/6,000 under `alchemy dev`), at most 12 calls per run.
+
+**Settings → Tibo → Memory** reads and deletes memories over HTTP in the user's own DO (`GET`/`DELETE /agents/tibo-agent/<name>/memories[/<id>]`, `TiboAgent.onRequest`), through the web stack's `AGENT` binding and its pinned `/agents/*` proxy. **Account deletion**: `wipe()` deletes every vector id the agent ever wrote (Vectorize can't drop a namespace) before `destroy()`; a failure throws and the cron retries.
 
 ### 7.4 Tools
 

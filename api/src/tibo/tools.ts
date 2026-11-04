@@ -13,6 +13,7 @@ import { z } from "zod";
 import type { DomainBinding, DomainResult, TiboRpc } from "../domain-client.ts";
 import { BULK_LIMIT, MAX_TOOL_CALLS, receiptFor, type DomainCall, type TurnLedger } from "./actions.ts";
 import { dayLabel } from "./dates.ts";
+import { TIBO_MEMORY_KINDS, type TiboMemoryKind } from "./protocol.ts";
 import {
   IMPORTANCE,
   goalView,
@@ -52,6 +53,15 @@ export interface ToolRuntime {
    * turn was started by a message the user typed after the action was held.
    */
   readonly confirmPending: ((approve: boolean) => Promise<unknown>) | null;
+  /** Long-term memory (`./recall.ts`), bound to this turn by the agent. */
+  readonly memory: MemoryTools;
+}
+
+/** The memory tools' backends. Their answers go to the model as they are. */
+export interface MemoryTools {
+  search(input: { query: string; from?: string; to?: string }): Promise<unknown>;
+  remember(input: { text: string; kind: TiboMemoryKind; replaces: readonly string[] }): Promise<unknown>;
+  forget(input: { refs: readonly string[]; about?: string }): Promise<unknown>;
 }
 
 // ─── Reactivity keys of the app's lists (`web/src/hooks/use-*.ts`) ─────────
@@ -822,11 +832,60 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     }),
   };
 
+  // ─── Long-term memory ───────────────────────────────────────────────────
+  const memoryTools = {
+    search_conversation: tool({
+      description:
+        "Search the whole conversation with the user, back to its first day, by keywords and by meaning. Use it when they ask about something said before that isn't in your context (\"what did I tell you about X in 2025?\"). `from` and `to` (inclusive) narrow it to dates. Answers short dated excerpts.",
+      inputSchema: z.object({
+        query: z.string().min(1).max(200).describe("What to look for, in plain words"),
+        from: day.optional(),
+        to: day.optional(),
+      }),
+      execute: counted(rt, (input) =>
+        rt.memory.search(input).catch((error: unknown) => {
+          console.error("search_conversation failed", error);
+          return { error: "Search isn't working just now. Say so." };
+        }),
+      ),
+    }),
+    remember: tool({
+      description:
+        "Keep a lasting fact about the user when they ask you to remember something (\"remember that…\"). Write it as a short third-person sentence that makes sense alone. Pass `replaces` with the refs of memories it makes out of date.",
+      inputSchema: z.object({
+        text: z.string().min(3).max(300).describe('Like "Their sister Priya\'s birthday is March 3."'),
+        kind: z.enum(TIBO_MEMORY_KINDS),
+        replaces: z.array(z.string().max(8)).max(10).optional().describe("Refs (m1, m2…) of memories this replaces"),
+      }),
+      execute: counted(rt, ({ text, kind, replaces }) =>
+        rt.memory.remember({ text, kind, replaces: replaces ?? [] }).catch((error: unknown) => {
+          console.error("remember failed", error);
+          return { error: "Couldn't save that just now. Nothing was kept. Say so." };
+        }),
+      ),
+    }),
+    forget: tool({
+      description:
+        "Forget lasting facts about the user when they ask (\"forget that I…\"). Pass the refs of the memories to delete. If you can't see them, pass `about` first: it lists matching memories with refs and deletes nothing. It doesn't erase the conversation itself.",
+      inputSchema: z.object({
+        refs: z.array(z.string().max(8)).max(10).optional().describe("Refs (m1, m2…) of the memories to forget"),
+        about: z.string().max(200).optional().describe("What the memory is about, to look it up"),
+      }),
+      execute: counted(rt, ({ refs, about }) =>
+        rt.memory.forget({ refs: refs ?? [], ...(about ? { about } : {}) }).catch((error: unknown) => {
+          console.error("forget failed", error);
+          return { error: "Couldn't do that just now. Nothing was forgotten. Say so." };
+        }),
+      ),
+    }),
+  };
+
   // ─── Answering a held action in words ──────────────────────────────────
   const { confirmPending } = rt;
   return confirmPending
     ? {
         ...tools,
+        ...memoryTools,
         confirm_action: tool({
           description:
             "Run (approve: true) or drop (approve: false) the actions waiting for the user's go-ahead, when the user's latest message clearly answers your question about them. Never on your own judgment.",
@@ -834,5 +893,5 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           execute: counted(rt, ({ approve }) => confirmPending(approve)),
         }),
       }
-    : tools;
+    : { ...tools, ...memoryTools };
 }

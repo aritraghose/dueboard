@@ -49,7 +49,7 @@ bun run dev:web   # terminal 2, open the printed websiteUrl
 ## Google auth setup
 
 1. In Google Cloud console → Google Auth platform, create a **Web application** client with scopes `openid`, `email`, `profile`.
-2. Add redirect URIs `http://localhost:1339/api/auth/callback/google` (the website's dev port when `api/` is started first: each dev server asks for 1337 and takes the next free port, so the AgentWorker gets 1337 and the ApiWorker 1338) and `<websiteUrl>/api/auth/callback/google` per deployed stage.
+2. Add redirect URIs `http://localhost:1339/api/auth/callback/google` (the website's dev port, fixed in `api/src/dev-ports.ts` with `strictPort`; the ApiWorker, DomainWorker and AgentWorker take 1337, 1338 and 1340) and `<websiteUrl>/api/auth/callback/google` per deployed stage.
 3. Copy `api/.env.example` to:
    - `api/.env` (dev): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
    - `api/.env.live` (deploy): the same, plus `AUTH_BASE_URL` set to the website origin.

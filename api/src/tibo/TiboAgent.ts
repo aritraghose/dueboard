@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { Agent, type Connection, type ConnectionContext, type WSMessage } from "agents";
-import { isStepCount, streamText } from "ai";
+import { asSchema, isStepCount, streamText, type ToolSet } from "ai";
 import type { AgentEnv } from "../AgentWorker.ts";
 import { AI_UNITS_PER_MESSAGE } from "../domain/usage-constants.ts";
 import { tiboClient, usageClient } from "../domain-client.ts";
@@ -9,15 +9,34 @@ import { MAX_CHAT_MESSAGE_LENGTH } from "../limits.ts";
 import { MAX_TOOL_STEPS, PendingActions, TurnLedger, receiptFor, type PendingAction } from "./actions.ts";
 import { BUBBLE_DELIMITER, BubbleSplitter, reactionLine, reactionOf, typingDelayMs } from "./bubbles.ts";
 import { RECENT_WINDOW, buildTurnContext, type ContextSection, type TurnContext } from "./context.ts";
-import { dayIn } from "./dates.ts";
+import { addDays, dayIn, startOfDayIn } from "./dates.ts";
+import { devSeedThread } from "./dev-seed.ts";
+import { MemoryJobs, type JobContext } from "./memory-jobs.ts";
+import { MemoryStore } from "./memory.ts";
+import { DAILY_JOB_CAP, DEV_DAILY_JOB_CAP, SETTLE_MS, estimateTokens } from "./memory-rules.ts";
 import { MODEL, museSpark } from "./model.ts";
 import { PERSONA } from "./persona.ts";
 import {
+  MemoryRefs,
+  deleteMemories,
+  forget,
+  memoriesSection,
+  recallMemories,
+  remember,
+  searchConversation,
+  storySection,
+  type RecallContext,
+} from "./recall.ts";
+import {
   TIBO_HISTORY_PAGE,
   TIBO_MAX_BUBBLES,
+  TIBO_MEMORIES_LIMIT,
+  TIBO_MEMORIES_PATH,
   TIBO_OLDER_PAGE,
+  type TiboMemory,
   type TiboClientFrame,
   type TiboConfirm,
+  type TiboMessage,
   type TiboReceipt,
   type TiboServerFrame,
 } from "./protocol.ts";
@@ -42,6 +61,13 @@ const QUIET_BUBBLES = {
 /** The longest a browser-made `clientId` may be. */
 const MAX_CLIENT_ID_LENGTH = 64;
 
+/** Memory jobs run this long after a turn, so a burst of turns shares one run. */
+const MEMORY_JOB_DELAY_S = 60;
+/** …and this long after a run that stopped with work left. */
+const MEMORY_JOB_CONTINUE_S = 5;
+/** Past the user's midnight, so a finished day gets its summary. */
+const DAY_END_GRACE_MS = 5 * 60_000;
+
 /**
  * Tibo: one Durable Object per user, named by their user id (the web
  * stack's `/agents/*` proxy pins the name to the session's user, whatever the
@@ -58,6 +84,13 @@ const MAX_CLIENT_ID_LENGTH = 64;
 export class TiboAgent extends Agent<AgentEnv> {
   private threadStore: Thread | undefined;
   private actionStore: PendingActions | undefined;
+  private memoryStore: MemoryStore | undefined;
+  /** A memory job is running (in memory: a restart drops it, and its schedule retries). */
+  private memoryJobRunning = false;
+  /** Another job run was asked for while one ran. */
+  private memoryJobOwed = false;
+  /** Memories the jobs just wrote, with vectors, until Vectorize can find them (`JobContext.fresh`). */
+  private readonly freshMemories: JobContext["fresh"] = [];
   /** A turn is running; others wait for it. In memory: a restart drops it with the turn. */
   private running = false;
   /** A message arrived during the running turn, so another follows it. */
@@ -80,9 +113,23 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.actionStore;
   }
 
+  /** Summaries, memories and thread chunks (`./memory.ts`). */
+  private get memory() {
+    if (!this.memoryStore) {
+      this.memoryStore = new MemoryStore(this.ctx.storage.sql);
+      this.memoryStore.migrate();
+    }
+    return this.memoryStore;
+  }
+
+  private get dev() {
+    return this.env.TIBO_DEV === "true";
+  }
+
   onStart() {
     void this.thread;
     void this.actions;
+    void this.memory;
   }
 
   /** The thread lives in SQL, not in Agent state; browsers may not write state. */
@@ -148,7 +195,179 @@ export class TiboAgent extends Agent<AgentEnv> {
    */
   async wipe() {
     for (const connection of this.getConnections()) connection.close(4000, "Account deleted");
+    // Its vectors first: Vectorize can't drop a namespace, so every vector
+    // id this agent ever wrote is deleted (a failure throws, and the wipe
+    // cron retries before anything else is gone).
+    await this.deleteAllVectors();
     await this.destroy();
+  }
+
+  private async deleteAllVectors() {
+    const ids = this.memory.allVectorIds();
+    for (let start = 0; start < ids.length; start += 500) {
+      await this.env.MEMORY.deleteByIds(ids.slice(start, start + 500));
+    }
+  }
+
+  // ─── HTTP: Settings → Tibo → Memory, and dev tools ───────────────────────
+
+  /**
+   * `/agents/tibo-agent/<user id>/…` over HTTP. The web stack's proxy signs
+   * the user in and pins the name to them, so these only ever reach the
+   * caller's own memories. See `TIBO_MEMORIES_PATH` in `./protocol.ts`.
+   */
+  async onRequest(request: Request): Promise<Response> {
+    const [, , , , ...rest] = new URL(request.url).pathname.split("/");
+    const route = rest.map(decodeURIComponent);
+
+    if (route[0] === TIBO_MEMORIES_PATH && route.length === 1 && request.method === "GET") {
+      const memories: TiboMemory[] = this.memory.listActive(TIBO_MEMORIES_LIMIT).map(
+        ({ id, text, kind, createdAt, updatedAt }) => ({ id, text, kind, createdAt, updatedAt }),
+      );
+      return Response.json({ memories });
+    }
+    if (route[0] === TIBO_MEMORIES_PATH && route.length === 2 && request.method === "DELETE") {
+      const memory = this.memory.memory(route[1]!);
+      if (!memory || memory.supersededBy !== null) return Response.json({ error: "Not found" }, { status: 404 });
+      await deleteMemories(this.env, this.memory, [memory.id]);
+      return Response.json({ ok: true });
+    }
+    if (route[0] === "dev" && this.dev) return this.devRoute(route[1], request);
+    return new Response("Not found", { status: 404 });
+  }
+
+  /**
+   * Development only (`alchemy dev`): `POST dev/seed` replaces this thread
+   * and its memory with the synthetic one in `./dev-seed.ts` and starts the
+   * memory jobs; `POST dev/memory-jobs` runs them now; `GET dev/memory`
+   * shows what they've built.
+   */
+  private async devRoute(action: string | undefined, request: Request): Promise<Response> {
+    if (action === "seed" && request.method === "POST") {
+      await this.deleteAllVectors();
+      this.thread.clear();
+      this.memory.clear();
+      const seeded = devSeedThread();
+      for (const message of seeded) {
+        this.thread.add({
+          role: message.role,
+          body: message.body,
+          createdAt: message.createdAt,
+          ...(message.role === "tibo" ? { turnId: message.turnId, meta: { model: MODEL } } : {}),
+        });
+      }
+      await this.scheduleMemoryJobs(1, "dev");
+      return Response.json({ inserted: seeded.length });
+    }
+    if (action === "memory-jobs" && request.method === "POST") {
+      await this.scheduleMemoryJobs(1, "dev");
+      return Response.json({ scheduled: true });
+    }
+    if (action === "memory" && request.method === "GET") {
+      // The whole index (dev has one user), as Vectorize last counted it: it
+      // lags writes and deletes by a few seconds.
+      const index = await this.env.MEMORY.describe().catch((error: unknown) => {
+        console.error("Describing the memory index failed", error);
+        return null;
+      });
+      return Response.json({
+        stats: this.memory.stats(),
+        vectorsInIndex: index ? { count: index.vectorCount, processedUpTo: index.processedUpToDatetime } : null,
+        running: this.memoryJobRunning,
+        summaries: (["year", "month", "week", "day"] as const).map((level) => ({
+          level,
+          latest: this.memory.latestSummaries(level, 50).map(({ periodStart, text }) => ({ periodStart, text })),
+        })),
+        memories: this.memory.listActive(200),
+        superseded: this.ctx.storage.sql
+          .exec(`SELECT id, text, superseded_by FROM memories WHERE superseded_by IS NOT NULL`)
+          .toArray(),
+      });
+    }
+    return new Response("Not found", { status: 404 });
+  }
+
+  // ─── Long-term memory jobs ───────────────────────────────────────────────
+
+  /**
+   * Schedules a memory job run `delaySeconds` from now (Agents SDK
+   * `schedule`, on the DO's alarm). Runs asked for within the same minute
+   * share one schedule.
+   */
+  private async scheduleMemoryJobs(delaySeconds: number, reason: string) {
+    const at = Date.now() + delaySeconds * 1000;
+    await this.schedule(new Date(at), "runMemoryJobs", { reason, minute: Math.floor(at / 60_000) }, { idempotent: true });
+  }
+
+  /**
+   * One run of the memory jobs (`./memory-jobs.ts`), then the next one: soon
+   * if work is left, tomorrow if today's budget ran out, and otherwise when
+   * the thread goes quiet and when the user's day ends, while anything is
+   * unread. Never during a reply's critical path, and never charged.
+   */
+  async runMemoryJobs(_payload?: { reason: string; minute: number }) {
+    if (this.memoryJobRunning) {
+      this.memoryJobOwed = true;
+      return;
+    }
+    this.memoryJobRunning = true;
+    // If the agent restarts mid-run (a deploy, an eviction), nothing would
+    // schedule the next one: this fallback does, and finds nothing to do
+    // when the run ended well.
+    await this.scheduleMemoryJobs(15 * 60, "watchdog");
+    // A run takes minutes (each model call 15–30 s), and a schedule callback
+    // that runs long holds up the agent's other jobs: detach it, kept alive
+    // until it ends.
+    void this.keepAliveWhile(() => this.memoryJobRun());
+  }
+
+  private async memoryJobRun() {
+    try {
+      const profile = await tiboClient(this.env.DOMAIN)
+        .profile(this.name)
+        .catch(() => null);
+      if (profile) {
+        this.memory.set("time_zone", profile.timeZone);
+        this.memory.set("first_name", profile.firstName);
+      }
+      const timeZone = profile?.timeZone ?? this.memory.get("time_zone") ?? "UTC";
+      const now = new Date();
+      const outcome = await new MemoryJobs({
+        env: this.env,
+        userId: this.name,
+        store: this.memory,
+        thread: this.thread,
+        timeZone,
+        firstName: profile?.firstName ?? this.memory.get("first_name") ?? "the user",
+        now,
+        cap: this.dev ? DEV_DAILY_JOB_CAP : DAILY_JOB_CAP,
+        fresh: this.freshMemories,
+        log: this.dev ? (...args) => console.log("Tibo memory job:", ...args) : () => {},
+      }).run();
+      if (this.dev) console.log("Tibo memory job", this.name, outcome, this.memory.stats());
+
+      const tomorrow = startOfDayIn(timeZone, addDays(dayIn(timeZone, now), 1)) + DAY_END_GRACE_MS;
+      if (outcome.outOfBudget) {
+        await this.scheduleMemoryJobs((tomorrow - Date.now()) / 1000, "budget");
+      } else if (outcome.more || this.memoryJobOwed) {
+        await this.scheduleMemoryJobs(MEMORY_JOB_CONTINUE_S, "continue");
+      } else if (this.thread.countAfter(this.memory.getNumber("summarized_seq")) > 0) {
+        // Unread messages wait for the thread to settle, and for the day to end.
+        const last = this.thread.latest(1).messages[0];
+        const settle = (last?.createdAt ?? Date.now()) + SETTLE_MS + 60_000;
+        const unread = Math.min(this.memory.getNumber("chunked_seq"), this.memory.getNumber("extracted_seq"));
+        if (settle > Date.now() && this.thread.countAfter(unread) > 0) {
+          await this.scheduleMemoryJobs((settle - Date.now()) / 1000, "settle");
+        }
+        await this.scheduleMemoryJobs((tomorrow - Date.now()) / 1000, "dayEnd");
+      }
+    } catch (error) {
+      console.error("Tibo memory job failed", this.name, error);
+      await this.scheduleMemoryJobs(10 * 60, "retry");
+    } finally {
+      this.memoryJobRunning = false;
+      this.memoryJobOwed = false;
+    }
   }
 
   // ─── Turns ───────────────────────────────────────────────────────────────
@@ -173,6 +392,10 @@ export class TiboAgent extends Agent<AgentEnv> {
         } while (this.owed && this.thread.awaitingReply());
       } finally {
         this.running = false;
+        // Fold the new messages into memory soon, off the reply's path.
+        await this.scheduleMemoryJobs(MEMORY_JOB_DELAY_S, "turn").catch((error: unknown) =>
+          console.error("Scheduling memory jobs failed", error),
+        );
       }
     });
   }
@@ -207,20 +430,37 @@ export class TiboAgent extends Agent<AgentEnv> {
       const seen = this.thread.markSeen();
       if (seen.length > 0) this.send({ type: "seen", messageIds: seen });
 
-      // 3. The context, built fresh, with the user's day as it is now.
+      // 3. The context, built fresh, with the user's day as it is now, and
+      // what Tibo remembers that bears on what the user just said.
       const now = new Date();
       const today = dayIn(profile.timeZone, now);
-      const snapshot = await this.snapshot(today, profile.timeZone);
+      this.memory.set("time_zone", profile.timeZone);
+      this.memory.set("first_name", profile.firstName);
       const recent = this.thread.latest(RECENT_WINDOW).messages;
+      // Tibo may react to the newest thing the user said.
+      const latestUserMessage = recent.findLast((message) => message.role === "user");
+      const recall: RecallContext = {
+        env: this.env,
+        userId,
+        store: this.memory,
+        thread: this.thread,
+        timeZone: profile.timeZone,
+        today,
+      };
+      const refs = new MemoryRefs();
+      const [snapshot, memories] = await Promise.all([
+        this.snapshot(today, profile.timeZone),
+        recallMemories(recall, unansweredText(recent)),
+      ]);
+      const story = storySection(this.memory, today);
+      const remembered = memoriesSection(memories, refs, profile.timeZone);
       const context = buildTurnContext({
         persona: PERSONA,
         profile,
         now,
         recent,
-        sections: snapshot ? [snapshot] : [],
+        sections: [snapshot, story, remembered].filter((section): section is ContextSection => section !== null),
       });
-      // Tibo may react to the newest thing the user said.
-      const latestUserMessage = recent.findLast((message) => message.role === "user");
 
       // Held actions can be answered in words only by a message the user
       // typed after they were held. Every turn is started by the user's own
@@ -236,7 +476,16 @@ export class TiboAgent extends Agent<AgentEnv> {
         today,
         ledger,
         confirmPending: confirmable ? (approve) => this.answerPending(pending.id, approve) : null,
+        memory: {
+          search: (input) => searchConversation(recall, refs, input),
+          // No receipts: a "Remembered: …" line under the chat read as
+          // unnatural; Tibo says it in its own words, and Settings lists them.
+          remember: async (input) =>
+            (await remember(recall, refs, { ...input, sourceMessageId: latestUserMessage?.id ?? null })).answer,
+          forget: async (input) => (await forget(recall, refs, input)).answer,
+        },
       });
+      if (this.dev) void this.logContextSizes(context, tools);
 
       // 4–6. Stream the reply, and deliver it bubble by bubble.
       const answered = await this.reply(turnId, context, latestUserMessage?.id ?? null, tools, ledger);
@@ -363,6 +612,22 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
+  /** Development: the estimated tokens of each part of the context, to tune the budget. */
+  private async logContextSizes(context: TurnContext, tools: ToolSet) {
+    try {
+      const schemas = await Promise.all(
+        Object.entries(tools).map(async ([name, entry]) => ({
+          name,
+          description: entry.description,
+          schema: await asSchema(entry.inputSchema).jsonSchema,
+        })),
+      );
+      console.log("Tibo context tokens", { ...context.sizes, tools: estimateTokens(JSON.stringify(schemas)) });
+    } catch (error) {
+      console.error("Measuring the context failed", error);
+    }
+  }
+
   // ─── Acting on the user's data ───────────────────────────────────────────
 
   /** The today snapshot, or `null` (logged) if the domain couldn't answer. */
@@ -477,6 +742,17 @@ export class TiboAgent extends Agent<AgentEnv> {
   private sendTo(connection: Connection, frame: TiboServerFrame) {
     connection.send(JSON.stringify(frame));
   }
+}
+
+/** What the user wrote since Tibo last spoke (what memories are recalled for), at most 1,000 characters. */
+function unansweredText(recent: readonly TiboMessage[]): string {
+  const lastTibo = recent.findLastIndex((message) => message.role === "tibo");
+  return recent
+    .slice(lastTibo + 1)
+    .filter((message) => message.role === "user")
+    .map((message) => message.body)
+    .join("\n")
+    .slice(-1000);
 }
 
 /** A client frame, or `null` for anything malformed (dropped silently). */

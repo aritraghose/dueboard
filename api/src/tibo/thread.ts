@@ -5,7 +5,7 @@
 // Tibo's bubbles is its own row sharing the turn's `turn_id`.
 //
 // `messages_fts` is an FTS5 index over `body`, kept in sync by triggers, for
-// step 19's `search_conversation`. `seq` orders the thread and is the FTS
+// `search_conversation` (`./recall.ts`). `seq` orders the thread and is the FTS
 // rowid; `id` is the stable public id.
 
 import {
@@ -94,6 +94,8 @@ export class Thread {
     turnId?: string;
     meta?: MessageMeta;
     id?: string;
+    /** When it was said (ms); now unless seeding a dev thread. */
+    createdAt?: number;
   }): TiboMessage {
     const id = input.id ?? crypto.randomUUID();
     const row = this.sql
@@ -104,7 +106,7 @@ export class Thread {
         input.turnId ?? id,
         input.role,
         input.body,
-        Date.now(),
+        input.createdAt ?? Date.now(),
         input.meta ? JSON.stringify(input.meta) : null,
       )
       .one();
@@ -214,19 +216,49 @@ export class Thread {
   }
 
   /**
-   * Keyword search over every message, newest first (FTS5 syntax). For step
-   * 19's `search_conversation`; unused until then.
+   * Up to `limit` messages after the order `afterSeq`, oldest first, with
+   * their order: what the memory jobs haven't read yet.
    */
-  search(query: string, limit: number): TiboMessage[] {
+  after(afterSeq: number, limit: number): (TiboMessage & { readonly seq: number })[] {
     return this.sql
-      .exec<Row>(
-        `SELECT m.* FROM messages_fts f JOIN messages m ON m.seq = f.rowid
-         WHERE messages_fts MATCH ? ORDER BY m.seq DESC LIMIT ?`,
-        query,
-        limit,
+      .exec<Row>(`SELECT * FROM messages WHERE seq > ? ORDER BY seq LIMIT ?`, afterSeq, limit)
+      .toArray()
+      .map((row) => ({ ...toMessage(row), seq: row.seq }));
+  }
+
+  /** How many messages come after the order `afterSeq`. */
+  countAfter(afterSeq: number): number {
+    return this.sql.exec<{ n: number }>(`SELECT count(*) AS n FROM messages WHERE seq > ?`, afterSeq).one().n;
+  }
+
+  /**
+   * Keyword search over every message (an FTS5 query, `ftsQuery` in
+   * `./memory-rules.ts`), best matches first, optionally between two
+   * instants (ms, `to` exclusive). Each hit is a short snippet around the
+   * matched words.
+   */
+  search(
+    match: string,
+    options: { from?: number; to?: number; limit: number },
+  ): { id: string; role: TiboRole; createdAt: number; snippet: string }[] {
+    return this.sql
+      .exec<{ id: string; role: TiboRole; created_at: number; snippet: string }>(
+        `SELECT m.id, m.role, m.created_at, snippet(messages_fts, 0, '', '', '…', 24) AS snippet
+         FROM messages_fts f JOIN messages m ON m.seq = f.rowid
+         WHERE messages_fts MATCH ? AND m.created_at >= ? AND m.created_at < ?
+         ORDER BY bm25(messages_fts) LIMIT ?`,
+        match,
+        options.from ?? 0,
+        options.to ?? Number.MAX_SAFE_INTEGER,
+        options.limit,
       )
       .toArray()
-      .map(toMessage);
+      .map((row) => ({ id: row.id, role: row.role, createdAt: row.created_at, snippet: row.snippet }));
+  }
+
+  /** Development only: empties the thread (the dev seed starts from nothing). */
+  clear() {
+    this.sql.exec(`DELETE FROM messages`);
   }
 
   private page(rows: Row[], limit: number) {

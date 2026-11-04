@@ -43,3 +43,27 @@ export const dayLabel = (day: string, today: string): string => {
 /** "3:40 PM" in the user's zone. */
 export const timeIn = (instant: string | Date, timeZone: string) =>
   new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", minute: "2-digit" }).format(new Date(instant));
+
+/** The zone's offset from UTC at `instant`, in ms (east is positive). */
+const offsetAt = (timeZone: string, instant: number) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - Math.floor(instant / 1000) * 1000;
+};
+
+/** The instant (ms) a calendar day starts in the zone. */
+export const startOfDayIn = (timeZone: string, day: string): number => {
+  const midnightUtc = Date.parse(`${day}T00:00:00Z`);
+  const guess = midnightUtc - offsetAt(timeZone, midnightUtc);
+  // Once more, in case the offset changes between the guess and midnight (DST).
+  return midnightUtc - offsetAt(timeZone, guess);
+};

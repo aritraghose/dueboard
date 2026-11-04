@@ -698,12 +698,12 @@ export function SessionIndicator({ className }: { className?: string }) {
       aria-label={`${running ? "Focus session" : "Paused session"}: ${left} left. Open it on Now.`}
       title={sessionName(session)}
       className={cn(
-        "inline-flex h-8 items-center gap-2 rounded-full bg-focus-soft px-3 text-sm font-medium text-focus-ink tabular-nums ring-1 ring-focus/20 outline-none transition-colors hover:bg-focus-soft/70 focus-visible:ring-3 focus-visible:ring-ring/50",
+        "inline-flex h-8 items-center gap-2 rounded-full bg-session-pill px-3 text-sm font-medium text-session-pill-foreground tabular-nums ring-1 ring-session-pill-foreground/15 outline-none transition-colors hover:bg-session-pill/80 focus-visible:ring-3 focus-visible:ring-ring/50",
         className,
       )}
     >
       {running ? (
-        <span aria-hidden="true" className="size-2 animate-focus-breathe rounded-full bg-focus" />
+        <span aria-hidden="true" className="size-2 animate-focus-breathe rounded-full bg-session-pill-dot" />
       ) : (
         <PauseIcon aria-hidden="true" className="size-3.5" />
       )}
