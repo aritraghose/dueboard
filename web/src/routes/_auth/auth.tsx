@@ -1,9 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
-import { AppLogo } from "@/components/app-logo";
+import { TiboAside, TiboBubble } from "@/components/tibo-aside";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "../../auth-client.ts";
 import { SITE_DESCRIPTION, seo } from "@/lib/seo";
@@ -45,24 +44,46 @@ function SignIn() {
   };
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="justify-items-center text-center">
-        <AppLogo className="mb-1 size-12" />
-        <CardTitle className="font-heading text-2xl">Dueboard</CardTitle>
-        <CardDescription>Sign in to see what's due.</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <Button variant="outline" size="lg" onClick={signIn} disabled={pending}>
-          {pending ? <Spinner /> : <GoogleMark />}
-          Continue with Google
-        </Button>
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-      </CardContent>
-    </Card>
+    <>
+      <section className="flex w-full max-w-md flex-col gap-8 max-lg:mx-auto max-lg:pt-8">
+        <div className="flex flex-col gap-4">
+          <h1 className="text-headline font-[650] text-balance">Sign in to Dueboard</h1>
+          <p className="text-lede text-pretty text-muted-foreground">
+            Your board, your streaks and Tibo are on the other side of this button.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={signIn}
+            disabled={pending}
+            className="h-13 gap-3 rounded-full bg-card text-base shadow-(--card-shadow) [&_svg]:size-5!"
+          >
+            {pending ? <Spinner /> : <GoogleMark />}
+            Continue with Google
+          </Button>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+        <p className="border-t pt-6 text-sm text-pretty text-muted-foreground">
+          New here? The same button sets you up. You'll pick a username next, then you're on your board.
+        </p>
+      </section>
+
+      <TiboAside label="Tibo says hi">
+        <div className="flex flex-col gap-2.5">
+          <TiboBubble delay={150}>Oh, hi.</TiboBubble>
+          <TiboBubble delay={900}>I'm Tibo. I live in Dueboard and keep your day in order.</TiboBubble>
+          <TiboBubble delay={1700}>
+            Sign in and we'll plan today together. I already have ideas. Some of them are good.
+          </TiboBubble>
+        </div>
+      </TiboAside>
+    </>
   );
 }
 

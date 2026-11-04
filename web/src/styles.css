@@ -134,9 +134,10 @@
   --tibo: oklch(0.85 0.06 185);
   --tibo-foreground: oklch(0.24 0.05 200);
   --tibo-soft: oklch(0.93 0.035 182);
-  --tibo-disc: oklch(0.93 0.035 182);
-  --tibo-ring-outer: #3d3d3d;
-  --tibo-ring-inner: #6e6e6e;
+  /* Tibo's icon looks the same in both themes. */
+  --tibo-disc: #1c1c1c;
+  --tibo-ring-outer: #777777;
+  --tibo-ring-inner: #bbbbbb;
   --tibo-glow: #ffffff;
 
   --chrome: oklch(0.96 0.03 170 / 70%);
@@ -187,6 +188,12 @@
   --text-title: 1.625rem;
   --text-title--line-height: 1.15;
   --text-title--letter-spacing: -0.03em;
+  /* Public pages (landing, sign-in, onboarding): Geist, carried by size and weight. */
+  --text-headline: clamp(1.875rem, 1.35rem + 2vw, 2.875rem);
+  --text-headline--line-height: 1.04;
+  --text-headline--letter-spacing: -0.04em;
+  --text-lede: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+  --text-lede--line-height: 1.5;
   --animate-tibo-spin: tibo-spin 6s infinite;
   --animate-tibo-spin-reverse: tibo-spin-reverse 6s infinite;
   @keyframes tibo-spin {
@@ -412,15 +419,12 @@
   --tibo: #1c1c1c;
   --tibo-foreground: #f5f5f5;
   --tibo-soft: #1f1f1f;
-  --tibo-disc: #1c1c1c;
   --tibo-unread: oklch(0.68 0.18 255);
   --session-pill: var(--focus-soft);
   --session-pill-foreground: var(--focus-ink);
   --session-pill-dot: var(--focus);
   --goal-move: var(--tag-violet);
   --goal-move-foreground: var(--primary-foreground);
-  --tibo-ring-outer: #777777;
-  --tibo-ring-inner: #bbbbbb;
 
   --usage: #f5f5f5;
   --usage-track: var(--sidebar);

@@ -1,11 +1,15 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
+import { TiboAside, TiboBubble, TiboTyping } from "@/components/tibo-aside";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { initials } from "@/lib/people";
+import { siteOrigin } from "@/lib/seo";
+import { cn } from "@/lib/utils";
 import { authClient } from "../../auth-client.ts";
 import { getSessionUser } from "../../session.ts";
 
@@ -16,7 +20,7 @@ export const Route = createFileRoute("/_auth/onboarding")({
     if (user.username) throw redirect({ to: "/now" });
     return { user };
   },
-  head: () => ({ meta: [{ title: "Choose a username · Dueboard" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Pick your username · Dueboard" }, { name: "robots", content: "noindex" }] }),
   component: Onboarding,
 });
 
@@ -84,22 +88,29 @@ function Onboarding() {
         ? "Checking…"
         : `${MIN}–${MAX} characters: letters, numbers, underscores and dots.`;
 
+  const firstName = user.name.trim().split(/\s+/)[0] || user.name;
+  const ready = Boolean(trimmed) && !invalid && availability !== "taken";
+
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardDescription>Welcome, {user.name}</CardDescription>
-        <CardTitle className="font-heading text-2xl">Choose a username</CardTitle>
-        <CardDescription>This is how you'll appear in the app. It must be unique.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
+    <>
+      <section className="flex w-full max-w-md flex-col gap-8 max-lg:mx-auto max-lg:pt-8">
+        <div className="flex flex-col gap-4">
+          <p className="text-muted-foreground">Welcome, {firstName}.</p>
+          <h1 className="text-headline font-[650] text-balance">Pick your username</h1>
+          <p className="text-lede text-pretty text-muted-foreground">
+            It's how friends find you and how you show up on Live. You can't change it later, so pick one you'll
+            like for a while.
+          </p>
+        </div>
+        <form className="flex flex-col gap-5" onSubmit={submit}>
           <Field data-invalid={Boolean(fieldError)}>
             <FieldLabel htmlFor="username">Username</FieldLabel>
-            <InputGroup>
-              <InputGroupAddon>
-                <InputGroupText>@</InputGroupText>
+            <InputGroup className="h-13 rounded-2xl bg-card text-lg">
+              <InputGroupAddon className="pl-4">
+                <InputGroupText className="text-lg">@</InputGroupText>
               </InputGroupAddon>
               <InputGroupInput
+                className="text-lg md:text-lg"
                 id="username"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
@@ -129,13 +140,89 @@ function Onboarding() {
           <Button
             type="submit"
             size="lg"
-            disabled={!trimmed || Boolean(invalid) || availability === "taken" || saving}
+            disabled={!ready || saving}
+            className="h-13 rounded-full text-base"
           >
             {saving && <Spinner />}
-            Continue
+            <span className="truncate">{ready ? `Claim @${trimmed}` : "Claim username"}</span>
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </section>
+
+      <TiboAside label="How your username looks" typing={availability === "checking"}>
+        <UsernamePreview
+          name={user.name}
+          image={user.image}
+          username={trimmed && !invalid ? trimmed : null}
+          availability={availability}
+          invalid={Boolean(trimmed && invalid)}
+        />
+      </TiboAside>
+    </>
+  );
+}
+
+function UsernamePreview({
+  name,
+  image,
+  username,
+  availability,
+  invalid,
+}: {
+  name: string;
+  image: string | null;
+  username: string | null;
+  availability: Availability;
+  invalid: boolean;
+}) {
+  const handle = username ?? "your_name";
+  const host = new URL(siteOrigin()).host;
+  const tibo = invalid
+    ? "Letters, numbers, dots and underscores only. I don't make the rules. I do enforce them."
+    : availability === "taken"
+      ? "Someone got there first. Try a dot or an underscore, it works wonders."
+      : availability === "available"
+        ? `@${username}. I can work with that. Very you, probably. We just met.`
+        : "Take your time. I'll be saying it a lot.";
+
+  return (
+    <div className="flex flex-col gap-5">
+      {availability === "checking" ? (
+        <TiboTyping />
+      ) : (
+        <TiboBubble key={tibo} className="duration-300">
+          {tibo}
+        </TiboBubble>
+      )}
+
+      <div data-tag="teal" className="overflow-hidden rounded-2xl border bg-background/60">
+        <div aria-hidden="true" className="profile-band h-20" />
+        <div className="flex flex-col gap-3 px-5 pb-5">
+          <Avatar className="-mt-8 size-16 ring-4 ring-card">
+            {image && <AvatarImage src={image} alt="" referrerPolicy="no-referrer" />}
+            <AvatarFallback className="text-lg font-semibold">{initials(name, handle)}</AvatarFallback>
+          </Avatar>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-lg font-semibold">{name}</span>
+            <span className={cn("truncate font-medium", username ? "text-tag-ink" : "text-muted-foreground")}>
+              @{handle}
+            </span>
+          </div>
+          <p className="truncate text-sm text-muted-foreground">
+            {host}/<span className={cn(username && "font-medium text-foreground")}>@{handle}</span>
+          </p>
+        </div>
+      </div>
+
+      <p className="flex items-baseline gap-2 border-t pt-4 text-sm">
+        <span className="shrink-0 font-medium text-muted-foreground">On Live</span>
+        <span className="min-w-0 truncate">
+          <span data-tag="teal" className={cn("font-semibold", username ? "text-tag-ink" : "text-muted-foreground")}>
+            @{handle}
+          </span>{" "}
+          settled a task: Pick a username
+        </span>
+      </p>
+    </div>
   );
 }

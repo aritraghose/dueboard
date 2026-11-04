@@ -4,6 +4,8 @@ import { getRequest } from "@tanstack/react-start/server";
 export const SITE_DESCRIPTION =
   "Tasks, habits, goals, notes and focus sessions on one board, with Tibo, an AI friend who plans your day with you, remembers what matters and keeps you on track.";
 
+export const GITHUB_URL = "https://github.com/aritraghose/dueboard";
+
 const DEFAULT_IMAGE = { path: "/og.png", width: 1200, height: 630, alt: "Dueboard: everything that's due, on one board." };
 
 export const siteOrigin = createIsomorphicFn()
