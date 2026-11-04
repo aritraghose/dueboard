@@ -126,6 +126,16 @@ export interface DiaryPageJson {
   readonly nextCursor: string | null;
 }
 
+/**
+ * Text another person wrote (a connection's task title on Live, a diary
+ * entry), as the model sees it in a tool result: escaped inside
+ * `<their_words>`, which the persona's tool rules call data, never
+ * instructions. Turns that read it can run tools, so it's marked like
+ * relayed text (`./relays.ts`).
+ */
+export const theirWords = (text: string) =>
+  `<their_words>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</their_words>`;
+
 // ─── Words the model and the user share ────────────────────────────────────
 
 /** Task importance as the app labels it, 1–5 stars. */

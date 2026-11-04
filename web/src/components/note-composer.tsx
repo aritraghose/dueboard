@@ -205,7 +205,7 @@ export function NoteComposer({
 
   return (
     <form
-      className="flex gap-3 rounded-xl border bg-card px-3.5 py-3 shadow-(--card-shadow) transition-shadow focus-within:border-ring/50"
+      className="flex gap-3 rounded-xl border bg-card px-3.5 py-3 shadow-(--card-shadow) transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
       onSubmit={async (event) => {
         event.preventDefault();
         if (!body || !today) return;

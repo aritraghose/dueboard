@@ -16,6 +16,7 @@ import { useMounted } from "@/hooks/use-mounted";
 import { useSocialActions } from "@/hooks/use-social";
 import { lastCheckedUser, rememberCheckedUser, type OnboardedUser } from "@/lib/session-cache";
 import { readSidebarOpen } from "@/lib/sidebar-state";
+import { canonical, seo } from "@/lib/seo";
 import { getSessionUser } from "../session.ts";
 
 /**
@@ -35,7 +36,19 @@ export const Route = createFileRoute("/@{$username}_/ask")({
     if (user) rememberCheckedUser(user);
     return { user, sidebarOpen: readSidebarOpen() };
   },
-  head: ({ params }) => ({ meta: [{ title: `Ask @${params.username.toLowerCase()} · Dueboard` }] }),
+  head: ({ params }) => {
+    const username = params.username.toLowerCase();
+    const path = `/@${username}/ask`;
+    return {
+      meta: seo({
+        title: `Ask @${username} · Dueboard`,
+        description: `Ask @${username} a question. Tibo answers for them from what they chose to share.`,
+        path,
+        noindex: true,
+      }),
+      links: [canonical(path)],
+    };
+  },
   // Like the Inbox: the thread draws its own header (profile button and bell); Tibo's own button would confuse.
   staticData: { topBar: { tibo: false, notifications: false } },
   component: AskRoute,

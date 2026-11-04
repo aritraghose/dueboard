@@ -27,6 +27,7 @@ import { profileAtom, useSocialActions } from "@/hooks/use-social";
 import { type LocalDate, isLocalDate, todayIn } from "@/lib/dates";
 import { lastCheckedUser, rememberCheckedUser, type OnboardedUser } from "@/lib/session-cache";
 import { readSidebarOpen } from "@/lib/sidebar-state";
+import { canonical, seo } from "@/lib/seo";
 import { getSessionUser } from "../session.ts";
 
 /**
@@ -64,7 +65,20 @@ export const Route = createFileRoute("/@{$username}")({
     if (user) rememberCheckedUser(user);
     return { user, sidebarOpen: readSidebarOpen() };
   },
-  head: ({ params }) => ({ meta: [{ title: `@${params.username.toLowerCase()} · Dueboard` }] }),
+  head: ({ params }) => {
+    const username = params.username.toLowerCase();
+    const path = `/@${username}`;
+    return {
+      meta: seo({
+        title: `@${username} · Dueboard`,
+        description: `See what @${username} gets done on Dueboard: their activity graph, diary, and the tasks, habits, goals and focus sessions they share.`,
+        path,
+        // People's diaries stay out of search results; shared links still preview.
+        noindex: true,
+      }),
+      links: [canonical(path)],
+    };
+  },
   component: ProfileRoute,
 });
 

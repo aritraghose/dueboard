@@ -6,13 +6,14 @@ import {
   Scripts,
   createRootRoute,
 } from "@tanstack/react-router";
+import { MotionConfig } from "motion/react";
 import type { ReactNode } from "react";
 import { DefaultCatchBoundary } from "../components/default-catch-boundary.tsx";
 import { NotFound } from "../components/not-found.tsx";
 import { ThemeProvider, themeScript } from "../components/theme-provider.tsx";
 import { Toaster } from "../components/toaster.tsx";
 import { TooltipProvider } from "../components/ui/tooltip.tsx";
-import { seo } from "../lib/seo.ts";
+import { SITE_DESCRIPTION, seo } from "../lib/seo.ts";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -20,18 +21,19 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      ...seo({
-        title: "Dueboard",
-        description:
-          "Bills, renewals, returns and deadlines in one place, sorted by when they're due, so nothing slips past.",
-      }),
+      ...seo({ title: "Dueboard", description: SITE_DESCRIPTION }),
+      { name: "application-name", content: "Dueboard" },
+      { name: "apple-mobile-web-app-title", content: "Dueboard" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      // The logo (`public/logo.svg`) is the only icon: the tab, the
-      // installed app (`site.webmanifest`) and the home screen.
-      { rel: "icon", type: "image/svg+xml", href: "/logo.svg" },
-      { rel: "apple-touch-icon", href: "/logo.svg" },
+      // The tab shows `public/favicon.svg` (the logo with a solid circle and
+      // no background), with `favicon.ico`, rendered from it, for browsers
+      // without SVG icons. iOS and installed apps need PNGs on a solid
+      // background (`apple-touch-icon.png`, `icon-192/512.png`).
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/site.webmanifest" },
     ],
   }),
@@ -60,10 +62,15 @@ function Document(props: Readonly<{ children: ReactNode }>) {
             atom resolves against this registry. */}
         <RegistryProvider>
           <ThemeProvider>
-            <TooltipProvider>
-              {props.children}
-              <Toaster />
-            </TooltipProvider>
+            {/* `motion` animates in JS, past the CSS reduced-motion rule in
+                styles.css: with the OS setting on, it skips movement and
+                layout animations (fades remain). */}
+            <MotionConfig reducedMotion="user">
+              <TooltipProvider>
+                {props.children}
+                <Toaster />
+              </TooltipProvider>
+            </MotionConfig>
           </ThemeProvider>
         </RegistryProvider>
         <Scripts />

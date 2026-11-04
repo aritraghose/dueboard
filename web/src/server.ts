@@ -47,6 +47,13 @@ export default createServerEntry({
     if (pathname !== "/api/auth" && !pathname.startsWith("/api/auth/")) {
       const { success } = await env.WEB_RATE_LIMIT.limit({ key: ip });
       if (!success) return tooManyRequests();
+      // `/rpc` and server functions change data on the user's behalf: only
+      // this site's own pages may send them. SameSite cookies already keep
+      // other sites out; this also covers sibling subdomains. Better Auth
+      // checks its own routes against `AUTH_BASE_URL`.
+      if (!SAFE_METHODS.has(request.method) && !sameOrigin(request)) {
+        return new Response("Forbidden", { status: 403 });
+      }
     }
 
     // Files are bigger than every other body, so this has its own cap.
@@ -57,6 +64,20 @@ export default createServerEntry({
     return await handler.fetch(limited);
   },
 });
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * The request came from one of this site's pages, or from no browser page
+ * at all (no `Origin` and no cross-site `Sec-Fetch-Site`; such a client
+ * holds no one's cookies).
+ */
+function sameOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  if (origin !== null) return origin === new URL(request.url).origin;
+  const site = request.headers.get("sec-fetch-site");
+  return site === null || site === "same-origin" || site === "none";
+}
 
 const tooManyRequests = () =>
   new Response("Too many requests. Please wait a minute and try again.", {
@@ -101,10 +122,7 @@ async function proxyAgent(request: Request): Promise<Response> {
 
   // Browsers send cookies on cross-site WebSocket handshakes, so only accept
   // requests from this site's own pages.
-  const origin = request.headers.get("origin");
-  if (origin !== null && origin !== url.origin) {
-    return new Response("Forbidden", { status: 403 });
-  }
+  if (!sameOrigin(request)) return new Response("Forbidden", { status: 403 });
 
   const [, , agent, name, ...rest] = url.pathname.split("/");
   if (agent === ASK_AGENT) return await proxyAsk(request, url, name ?? "", rest);
@@ -185,8 +203,7 @@ async function proxyAsk(request: Request, url: URL, segment: string, rest: strin
 async function convertAskDocument(request: Request): Promise<Response> {
   const answer = (body: AskConversion, status = 200) => Response.json(body, { status });
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
-  const origin = request.headers.get("origin");
-  if (origin !== new URL(request.url).origin) return new Response("Forbidden", { status: 403 });
+  if (request.headers.get("origin") !== new URL(request.url).origin) return new Response("Forbidden", { status: 403 });
   const userId = await getOnboardedUserId(request);
   if (!userId) return new Response("Unauthorized", { status: 401 });
   const { success } = await env.ASK_DOCUMENT_RATE_LIMIT.limit({ key: userId });
@@ -241,11 +258,15 @@ function readCookie(request: Request, name: string): string | null {
 /**
  * The signed-in user's id, if they finished onboarding. Same check as the
  * API's RPC middleware, through Better Auth's `get-session` over the `API`
- * service binding.
+ * service binding, and like it from the database rather than the 5-minute
+ * cookie cache: a session revoked or deleted with its account (whose Tibo
+ * the wipe cron is about to destroy) can't open an agent again.
  */
 async function getOnboardedUserId(request: Request): Promise<string | null> {
+  const url = new URL("/api/auth/get-session", request.url);
+  url.searchParams.set("disableCookieCache", "true");
   const response = await env.API.fetch(
-    new Request(new URL("/api/auth/get-session", request.url), {
+    new Request(url, {
       headers: { cookie: request.headers.get("cookie") ?? "" },
     }),
   );

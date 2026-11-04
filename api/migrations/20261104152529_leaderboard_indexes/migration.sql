@@ -1,0 +1,2 @@
+CREATE INDEX "activity_points_idx" ON "activity" ("local_date","user_id") WHERE "kind" in ('task_settled', 'goal_progressed', 'session_completed');--> statement-breakpoint
+CREATE INDEX "habit_checkins_points_idx" ON "habit_checkins" ("local_date","user_id") WHERE "count" > 0;

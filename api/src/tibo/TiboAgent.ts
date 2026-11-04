@@ -106,6 +106,15 @@ const QUIET_BUBBLES = {
   capped: "That's as much as I can do in one go. Want me to keep going?",
 } as const;
 
+/**
+ * Frames one socket may send per `FRAME_WINDOW_MS` (architecture.md §9).
+ * Chat turns have their own limit (`CHAT_RATE_LIMIT`); this bounds the
+ * rest (paging, reactions, read marks, confirms), which reach the agent
+ * past the website's HTTP limits. The app sends a handful a minute.
+ */
+const FRAME_BUDGET = 60;
+const FRAME_WINDOW_MS = 10_000;
+
 /** The longest a browser-made `clientId` may be. */
 const MAX_CLIENT_ID_LENGTH = 64;
 
@@ -158,6 +167,8 @@ export class TiboAgent extends Agent<AgentEnv> {
   private proactiveStore: ProactiveStore | undefined;
   private reminderStore: ReminderStore | undefined;
   private relayCardStore: RelayCards | undefined;
+  /** Frames per socket in the current window (`FRAME_BUDGET`), in memory. */
+  private frameCounts = new Map<string, { windowStart: number; count: number }>();
   /** A memory job is running (in memory: a restart drops it, and its schedule retries). */
   private memoryJobRunning = false;
   /** Another job run was asked for while one ran. */
@@ -258,6 +269,7 @@ export class TiboAgent extends Agent<AgentEnv> {
   }
 
   onMessage(connection: Connection, raw: WSMessage) {
+    if (!this.allowFrame(connection.id)) return;
     const frame = parseFrame(raw);
     if (!frame) return;
 
@@ -309,6 +321,22 @@ export class TiboAgent extends Agent<AgentEnv> {
     this.send({ type: "bubble", message });
     this.proactive.set("last_seen_at", Date.now());
     this.requestTurn();
+  }
+
+  onClose(connection: Connection) {
+    this.frameCounts.delete(connection.id);
+  }
+
+  /** One more frame from this socket fits its budget; extra frames are dropped. */
+  private allowFrame(connectionId: string) {
+    const now = Date.now();
+    const current = this.frameCounts.get(connectionId);
+    if (!current || now - current.windowStart >= FRAME_WINDOW_MS) {
+      this.frameCounts.set(connectionId, { windowStart: now, count: 1 });
+      return true;
+    }
+    current.count += 1;
+    return current.count <= FRAME_BUDGET;
   }
 
   /**

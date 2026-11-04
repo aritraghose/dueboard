@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_auth/onboarding")({
     if (user.username) throw redirect({ to: "/now" });
     return { user };
   },
+  head: () => ({ meta: [{ title: "Choose a username · Dueboard" }, { name: "robots", content: "noindex" }] }),
   component: Onboarding,
 });
 

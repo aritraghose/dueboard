@@ -57,6 +57,7 @@ There are two kinds of data, and each lives where it fits:
 - Every RPC runs as `CurrentUser` through the `Authentication` middleware, which also applies the per-user `RPC_RATE_LIMIT`. The one exception is the `PublicRpcs` group (merged into `ApiRpcs`, same `/rpc` endpoint): its `OptionalAuthentication` middleware provides `Viewer` (`{ user: … | null }`) and limits logged-out callers per IP.
 - Better Auth owns its tables. Reference `user.id` as a plain `text` column with no foreign key (Drizzle migrations run before Better Auth's).
 - Web reads bindings through `web/src/env.ts`.
+- **Origin checks** (step 24, `web/src/server.ts`): every request that isn't `GET`/`HEAD`/`OPTIONS` (`/rpc`, server functions) and every `/agents/*` request must come from the site's own origin (`Origin`, or `Sec-Fetch-Site` when there's no `Origin`), else 403. Better Auth checks its own routes against `AUTH_BASE_URL`. The `/agents/*` proxy and the PDF upload read the session with `disableCookieCache`, like the RPCs, so a revoked or deleted session can't reopen an agent during the cookie cache's 5 minutes.
 - Pathless route groups: `_public/`, `_auth/`, `_app/`. The `/rpc` and `/api/*` paths are reserved by the proxies.
 
 ## 3. Domain services layer
@@ -119,7 +120,7 @@ plain `date`**, interpreted in the owner's time zone.
 | `notes` | `id`, `user_id`, `body` (1–60 chars, `CHECK`), `local_date`, `privacy`, `share_to_live`, `created_at`, `updated_at` | Several per day, at most 50. Written only for today in the user's zone; `local_date` never changes. Index `(user_id, local_date, created_at, id)`. |
 | `focus_sessions` | `id`, `user_id`, `label?` (≤ 100), `planned_minutes` (1–600), `status` (`running`\|`paused`\|`completed`\|`stopped`), `local_date` (start day in the user's zone), `started_at`, `ends_at?`, `ended_at?`, `privacy`, `share_to_live` | **Partial unique index on `user_id` WHERE status IN ('running','paused')**, so the database enforces one active session. `ends_at` is set exactly while running and recomputed on resume and extend so the sweep can find expired ones; `ended_at` is set exactly once completed or stopped. |
 | `focus_session_segments` | `session_id`, `started_at`, `ended_at?` | Pause and resume history. Elapsed time is the sum of the segments. |
-| `activity` | `id`, `user_id` (actor), `kind`, `subject_type`, `subject_id`, `occurred_at`, `local_date`, `meta jsonb` | The single feed behind Live, diary and contribution graph (§5). Indexes on `(user_id, occurred_at desc)` and `(user_id, local_date)`. |
+| `activity` | `id`, `user_id` (actor), `kind`, `subject_type`, `subject_id`, `occurred_at`, `local_date`, `meta jsonb` | The single feed behind Live, diary and contribution graph (§5). Indexes on `(user_id, occurred_at desc)`, `(user_id, local_date)`, `(subject_type, subject_id)`, and `activity_points_idx` `(local_date, user_id)` over the scored kinds for the leaderboard (step 24; `habit_checkins_points_idx` is its twin). |
 | `connection_requests` | `id`, `from_user_id`, `to_user_id`, `status` (`pending`\|`accepted`\|`declined`\|`cancelled`), `created_at`, `responded_at?` | Partial unique index: one `pending` row per ordered pair. Answered rows are kept (the 24-hour send cap counts them). `responded_at` set iff not pending (`CHECK`). |
 | `connections` | `user_low`, `user_high` (ordered pair), `created_at` | PK on the pair, `CHECK user_low < user_high collate "C"` (byte order, matching JS `<`). Mutual. Removing a connection deletes the row. |
 | `blocks` | `blocker_id`, `blocked_id`, `created_at` | PK on the pair. Hides everything both ways and blocks requests, relays and the Ask page. |
@@ -131,7 +132,7 @@ plain `date`**, interpreted in the owner's time zone.
 | `ask_usage` | `user_id`, `period` (`YYYY-MM`, owner's zone), `answers` | Logged-out answers only: the owner's Ask pool. PK both. |
 | `ask_documents` | `id`, `user_id`, `name` (1–120), `text` (1–12,000), `created_at` | Ask page files as text only (§7.6). At most 2 per owner, counted under an advisory lock. |
 | `ask_questions` | `id`, `user_id` (owner), `asker_id?` (signed-in visitor), `question` (1–500), `answer` (≤ 2000), `created_at` | The owner's question log (Settings → Ask page), kept 30 days: reads hide older rows and the ApiWorker's cron deletes them hourly. Deleted by a block between the two and with either account. |
-| `push_subscriptions` | `id`, `user_id`, `endpoint`, `p256dh`, `auth`, `created_at` | Built last. |
+| `push_subscriptions` | `id`, `user_id`, `endpoint`, `p256dh`, `auth`, `created_at` | **Not built**: step 23 is paused (§12). Account deletion must add it to `USER_OWNED_TABLES` when it lands. |
 
 ### Time zones
 
@@ -191,7 +192,7 @@ These live in one module, `api/src/domain/visibility.ts` (pure rules in
 `visibility-rules.ts`), and every reader must go through it. It also builds
 the rules as SQL conditions (`canSeeItemSql`, `liveActorSql`, the
 activity-subject joins), so readers filter in the database. The profile
-tabs (`GetProfileItems`), the diary (`GetDiary`) and Live (`GetLive`, `domain/live.ts`) use it:
+tabs (`GetProfileItems`), the diary (`GetDiary`), Live (`GetLive`, `domain/live.ts`) and the leaderboard (`connectedSql`, `notBlockedSql`; step 24) use it. Relays, the Ask page and connection requests check blocks themselves, since they gate a write rather than show items:
 
 ```
 canSeeItem(viewer, owner, privacy):
@@ -348,6 +349,7 @@ Live and diary; search the conversation; relay (§7.5).
 
 - Destructive or surprising actions (delete, stop a running session, a bulk
   change) must ask the user to confirm first.
+- **Other people's text** (step 24): `read_live` and `read_diary` return titles other people wrote. Those turns can run tools, so each such title reaches the model escaped inside `<their_words>` (`theirWords`, `tibo/views.ts`), and the tool rules (`TOOL_RULES`) call it data, never instructions, like relayed text. The confirmation rules and `ownWords` (§7.5) still stand behind it.
 - **Reminders (step 20)**: `set_reminder`, `list_reminders`, `cancel_reminder` (§7.8) are the one thing Tibo can schedule; settings stay out of `TIBO_RPCS`.
 - **Built (step 18)**: `api/src/tibo/tools.ts` (the tools, Zod schemas),
   `actions.ts` (turn ledger, pending actions, the confirmation design),
@@ -444,7 +446,7 @@ the relay section of `TiboAgent.ts`; tools `relay_message`, `answer_relay`,
 - **Walled off in code.** The exported class (`AskAgent` in `api/src/agent.ts`) narrows the Worker's env before the agent's constructor runs (`askEnv`, `api/src/ask-env.ts`): the agent gets only `AI`, `AI_GATEWAY_ID`, its rate limit, Turnstile's keys and `ASK`, a frozen pair of functions over the DomainWorker (`askPort` in `domain-client.ts`). No `DOMAIN` binding, no Tibo agents, no memory index. `ask/walls.test.ts` fails if a module in `ask/` imports from `tibo/`, the domain services or `cloudflare:workers`, or names those bindings, and checks the env's keys.
 - **The two domain calls** (`domain/ask.ts`, through `DomainWorker.askPrepare`/`askRecord`): `prepareAsk(username, visitorUserId)` gates the question and returns only the owner's display name, username, `instructions` and `shared_context`; `recordAsk` charges, counts and logs one answer in one transaction.
 - **One DO per (owner, visitor)**, named `<username>~u.<user id>` (signed in and onboarded) or `<username>~v.<uuid>` (an HttpOnly `__Host-dueboard-ask` cookie, 30 days). The website's proxy computes the name; the client never sends one. HTTP only: `GET …/thread`, `POST …/ask` (`ask/protocol.ts`, `@dueboard/api/ask`).
-- **Short-lived**: an expiry schedule checks idleness and `destroy()`s the DO after **1 hour** without a visit (its exchange, Turnstile pass and counts). Nothing goes into the owner's Tibo thread.
+- **Short-lived**: an expiry schedule checks idleness and `destroy()`s the DO after **1 hour** without a visit (its exchange, Turnstile pass and counts). Nothing goes into the owner's Tibo thread. Account deletion relies on this: Ask instances can't be listed by name, so a deleted owner's or visitor's exchanges live at most an hour past their last visit (step 24).
 - **Who pays** (step 22, the user's call): a **signed-in visitor** pays from their own AI quota (2 units, `ask_answer`, charged to them). A **logged-out visitor** uses the owner's **Ask pool**: `monthly_answer_cap` answers a month (1–50, default 50, owner's zone), counted in `ask_usage`, separate from the owner's own quota. The owner previewing their page (allowed even while it's off) pays like any signed-in visitor.
 - **Checked before every model call, in order**: the question (1–500 characters), one at a time per visitor, the burst limit (1009, by visitor, and by IP when logged out so a fresh cookie doesn't reset it), 10 an hour per visitor and owner (DO storage), **Turnstile** on the first question of a visitor session, then `prepareAsk`: on (or the owner), no block either way, and the payer has room. Refusals are fixed lines: "not available", "unavailable right now" (the pool ran out, or the model failed), "you've used your requests" (a signed-in visitor's own quota), "you've asked a lot". No details leak.
 - **Turnstile**: `AskTurnstile` (`Cloudflare.Turnstile.Widget`, managed, for `AUTH_BASE_URL`'s hostname) is created by deploys; its secret is bound as `secret_text` (`TURNSTILE_SECRET`), its sitekey goes to the page in the `thread` answer. Siteverify runs in the agent (`ask/turnstile.ts`, tested): `success`, action `ask` and the site's hostname, failing closed. Under `alchemy dev`, Cloudflare's test keys stand in and the hostname isn't checked. The page loads `api.js` from `challenges.cloudflare.com` (the one external script, approved for this page only) right before the first question.
@@ -524,6 +526,8 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
 
 - The binding only counts per 10 or 60 seconds, so daily caps are counted in Postgres by the service. Limits a domain service checks itself go through the `RateLimiter` service (`domain/rate-limiter.ts`), so Tibo's tools hit them too.
 - **Paths audited (step 16)**: `/api/auth/*` (1003), `/rpc` (1012 per IP first, then 1004 or 1008), `/agents/*` (1010, then 1005 per chat turn), the public profile `/@username` (its SSR page load and server function under 1012, its reads under 1008/1004). Static assets are served before the Worker runs.
+- **Tibo's WebSocket frames** (step 24): beyond chat turns (1005), each socket may send 60 frames per 10 seconds (`FRAME_BUDGET` in `TiboAgent.ts`, in memory); paging, reactions, read marks and confirms past that are dropped.
+- **Namespaces are per account, not per stage**: every stage on the account shares each counter, keyed by IP, user id or visitor id. User and visitor ids differ between stages, so only the per-IP limits (1003, 1008, 1010, 1012) are shared, for example by one tester using dev and staging at once.
 - **Input sizes**: every RPC input `Schema` string and array has a `maxLength` (`domain/model.ts`). The website reads each request body up to `MAX_REQUEST_BODY_BYTES` (64 KiB) and answers 413 beyond it. Chat messages are capped at `MAX_CHAT_MESSAGE_LENGTH` (4000 characters) by the composer and the agent.
 
 ## 10. Realtime
@@ -545,7 +549,9 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
   message about it (§7.8). Reads also complete them lazily, so the UI is
   right even between sweeps.
 
-## 12. Web push (last)
+## 12. Web push (paused)
+
+Step 23 was paused on 2026-11-04 before anything was built; `notifyUser` (§7.8) is the seam. The plan stands:
 
 - VAPID keys are stored as Alchemy secrets.
 - The service worker is a local file. Permission is asked only after a user action.

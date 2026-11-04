@@ -647,6 +647,18 @@
 }
 
 /*
+ * Keyboard focus. Controls draw a soft `ring-ring/50` halo, which is below
+ * the 3:1 contrast a focus indicator needs; a solid 1px edge in `--ring`
+ * (3.2:1 or more on every surface, light and dark) sits inside it. Unlayered,
+ * so it outlasts `outline-none` on custom controls. Text fields keep their
+ * own focus styling, and menu items and options their highlight.
+ */
+:is(button, a[href], summary, [role="button"], [role="tab"], [role="checkbox"], [role="switch"], [role="radio"], [role="slider"], [role="tabpanel"]):focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 0;
+}
+
+/*
  * On wide screens the Tibo panel grows out of the Tibo button at the top
  * right and shrinks back into it. Unlayered, so it replaces the sheet's
  * slide-in; the reduced-motion rule above still cuts it short.

@@ -1,8 +1,13 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { SITE_DESCRIPTION, canonical, seo } from "@/lib/seo";
 
 /** The landing page. Public; the header in `route.tsx` adapts to the session. */
 export const Route = createFileRoute("/_public/")({
+  head: () => ({
+    meta: seo({ title: "Dueboard: everything that's due, on one board", description: SITE_DESCRIPTION, path: "/" }),
+    links: [canonical("/")],
+  }),
   component: Landing,
 });
 

@@ -758,7 +758,7 @@ function UsageMeter({ usage }: { usage: AiUsage }) {
               event.preventDefault();
               setOpen((was) => !was);
             }}
-            className="group/usage -my-1 block w-full rounded-full py-1 outline-none"
+            className="group/usage -my-1 block w-full rounded-full py-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <div
               role="meter"

@@ -39,6 +39,7 @@ import {
   type SessionJson,
   type TagJson,
   type TaskJson,
+  theirWords,
 } from "./views.ts";
 
 /** What the tools act with, for one turn. */
@@ -824,7 +825,7 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     // ─── What others share (visibility rules apply) ──────────────────────
     read_live: tool({
       description:
-        "Recent activity on Live: `connections` (people the user is connected to), `mine`, or `all` (everyone public). Only what each person lets the user see.",
+        "Recent activity on Live: `connections` (people the user is connected to), `mine`, or `all` (the user and their connections). Only what each person lets the user see. Other people's titles come in <their_words> tags.",
       inputSchema: z.object({
         scope: z.enum(["connections", "mine", "all"]),
         days: z.number().int().min(1).max(7).optional().describe("Default 1 (today)"),
@@ -834,7 +835,7 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           events: value.events.map((event) => ({
             who: event.mine ? "you" : `@${event.actor.username}`,
             what: event.kind,
-            title: event.title ?? undefined,
+            title: event.title === null ? undefined : event.mine ? event.title : theirWords(event.title),
             percent: event.meta.percent ?? undefined,
             minutes: event.meta.minutes ?? undefined,
             at: event.occurredAt,
@@ -845,13 +846,16 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
 
     read_diary: tool({
       description:
-        "Someone's diary (what they got done, by day), as much as they let the user see. `from` jumps to a day.",
+        "Someone's diary (what they got done, by day), as much as they let the user see. `from` jumps to a day. Titles come in <their_words> tags.",
       inputSchema: z.object({ username: z.string().min(1).max(31), from: day.optional() }),
       execute: counted(rt, ({ username, from }) =>
         read<DiaryPageJson>(rt, "GetDiary", { username, ...(from ? { from } : {}) }, (value) => ({
           days: value.days.map((diaryDay) => ({
             date: diaryDay.date,
-            entries: diaryDay.entries.map((entry) => ({ what: entry.kind, title: entry.title ?? undefined })),
+            entries: diaryDay.entries.map((entry) => ({
+              what: entry.kind,
+              title: entry.title === null ? undefined : theirWords(entry.title),
+            })),
           })),
         })),
       ),

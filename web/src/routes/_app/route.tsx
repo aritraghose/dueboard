@@ -23,6 +23,8 @@ export const Route = createFileRoute("/_app")({
     rememberCheckedUser(onboarded);
     return { user: onboarded, sidebarOpen: readSidebarOpen() };
   },
+  // Private pages: never in search results. Each page names its own tab title.
+  head: () => ({ meta: [{ name: "robots", content: "noindex" }] }),
   component: AppLayout,
 });
 

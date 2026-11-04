@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "../../auth-client.ts";
+import { SITE_DESCRIPTION, seo } from "@/lib/seo";
 import { getSessionUser } from "../../session.ts";
 
 export const Route = createFileRoute("/_auth/auth")({
@@ -17,6 +18,9 @@ export const Route = createFileRoute("/_auth/auth")({
     const user = await getSessionUser();
     if (user) throw redirect({ to: user.username ? "/now" : "/onboarding" });
   },
+  head: () => ({
+    meta: seo({ title: "Sign in · Dueboard", description: SITE_DESCRIPTION, path: "/auth", noindex: true }),
+  }),
   component: SignIn,
 });
 

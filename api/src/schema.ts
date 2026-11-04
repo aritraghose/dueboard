@@ -347,6 +347,9 @@ export const HabitCheckins = pgTable(
   (t) => [
     uniqueIndex("habit_checkins_habit_date_idx").on(t.habitId, t.localDate),
     index("habit_checkins_user_date_idx").on(t.userId, t.localDate),
+    // The leaderboard counts every user's checked days in a period
+    // (`domain/points.ts`), so it reads by day, not by user.
+    index("habit_checkins_points_idx").on(t.localDate, t.userId).where(sql`${t.count} > 0`),
     check("habit_checkins_count", sql`${t.count} >= 0`),
   ],
 );
@@ -611,6 +614,11 @@ export const Activity = pgTable(
     index("activity_user_occurred_idx").on(t.userId, t.occurredAt.desc()),
     index("activity_user_local_date_idx").on(t.userId, t.localDate),
     index("activity_subject_idx").on(t.subjectType, t.subjectId),
+    // The leaderboard's "everyone" scope counts the scored kinds across all
+    // users from a period's first day (`domain/points.ts`).
+    index("activity_points_idx")
+      .on(t.localDate, t.userId)
+      .where(sql`${t.kind} in ('task_settled', 'goal_progressed', 'session_completed')`),
   ],
 );
 export type ActivityRow = typeof Activity.$inferSelect;

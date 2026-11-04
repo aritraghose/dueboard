@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+	<!-- The tab icon: logo.svg with its background circle as a solid disc, so it shows on light and dark tab bars, and filter regions wide enough not to clip the shadows. -->
+	<defs>
+		<linearGradient id="tier3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+			<stop offset="0%" stop-color="#FFFFFF" />
+			<stop offset="40%" stop-color="#CCCCCC" />
+			<stop offset="100%" stop-color="#666666" />
+		</linearGradient>
+		<linearGradient id="tier1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+			<stop offset="0%" stop-color="#A0A0A0" />
+			<stop offset="50%" stop-color="#555555" />
+			<stop offset="100%" stop-color="#111111" />
+		</linearGradient>
+		<linearGradient id="tier2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+			<stop offset="0%" stop-color="#E0E0E0" />
+			<stop offset="50%" stop-color="#888888" />
+			<stop offset="100%" stop-color="#333333" />
+		</linearGradient>
+		<filter id="softShadow" x="-40%" y="-40%" width="180%" height="200%">
+			<feDropShadow dx="8" dy="20" stdDeviation="18" flood-color="#000000" flood-opacity="0.9"/>
+		</filter>
+		<filter id="intenseGlow" x="-400%" y="-400%" width="900%" height="900%">
+			<feGaussianBlur stdDeviation="15" result="blur" />
+			<feComposite in="SourceGraphic" in2="blur" operator="over" />
+		</filter>
+	</defs>
+	<circle cx="512" cy="512" r="300" fill="#222222" />
+	<g transform="translate(10, 20)">
+		<path d="M 180 260 C 100 850, 580 850, 780 530" fill="none" stroke="url(#tier1Grad)" stroke-width="65" stroke-linecap="round" filter="url(#softShadow)" />
+		<path d="M 250 320 C 180 750, 600 720, 850 380" fill="none" stroke="url(#tier2Grad)" stroke-width="45" stroke-linecap="round" filter="url(#softShadow)" />
+		<path d="M 320 380 C 260 650, 620 570, 920 230" fill="none" stroke="url(#tier3Grad)" stroke-width="25" stroke-linecap="round" filter="url(#softShadow)" />
+		<circle cx="920" cy="230" r="14" fill="#FFFFFF" filter="url(#intenseGlow)" />
+		<circle cx="920" cy="230" r="6" fill="#111111" />
+	</g>
+</svg>

@@ -1,12 +1,6 @@
 import { eq, sql, type SQL } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import {
-  Activity,
-  Blocks,
-  Connections,
-  HabitCheckins,
-  UserSettings,
-} from "../schema.ts";
+import { Activity, HabitCheckins, UserSettings } from "../schema.ts";
 import { AuthUsers } from "./auth-users.ts";
 import { FALLBACK_TIME_ZONE, todayIn, type LocalDate } from "./dates.ts";
 import { Database, orDieOnDbError, type Executor } from "./database.ts";
@@ -19,6 +13,7 @@ import {
   decodeInput,
 } from "./model.ts";
 import { periodStart } from "./points-rules.ts";
+import { connectedSql, notBlockedSql } from "./visibility.ts";
 
 // Points and the leaderboard. Points aren't stored: they're counted from
 // the rows the actions already leave (the rules are in `points-rules.ts`),
@@ -80,13 +75,11 @@ export const getLeaderboard = Effect.fn("getLeaderboard")(function* (
     .pipe(orDieOnDbError);
   const from = periodStart(period, todayIn(settings?.timeZone ?? FALLBACK_TIME_ZONE));
 
+  // Who may be ranked for this viewer comes from the visibility module, like
+  // every other cross-user read (planning.md working rule 9).
+  const owner = sql`s.user_id`;
   const inScope =
-    scope === "connections"
-      ? sql`and (s.user_id = ${viewerId} or exists (
-          select 1 from ${Connections}
-          where (${Connections.userLow} = ${viewerId} and ${Connections.userHigh} = s.user_id)
-             or (${Connections.userHigh} = ${viewerId} and ${Connections.userLow} = s.user_id)))`
-      : sql``;
+    scope === "connections" ? sql`and (s.user_id = ${viewerId} or ${connectedSql(viewerId, owner)})` : sql``;
   const rows = yield* db
     .execute<RankedRow>(
       sql`with scores as (${scores(from, null)}),
@@ -94,10 +87,7 @@ export const getLeaderboard = Effect.fn("getLeaderboard")(function* (
         select s.user_id, s.points, (rank() over (order by s.points desc))::int as rank
         from scores s
         join ${AuthUsers} u on u.id = s.user_id and u.username is not null
-        where not exists (
-          select 1 from ${Blocks}
-          where (${Blocks.blockerId} = ${viewerId} and ${Blocks.blockedId} = s.user_id)
-             or (${Blocks.blockerId} = s.user_id and ${Blocks.blockedId} = ${viewerId}))
+        where ${notBlockedSql(viewerId, owner)}
         ${inScope}
       )
       select r.rank, r.points, r.user_id, u.username, u.name, u.image
