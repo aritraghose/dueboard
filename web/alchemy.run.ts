@@ -3,11 +3,17 @@ import { AgentWorker, ApiWorker, DEV_PORTS, LIMITS, bindingProps } from "@dueboa
 import * as Alchemy from "alchemy";
 import * as Effect from "effect/Effect";
 
+const STAGE_DOMAINS: Record<string, Cloudflare.WorkerDomainConfig> = {
+  production: { name: "dueboard.com", redirects: ["www.dueboard.com"] },
+  staging: { name: "staging.dueboard.com" },
+};
+
 export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
   compatibility: {
     flags: ["enable_request_signal"],
   },
   dev: { port: DEV_PORTS.Website, strictPort: true },
+  domain: Effect.map(Alchemy.Stack, ({ stage }) => STAGE_DOMAINS[stage]),
   env: {
     API: ApiWorker,
     AGENT: AgentWorker,
