@@ -57,6 +57,11 @@ export const getUsage = Effect.fn("getUsage")(function* (userId: string) {
   return toAiUsage(used, limit, now, timeZone);
 });
 
+/** The user's zone (UTC with no settings row yet), for counting their months. */
+export const timeZoneOf = Effect.fn("usage.timeZoneOf")(function* (db: Executor, userId: string) {
+  return (yield* accountOf(db, userId)).timeZone;
+});
+
 /** Whether `units` more fit in the user's quota this month. */
 export const canSpend = Effect.fn("canSpend")(function* (userId: string, units: number) {
   const db = yield* Database;
@@ -70,14 +75,19 @@ const checkUnits = (units: number) =>
     ? Effect.void
     : Effect.die(new Error(`Invalid AI usage charge: ${units} units`));
 
-/** Adds `units` to the user's month and logs the charge, in `tx`. */
-const charge = Effect.fn("usage.charge")(function* (
+/**
+ * Adds `units` to the user's month and logs the charge, in `tx`. Exported
+ * for services that charge inside their own transaction (`./ask.ts`); check
+ * `canSpend` first.
+ */
+export const charge = Effect.fn("usage.charge")(function* (
   tx: Executor,
   userId: string,
   units: number,
   reason: AiUsageReason,
   ref: string | null,
 ) {
+  yield* checkUnits(units);
   const { timeZone } = yield* accountOf(tx, userId);
   const period = periodOf(new Date(), timeZone);
   yield* tx
@@ -100,7 +110,6 @@ export const recordUsage = Effect.fn("recordUsage")(function* (
   reason: AiUsageReason,
   ref: string | null = null,
 ) {
-  yield* checkUnits(units);
   const db = yield* Database;
   yield* transaction(db, (tx) => charge(tx, userId, units, reason, ref));
   return yield* getUsage(userId);

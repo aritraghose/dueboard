@@ -83,10 +83,13 @@ export function TiboThread({
   className,
   headerEnd,
   onNavigate,
+  fullPage = false,
 }: {
   className?: string;
   headerEnd?: React.ReactNode;
   onNavigate?: () => void;
+  /** On a page of its own (`/inbox`): from `md` up the message box is half the thread's width, centered. */
+  fullPage?: boolean;
 }) {
   const { store } = useTibo();
   const thread = useTiboThread();
@@ -121,8 +124,13 @@ export function TiboThread({
               />
             )}
           </div>
-          {/* A little narrower than the thread on wide screens. */}
-          <div className="flex flex-col gap-2 px-3 pt-2 pb-3 md:mx-auto md:w-[88%] md:px-4">
+          {/* Narrower than the thread on wide screens: half its width on a page of its own. */}
+          <div
+            className={cn(
+              "flex flex-col gap-2 px-3 pt-2 pb-3 md:mx-auto",
+              fullPage ? "md:w-1/2 md:px-0" : "md:w-[88%] md:px-4",
+            )}
+          >
             {thread.limitReached ? (
               <LimitNotice onNavigate={onNavigate} />
             ) : (

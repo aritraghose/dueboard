@@ -1,8 +1,10 @@
+import type { AskPrepared } from "./domain/ask.ts";
 import type { AiUsageReason } from "./domain/model.ts";
 import type { RelayStatus } from "./domain/relay-constants.ts";
 import type { RelayJson, RelaySyncJson } from "./domain/relays.ts";
 import type { TiboEventJson, TiboProactiveContext } from "./domain/tibo.ts";
 
+export type { AskOwnerContext, AskPrepared } from "./domain/ask.ts";
 export type { RelayJson, RelayPersonJson, RelaySyncJson } from "./domain/relays.ts";
 export type { TiboEventJson, TiboProactiveContext, TiboProactiveSettings } from "./domain/tibo.ts";
 
@@ -115,7 +117,29 @@ export interface DomainBinding {
   tiboEventsDone(ids: readonly string[]): Promise<{ ok: true }>;
   pendingWipes(): Promise<{ userIds: string[] }>;
   wipesDone(userIds: readonly string[]): Promise<{ ok: true }>;
+  askPrepare(username: string, visitorUserId: string | null): Promise<AskPrepared>;
+  askRecord(username: string, visitorUserId: string | null, question: string, answer: string): Promise<{ ok: true }>;
 }
+
+/**
+ * The Ask agent's whole view of the domain (architecture.md §7.6): two
+ * calls, both about one owner's Ask page. `askPort` closes over the binding
+ * so the `AskAgent` never holds `DOMAIN` itself (see `./ask/AskAgent.ts`).
+ */
+export interface AskPort {
+  /** May this visitor ask now, and what may the agent read. */
+  prepare(username: string, visitorUserId: string | null): Promise<AskPrepared>;
+  /** Charge the owner, count the answer and log the question. */
+  record(username: string, visitorUserId: string | null, question: string, answer: string): Promise<void>;
+}
+
+export const askPort = (domain: DomainBinding): AskPort =>
+  Object.freeze({
+    prepare: (username: string, visitorUserId: string | null) => domain.askPrepare(username, visitorUserId),
+    record: async (username: string, visitorUserId: string | null, question: string, answer: string) => {
+      await domain.askRecord(username, visitorUserId, question, answer);
+    },
+  });
 
 /**
  * The usage ledger's calls (`domain/usage.ts`). Check with `check` before a

@@ -127,8 +127,10 @@ plain `date`**, interpreted in the owner's time zone.
 | `ai_usage` | `user_id`, `period` (`YYYY-MM` in the user's time zone), `units` | Quota ledger (§8). |
 | `ai_usage_events` | `user_id`, `units`, `reason`, `ref?`, `created_at` | Audit log. |
 | `relays` | `id`, `from_user_id`, `to_user_id`, `message` (1–1000), `status` (`pending`\|`delivered`\|`answered`\|`declined`\|`expired`\|`cancelled`), `answer?` (1–1000), `created_at`, `delivered_at?`, `answered_at?`, `expires_at` (7 days), `updated_at`, `sender_synced`, `recipient_synced`, `retry_at?` | §7.5. `CHECK`s: not to yourself, the lengths, `answer` iff answered, `answered_at` iff answered or declined. Deleted with either account. |
-| `ask_settings` | `user_id` PK, `enabled` (default **false**), `instructions`, `shared_context`, `monthly_answer_cap` | §7.6 |
-| `ask_usage` | `user_id`, `period`, `answers` | |
+| `ask_settings` | `user_id` PK, `enabled` (default **false**), `instructions` (≤ 4000), `shared_context` (≤ 8000), `monthly_answer_cap` (the logged-out pool, 1–50, default 50), `updated_at` | §7.6. Created on the owner's first save. |
+| `ask_usage` | `user_id`, `period` (`YYYY-MM`, owner's zone), `answers` | Logged-out answers only: the owner's Ask pool. PK both. |
+| `ask_documents` | `id`, `user_id`, `name` (1–120), `text` (1–12,000), `created_at` | Ask page files as text only (§7.6). At most 2 per owner, counted under an advisory lock. |
+| `ask_questions` | `id`, `user_id` (owner), `asker_id?` (signed-in visitor), `question` (1–500), `answer` (≤ 2000), `created_at` | The owner's question log (Settings → Ask page), kept 30 days: reads hide older rows and the ApiWorker's cron deletes them hourly. Deleted by a block between the two and with either account. |
 | `push_subscriptions` | `id`, `user_id`, `endpoint`, `p256dh`, `auth`, `created_at` | Built last. |
 
 ### Time zones
@@ -253,14 +255,14 @@ If it gets slow later, add a materialized per-user inbox.
 | `/inbox` | `_app` | Focused full-page Tibo chat |
 | `/boards` | `_app` | Every board (Tasks, Habits, Goals, Notes, Live, Diary) as a card that opens it |
 | `/live` | `_app` | Live, full-page: the feed of what you and your connections get done (it was called the timeline) |
-| `/settings` | `_app` | Tabs: General (defaults, time zone display, theme), Connections (blocked list only), Tibo (relay policy, later the Ask page), Account (delete) |
+| `/settings` | `_app` | Tabs: General (defaults, time zone display, theme), Connections (blocked list only), Tibo (relay policy, check-ins, memory), Ask page (switch, instructions, shared context, the logged-out pool, recent questions), Account (delete) |
 | `/tags` | `_app` | Create, rename and recolor tags (built-in tags only recolor). Linked from `/tasks` ("Manage tags"). |
 | `/notifications` | `_app` | Who asked to connect and who accepted your requests, newest first, with Accept / Decline on pending ones. Opening it marks them seen. Reached from the bell in the top row (left of Tibo; floating top right on phones), which shows the unread dot. |
 | `/discover` | `_app` | People search, incoming requests, sent requests. In the desktop sidebar after Boards. |
 | `/leaderboard` | `_app` | Points ranking: `?scope=public` (default Connections), `?period=all|month|today` (default This week). In the desktop sidebar after Discover. |
 | `/connections` | `_app` | The user's connections, with Remove and Block. Opened from their own profile's connections count. |
 | `/@username` | public-readable | Tabs `?tab=` Overview (default: counts and the graph), Tasks, Habits, Goals, Diary, Sessions. `routes/@{$username}.tsx` (literal `@` prefix + param), outside `_app`'s guard; signed-in viewers get the app chrome (`AppShell`). Profile card, contribution graph, diary filtered for the viewer. Logged-out visitors can view it. |
-| `/@username/ask` | public-readable | Q&A with the user's Ask agent, only if they enabled it |
+| `/@username/ask` | public-readable | Q&A with the user's Ask agent, only if they enabled it (the owner can always preview). `routes/@{$username}_.ask.tsx` (the `_` keeps it out of the profile's layout). Laid out like `/inbox`: Tibo floating at the top "Answers for @username", a profile button and (signed in) the bell. |
 
 - The **Tibo button** sits at the top right of every `_app` page and opens a side panel with the same thread as `/inbox`.
 - Usernames **cannot be changed**, so `/@username` links never break.
@@ -281,7 +283,7 @@ If it gets slow later, add a materialized per-user inbox.
 - The side panel and `/inbox` are two views of the same WebSocket thread, so
   every tab and device stays in sync.
 - Model: **Meta Muse Spark 1.3 only** (`meta/muse-spark-1.3`) through AI
-  Gateway with BYOK, through the Responses-format setup in `api/src/tibo/model.ts`
+  Gateway with BYOK, through the Responses-format setup in `api/src/muse.ts` (moved out of `tibo/` in step 22, so the Ask agent imports nothing of Tibo's)
   (`@ai-sdk/openai` `.responses()` + `env.AI.run` with
   `openaiEndpoint: "/v1/responses"` + the `cf-aig-no-wholesale` header). The
   Agents SDK's `createAI` cannot read this model's replies.
@@ -438,17 +440,17 @@ the relay section of `TiboAgent.ts`; tools `relay_message`, `answer_relay`,
 
 ### 7.6 Ask agent (`/@username/ask`)
 
-- A **separate** `AskAgent`, never `TiboAgent` with a stricter prompt.
-- It receives only two things: the owner's `instructions` and `shared_context`.
-  It has no thread, no memories, no tools and no domain access, because none are
-  wired to it.
-- Off by default. The owner enables it and sets `monthly_answer_cap`.
-- Visitors can be logged out. Limits apply per visitor (by user id if signed
-  in, otherwise by IP) through the Rate Limiting binding, plus **Turnstile** on
-  the first question.
-- Every answer counts against the owner's AI quota and their monthly cap.
-- If either runs out, the page shows "unavailable right now".
-- The visitor's exchange is short-lived: it lives in a DO per visitor and owner, expires after inactivity, and is not stored in the owner's thread.
+- A **separate** `AskAgent` (`api/src/ask/`), never `TiboAgent` with a stricter prompt. The page shows it as Tibo "answering for @username" (step 22, the user's call), but it has none of Tibo's persona, thread, memories or tools.
+- **Walled off in code.** The exported class (`AskAgent` in `api/src/agent.ts`) narrows the Worker's env before the agent's constructor runs (`askEnv`, `api/src/ask-env.ts`): the agent gets only `AI`, `AI_GATEWAY_ID`, its rate limit, Turnstile's keys and `ASK`, a frozen pair of functions over the DomainWorker (`askPort` in `domain-client.ts`). No `DOMAIN` binding, no Tibo agents, no memory index. `ask/walls.test.ts` fails if a module in `ask/` imports from `tibo/`, the domain services or `cloudflare:workers`, or names those bindings, and checks the env's keys.
+- **The two domain calls** (`domain/ask.ts`, through `DomainWorker.askPrepare`/`askRecord`): `prepareAsk(username, visitorUserId)` gates the question and returns only the owner's display name, username, `instructions` and `shared_context`; `recordAsk` charges, counts and logs one answer in one transaction.
+- **One DO per (owner, visitor)**, named `<username>~u.<user id>` (signed in and onboarded) or `<username>~v.<uuid>` (an HttpOnly `__Host-dueboard-ask` cookie, 30 days). The website's proxy computes the name; the client never sends one. HTTP only: `GET …/thread`, `POST …/ask` (`ask/protocol.ts`, `@dueboard/api/ask`).
+- **Short-lived**: an expiry schedule checks idleness and `destroy()`s the DO after **1 hour** without a visit (its exchange, Turnstile pass and counts). Nothing goes into the owner's Tibo thread.
+- **Who pays** (step 22, the user's call): a **signed-in visitor** pays from their own AI quota (2 units, `ask_answer`, charged to them). A **logged-out visitor** uses the owner's **Ask pool**: `monthly_answer_cap` answers a month (1–50, default 50, owner's zone), counted in `ask_usage`, separate from the owner's own quota. The owner previewing their page (allowed even while it's off) pays like any signed-in visitor.
+- **Checked before every model call, in order**: the question (1–500 characters), one at a time per visitor, the burst limit (1009, by visitor, and by IP when logged out so a fresh cookie doesn't reset it), 10 an hour per visitor and owner (DO storage), **Turnstile** on the first question of a visitor session, then `prepareAsk`: on (or the owner), no block either way, and the payer has room. Refusals are fixed lines: "not available", "unavailable right now" (the pool ran out, or the model failed), "you've used your requests" (a signed-in visitor's own quota), "you've asked a lot". No details leak.
+- **Turnstile**: `AskTurnstile` (`Cloudflare.Turnstile.Widget`, managed, for `AUTH_BASE_URL`'s hostname) is created by deploys; its secret is bound as `secret_text` (`TURNSTILE_SECRET`), its sitekey goes to the page in the `thread` answer. Siteverify runs in the agent (`ask/turnstile.ts`, tested): `success`, action `ask` and the site's hostname, failing closed. Under `alchemy dev`, Cloudflare's test keys stand in and the hostname isn't checked. The page loads `api.js` from `challenges.cloudflare.com` (the one external script, approved for this page only) right before the first question.
+- **The turn**: one `generateText` call, no tools, Muse Spark through `museSpark` (gateway metadata `ask:<username>`, purpose `ask`). The system prompt (`ask/prompt.ts`, tested) answers only from the escaped `<owner_instructions>` and `<owner_context>`, says "I don't know — you could reach out to @username directly" otherwise, never invents, never guesses the owner's pronouns, and treats the visitor's `<visitor_question>` turns (escaped) as untrusted. The last 6 exchanges go along for follow-ups.
+- **Files** (step 22 follow-up): the owner can add up to 2 PDFs (a CV), 4 MiB each. The website's `POST /api/ask-documents/convert` (`web/src/server.ts`: same origin, onboarded users, limit 1013 per user, `%PDF-` only) turns one into text with Workers AI `toMarkdown` (no metadata, embedded images not converted) and keeps nothing; `documentText` (`domain/ask-rules.ts`, tested) drops the converter's headings and cuts it to 12,000 characters. The owner reads and can edit that text, and `AddAskDocument` saves only the text (`ask_documents`). `prepareAsk` passes the files' names and text to the agent, which reads each in an escaped `<owner_document>` as facts, never instructions. Ask page only; Tibo's own chat doesn't see them.
+- **Owner visibility**: every answered question goes to `ask_questions` (with who asked when signed in) and shows in Settings → Ask page for 30 days. The page tells visitors the owner can read them.
 
 ### 7.7 Persona
 
@@ -484,11 +486,12 @@ the relay section of `TiboAgent.ts`; tools `relay_message`, `answer_relay`,
   - a Tibo reply turn,
   - a proactive message,
   - a relay turn,
-  - an Ask-page answer.
+  - an Ask-page answer (to the signed-in visitor who asked).
 - One reply turn counts as one message, however many bubbles it has.
 - Internal background jobs (summaries, memory extraction) do not count, but they have their own internal budget.
 - The ledger stores **units**: 1 message = 2 units, so a relay turn costs 1 unit (half a message) to each user.
-- The limit is `AI_MONTHLY_MESSAGE_QUOTA` (config, default **300**), overridable per user (`user_settings.ai_quota_override`). Changing it never needs a code change.
+- The limit is `AI_MONTHLY_MESSAGE_QUOTA` (config, default **150** since step 22; it was 300), overridable per user (`user_settings.ai_quota_override`). Changing it never needs a code change.
+- **Ask answers** (step 22): a signed-in visitor's answer is charged to the **visitor** (2 units, `ask_answer`). A logged-out visitor's answer uses the owner's separate Ask pool (§7.6), not anyone's quota.
 - The check happens **before** a model call. Usage is recorded after it succeeds.
 - **At the limit**:
   - the composer disappears;
@@ -513,7 +516,8 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
 | 1006 `CONNECTION_REQUEST_RATE_LIMIT` | user | 5/min burst, plus 20 per 24 h counted in Postgres | ApiWorker: connection requests (`social.ts`, via `RateLimiter`) |
 | 1007 `RELAY_RATE_LIMIT` | user | 5/min burst, plus 30 per 24 h counted in Postgres | DomainWorker: relays sent (`domain/relays.ts`, via `RateLimiter`) |
 | 1008 `PUBLIC_READ_RATE_LIMIT` | IP (`cf-connecting-ip`) | 60/min | ApiWorker: `PublicRpcs` for logged-out visitors |
-| 1009 | visitor (user or IP) | strict | reserved: Ask page questions, plus Turnstile (step 22) |
+| 1009 `ASK_RATE_LIMIT` | visitor (user id or cookie id), plus IP when logged out | 3/min burst, plus 10 per hour per visitor and owner counted in the agent | AgentWorker: `AskAgent`, before each model call; Turnstile on a visitor's first question |
+| 1013 `ASK_DOCUMENT_RATE_LIMIT` | user | 5/min | Website: `/api/ask-documents/convert` (PDF to text for an Ask page), after the session lookup (`src/server.ts`) |
 | 1010 `AGENT_RATE_LIMIT` | IP | 60/min | Website: `/agents/*` WebSocket upgrades and HTTP, before the session lookup (`src/server.ts`) |
 | 1011 `PEOPLE_SEARCH_RATE_LIMIT` | user | 30/min | ApiWorker: people search (`SearchPeople`, via `RateLimiter`) |
 | 1012 `WEB_RATE_LIMIT` | IP | 300/min | Website: everything else its Worker serves (`/rpc` signed in or out, page loads, server functions such as `getSessionUser`), before any session lookup (`src/server.ts`) |

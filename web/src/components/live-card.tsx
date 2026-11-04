@@ -2,7 +2,7 @@ import { LIVE_SCOPE, type LiveEvent, type LiveScope, type PathEvent } from "@due
 import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { CheckIcon, PanelRightCloseIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { CompactNoteComposer } from "@/components/note-composer";
 import { Segmented } from "@/components/task-fields";
@@ -77,7 +77,7 @@ export function LiveCard({
               aria-label="Collapse Live"
               onClick={onCollapse}
             >
-              <PanelRightCloseIcon />
+              <ChevronRightIcon />
             </Button>
           ) : (
             <span />
@@ -231,7 +231,8 @@ function LiveFeed({
         {end}
         {groups.map((group) => (
           <section key={group.date} aria-label={formatDay(group.date, today)} className="flex flex-col">
-            <h3 className="sticky top-0 z-10 bg-card/90 py-1.5 text-center text-xs font-medium text-muted-foreground backdrop-blur-sm">
+            {/* No fill in light mode: on the card's gradient a flat band shows (dark mode keeps it). */}
+            <h3 className="sticky top-0 z-10 py-1.5 text-center text-xs font-medium text-muted-foreground dark:bg-card/90 dark:backdrop-blur-sm">
               {dayLabel(group.date, today)}
             </h3>
             <ol className="flex flex-col gap-0.5 pb-2">

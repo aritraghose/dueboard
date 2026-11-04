@@ -76,6 +76,32 @@ export const LIMITS = {
     key: "ip",
     where: "ApiWorker: `OptionalAuthentication` middleware, logged-out viewers",
   }),
+  /**
+   * Ask page questions (step 22), per visitor: a burst limit, checked by
+   * the `AskAgent` before every model call, keyed by the visitor (signed-in
+   * user id or cookie id) and, for logged-out visitors, by IP too, so a
+   * cleared cookie doesn't reset it. The hourly cap per owner
+   * (`ASK_VISITOR_HOURLY`) is counted in the agent's own storage.
+   */
+  ask: limit({
+    name: "ASK_RATE_LIMIT",
+    namespaceId: 1009,
+    simple: { limit: 3, period: 60 },
+    key: "visitor",
+    where: "AgentWorker: `AskAgent` (`ask/AskAgent.ts`), before each model call",
+  }),
+  /**
+   * Turning an Ask page file (a PDF) into text, per user: each is a Workers
+   * AI conversion of up to 4 MiB. Checked by the website's
+   * `/api/ask-documents/convert` route after the session lookup.
+   */
+  askDocument: limit({
+    name: "ASK_DOCUMENT_RATE_LIMIT",
+    namespaceId: 1013,
+    simple: { limit: 5, period: 60 },
+    key: "user",
+    where: "Website: `/api/ask-documents/convert` (`web/src/server.ts`)",
+  }),
   /** `/agents/*` WebSocket upgrades and HTTP, per IP, before the session lookup. */
   agent: limit({
     name: "AGENT_RATE_LIMIT",
@@ -107,9 +133,7 @@ export const LIMITS = {
 } as const;
 
 /** Ids taken by limits a later step adds, so nothing else claims them. */
-export const RESERVED_NAMESPACE_IDS = {
-  1009: "Ask page questions, per visitor, plus Turnstile (step 22)",
-} as const;
+export const RESERVED_NAMESPACE_IDS = {} as const;
 
 /** The props `Cloudflare.RateLimit(name, props)` takes. */
 export const bindingProps = ({ namespaceId, simple }: RateLimitSpec) => ({

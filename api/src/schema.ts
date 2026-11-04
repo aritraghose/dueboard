@@ -18,6 +18,14 @@ import {
 import {
   ACTIVITY_KIND,
   AI_USAGE_REASON,
+  ASK_ANSWER_MAX_LENGTH,
+  ASK_DOCUMENT_MAX_LENGTH,
+  ASK_DOCUMENT_NAME_MAX_LENGTH,
+  ASK_INSTRUCTIONS_MAX_LENGTH,
+  ASK_MONTHLY_ANSWER_CAP_DEFAULT,
+  ASK_MONTHLY_ANSWER_CAP_MAX,
+  ASK_QUESTION_MAX_LENGTH,
+  ASK_SHARED_CONTEXT_MAX_LENGTH,
   ACTIVITY_SUBJECT,
   CONNECTION_REQUEST_STATUS,
   GOAL_COUNT_MAX,
@@ -850,6 +858,104 @@ export const TiboEvents = pgTable(
   ],
 );
 
+/**
+ * The owner's Ask page (architecture.md §7.6, `domain/ask.ts`): off by
+ * default. The Ask agent reads only `instructions`, `shared_context` and the
+ * owner's display name, through `DomainWorker.askPrepare`.
+ */
+export const AskSettingsTable = pgTable(
+  "ask_settings",
+  {
+    userId: text("user_id").primaryKey(),
+    enabled: boolean("enabled").notNull().default(false),
+    instructions: text("instructions").notNull().default(""),
+    sharedContext: text("shared_context").notNull().default(""),
+    monthlyAnswerCap: integer("monthly_answer_cap").notNull().default(ASK_MONTHLY_ANSWER_CAP_DEFAULT),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    check("ask_settings_instructions_length", sql`char_length(${t.instructions}) <= ${sql.raw(String(ASK_INSTRUCTIONS_MAX_LENGTH))}`),
+    check(
+      "ask_settings_shared_context_length",
+      sql`char_length(${t.sharedContext}) <= ${sql.raw(String(ASK_SHARED_CONTEXT_MAX_LENGTH))}`,
+    ),
+    check(
+      "ask_settings_monthly_answer_cap",
+      sql`${t.monthlyAnswerCap} between 1 and ${sql.raw(String(ASK_MONTHLY_ANSWER_CAP_MAX))}`,
+    ),
+  ],
+);
+export type AskSettingsRow = typeof AskSettingsTable.$inferSelect;
+
+/** Ask answers per owner and month (`YYYY-MM` in the owner's zone), for `monthly_answer_cap`. */
+export const AskUsage = pgTable(
+  "ask_usage",
+  {
+    userId: text("user_id").notNull(),
+    period: text("period").notNull(),
+    answers: integer("answers").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.period] }), check("ask_usage_answers", sql`${t.answers} >= 0`)],
+);
+
+/**
+ * Questions visitors asked an owner's Ask page, with the answers, so the
+ * owner can improve their instructions (Settings → Ask page). Kept
+ * `ASK_QUESTION_RETENTION_DAYS`: older rows are hidden at once and deleted
+ * by the ApiWorker's cron. `asker_id` is the signed-in visitor (shown to the
+ * owner by username), `null` when logged out.
+ */
+export const AskQuestions = pgTable(
+  "ask_questions",
+  {
+    id: id(),
+    /** The owner whose page was asked. */
+    userId: userId(),
+    askerId: text("asker_id"),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("ask_questions_user_created_idx").on(t.userId, t.createdAt.desc()),
+    index("ask_questions_created_idx").on(t.createdAt),
+    index("ask_questions_asker_idx").on(t.askerId),
+    check("ask_questions_question_length", sql`char_length(${t.question}) between 1 and ${sql.raw(String(ASK_QUESTION_MAX_LENGTH))}`),
+    check("ask_questions_answer_length", sql`char_length(${t.answer}) <= ${sql.raw(String(ASK_ANSWER_MAX_LENGTH))}`),
+  ],
+);
+export type AskQuestionRow = typeof AskQuestions.$inferSelect;
+
+/**
+ * Files the owner added for their Ask agent, as text only (the website
+ * converts each PDF and the owner reviews it before saving; the file itself
+ * is never kept). At most `ASK_DOCUMENTS_MAX` per owner, checked under a
+ * lock in `domain/ask.ts`. The Ask agent reads them through `prepareAsk`.
+ */
+export const AskDocuments = pgTable(
+  "ask_documents",
+  {
+    id: id(),
+    userId: userId(),
+    name: text("name").notNull(),
+    text: text("text").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("ask_documents_user_created_idx").on(t.userId, t.createdAt),
+    check("ask_documents_name_length", sql`char_length(${t.name}) between 1 and ${sql.raw(String(ASK_DOCUMENT_NAME_MAX_LENGTH))}`),
+    check("ask_documents_text_length", sql`char_length(${t.text}) between 1 and ${sql.raw(String(ASK_DOCUMENT_MAX_LENGTH))}`),
+  ],
+);
+
 export const relations = defineRelations(
   {
     UserSettings,
@@ -872,6 +978,10 @@ export const relations = defineRelations(
     AiUsageTotals,
     AiUsageEvents,
     Relays,
+    AskSettingsTable,
+    AskUsage,
+    AskQuestions,
+    AskDocuments,
   },
   () => ({}),
 );

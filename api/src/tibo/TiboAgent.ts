@@ -22,7 +22,7 @@ import { devSeedThread } from "./dev-seed.ts";
 import { MemoryJobs, type JobContext } from "./memory-jobs.ts";
 import { MemoryStore } from "./memory.ts";
 import { DAILY_JOB_CAP, DEV_DAILY_JOB_CAP, SETTLE_MS, estimateTokens } from "./memory-rules.ts";
-import { MODEL, museSpark } from "./model.ts";
+import { MODEL, museSpark } from "../muse.ts";
 import { PERSONA } from "./persona.ts";
 import { ProactiveStore, type CheckInOutcome } from "./proactive.ts";
 import {

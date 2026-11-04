@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as AccountService from "./domain/account.ts";
+import * as AskService from "./domain/ask.ts";
 import * as DaysService from "./domain/days.ts";
 import * as DiaryService from "./domain/diary.ts";
 import * as GoalsService from "./domain/goals.ts";
@@ -408,5 +409,35 @@ export const apiHandlers = ApiRpcs.of({
     Effect.gen(function* () {
       const user = yield* CurrentUser;
       return yield* UsageService.getUsage(user.id);
+    }),
+  GetAskSettings: () =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* AskService.getAskSettings(user.id);
+    }),
+  UpdateAskSettings: (input) =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* AskService.updateAskSettings(user.id, input);
+    }),
+  AddAskDocument: (input) =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* AskService.addAskDocument(user.id, input);
+    }),
+  DeleteAskDocument: (input) =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* AskService.deleteAskDocument(user.id, input);
+    }),
+  ListAskQuestions: () =>
+    Effect.gen(function* () {
+      const user = yield* CurrentUser;
+      return yield* AskService.listAskQuestions(user.id);
+    }),
+  GetAskPage: (input) =>
+    Effect.gen(function* () {
+      const { user } = yield* Viewer;
+      return yield* AskService.getAskPage(user?.id ?? null, input);
     }),
 });

@@ -6,11 +6,10 @@ import {
   CalendarRangeIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronUpIcon,
   CircleCheckIcon,
   ListTodoIcon,
-  PanelRightOpenIcon,
-  PanelTopCloseIcon,
-  PanelTopOpenIcon,
   PlusIcon,
   RepeatIcon,
   StickyNoteIcon,
@@ -197,7 +196,7 @@ function Now() {
                 title={topBarHidden ? "Show the top bar" : "Hide the top bar"}
                 onClick={() => setTopBarHidden(!topBarHidden)}
               >
-                {topBarHidden ? <PanelTopOpenIcon /> : <PanelTopCloseIcon />}
+                {topBarHidden ? <ChevronDownIcon /> : <ChevronUpIcon />}
               </Button>
               <DayStepper date={date} today={today} onChange={changeDate} />
               <div className="mt-1 flex items-center gap-1 justify-self-end">
@@ -221,7 +220,7 @@ function Now() {
                     aria-label="Show Live"
                     onClick={() => setLiveCollapsed(false)}
                   >
-                    <PanelRightOpenIcon />
+                    <ChevronLeftIcon />
                   </Button>
                 )}
               </div>

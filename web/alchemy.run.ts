@@ -28,6 +28,10 @@ export class Website extends Cloudflare.Website.Vite<Website>()("Website", {
     AUTH_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.auth.name, bindingProps(LIMITS.auth)),
     AGENT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.agent.name, bindingProps(LIMITS.agent)),
     WEB_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.web.name, bindingProps(LIMITS.web)),
+    // Settings → Ask page's PDF upload (`src/server.ts`): Workers AI turns
+    // the file into text (`toMarkdown`), per user under its own limit.
+    AI: Cloudflare.Workers.AI(),
+    ASK_DOCUMENT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.askDocument.name, bindingProps(LIMITS.askDocument)),
   },
 }) {}
 

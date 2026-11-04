@@ -15,6 +15,7 @@ import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as PublicRouteRouteImport } from './routes/_public/route'
 import { Route as GlanceRouteImport } from './routes/glance'
 import { Route as RpcRouteImport } from './routes/rpc'
+import { Route as AtChar123usernameChar125AskRouteImport } from './routes/@{$username}_.ask'
 import { Route as AppBoardsRouteImport } from './routes/_app/boards'
 import { Route as AppConnectionsRouteImport } from './routes/_app/connections'
 import { Route as AppDiaryRouteImport } from './routes/_app/diary'
@@ -64,6 +65,12 @@ const RpcRoute = RpcRouteImport.update({
   path: '/rpc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AtChar123usernameChar125AskRoute =
+  AtChar123usernameChar125AskRouteImport.update({
+    id: '/@{$username}_/ask',
+    path: '/@{$username}/ask',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppBoardsRoute = AppBoardsRouteImport.update({
   id: '/boards',
   path: '/boards',
@@ -170,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
+  '/@{$username}/ask': typeof AtChar123usernameChar125AskRoute
   '/boards': typeof AppBoardsRoute
   '/connections': typeof AppConnectionsRoute
   '/diary': typeof AppDiaryRoute
@@ -195,6 +203,7 @@ export interface FileRoutesByTo {
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
+  '/@{$username}/ask': typeof AtChar123usernameChar125AskRoute
   '/boards': typeof AppBoardsRoute
   '/connections': typeof AppConnectionsRoute
   '/diary': typeof AppDiaryRoute
@@ -223,6 +232,7 @@ export interface FileRoutesById {
   '/@{$username}': typeof AtChar123usernameChar125Route
   '/glance': typeof GlanceRoute
   '/rpc': typeof RpcRoute
+  '/@{$username}_/ask': typeof AtChar123usernameChar125AskRoute
   '/_app/boards': typeof AppBoardsRoute
   '/_app/connections': typeof AppConnectionsRoute
   '/_app/diary': typeof AppDiaryRoute
@@ -251,6 +261,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/glance'
     | '/rpc'
+    | '/@{$username}/ask'
     | '/boards'
     | '/connections'
     | '/diary'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/glance'
     | '/rpc'
+    | '/@{$username}/ask'
     | '/boards'
     | '/connections'
     | '/diary'
@@ -303,6 +315,7 @@ export interface FileRouteTypes {
     | '/@{$username}'
     | '/glance'
     | '/rpc'
+    | '/@{$username}_/ask'
     | '/_app/boards'
     | '/_app/connections'
     | '/_app/diary'
@@ -332,6 +345,7 @@ export interface RootRouteChildren {
   AtChar123usernameChar125Route: typeof AtChar123usernameChar125Route
   GlanceRoute: typeof GlanceRoute
   RpcRoute: typeof RpcRoute
+  AtChar123usernameChar125AskRoute: typeof AtChar123usernameChar125AskRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -377,6 +391,13 @@ declare module '@tanstack/react-router' {
       path: '/rpc'
       fullPath: '/rpc'
       preLoaderRoute: typeof RpcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/@{$username}_/ask': {
+      id: '/@{$username}_/ask'
+      path: '/@{$username}/ask'
+      fullPath: '/@{$username}/ask'
+      preLoaderRoute: typeof AtChar123usernameChar125AskRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/boards': {
@@ -597,6 +618,7 @@ const rootRouteChildren: RootRouteChildren = {
   AtChar123usernameChar125Route: AtChar123usernameChar125Route,
   GlanceRoute: GlanceRoute,
   RpcRoute: RpcRoute,
+  AtChar123usernameChar125AskRoute: AtChar123usernameChar125AskRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

@@ -16,16 +16,16 @@ const DEBOUNCE_MS = 300;
 /** A person in a list: picture, name and @username linking to their profile, then `actions`. */
 export function PersonRow({ person, children }: { person: Person; children?: ReactNode }) {
   return (
-    <li className="flex items-center gap-3 py-2.5">
+    <li className="flex items-center gap-3 py-2">
       <Link
         to="/@{$username}"
         params={{ username: person.username }}
         className="flex min-w-0 flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <PersonAvatar person={person} />
+        <PersonAvatar person={person} className="size-8" />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate font-medium">{person.name}</span>
-          <span className="truncate text-sm text-muted-foreground">@{person.username}</span>
+          <span className="truncate text-sm font-medium">{person.name}</span>
+          <span className="truncate text-xs text-muted-foreground">@{person.username}</span>
         </span>
       </Link>
       {children && <div className="shrink-0">{children}</div>}
@@ -76,7 +76,7 @@ function Results({ query }: { query: string }) {
   if (!AsyncResult.isSuccess(result)) {
     return (
       <div className="flex items-center gap-3 px-1 py-2.5">
-        <Skeleton className="size-9 rounded-full" />
+        <Skeleton className="size-8 rounded-full" />
         <Skeleton className="h-4 w-40" />
       </div>
     );

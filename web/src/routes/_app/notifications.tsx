@@ -47,7 +47,7 @@ function Notifications() {
 
   return (
     <Page>
-      <PageHeader title="Notifications">
+      <PageHeader compact title="Notifications">
         {/* Phones have the top row's bell instead, and the empty state's button. */}
         <Button asChild variant="outline" className="max-md:hidden">
           <Link to="/discover">
@@ -127,14 +127,14 @@ function NotificationRow({ item, now }: { item: NotificationItem; now: Date | nu
   const { person } = item;
   const KindIcon = item.kind === "connection_request" ? UserPlusIcon : UserCheckIcon;
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
       <Link
         to="/@{$username}"
         params={{ username: person.username }}
         className="flex min-w-[min(100%,15rem)] flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="relative shrink-0">
-          <PersonAvatar person={person} />
+          <PersonAvatar person={person} className="size-8" />
           <span
             aria-hidden="true"
             className="absolute -right-1 -bottom-1 flex size-[1.125rem] items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-card [&_svg]:size-2.5"
@@ -143,10 +143,10 @@ function NotificationRow({ item, now }: { item: NotificationItem; now: Date | nu
           </span>
         </span>
         <span className="flex min-w-0 flex-col">
-          <span className="text-pretty">
+          <span className="text-sm text-pretty">
             <span className="font-medium">{person.name}</span> {notificationAction(item)}
           </span>
-          <span className="flex min-w-0 gap-2 text-sm text-muted-foreground">
+          <span className="flex min-w-0 gap-2 text-xs text-muted-foreground">
             <span className="truncate">@{person.username}</span>
             {now && (
               <time dateTime={item.createdAt.toISOString()} className="shrink-0">
@@ -165,13 +165,13 @@ function NotificationOutcome({ item }: { item: NotificationItem }) {
   if (item.kind !== "connection_request") return null;
   if (item.state === "pending") {
     return (
-      <div className="shrink-0 max-sm:pl-12">
+      <div className="shrink-0 max-sm:pl-11">
         <ConnectionActions username={item.person.username} status={statusOf("pending_in", item.requestId)} compact />
       </div>
     );
   }
   return (
-    <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground max-sm:pl-12">
+    <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground max-sm:pl-11">
       {item.state === "accepted" && <CheckIcon className="size-4 text-success-ink" />}
       {item.state === "accepted" ? "Accepted" : "Declined"}
     </span>
@@ -183,7 +183,7 @@ function NotificationsLoading() {
     <div className="flex flex-col divide-y" aria-hidden="true">
       {[0, 1, 2].map((row) => (
         <div key={row} className="flex items-center gap-3 py-3">
-          <Skeleton className="size-9 rounded-full" />
+          <Skeleton className="size-8 rounded-full" />
           <div className="flex flex-col gap-1.5">
             <Skeleton className="h-4 w-48" />
             <Skeleton className="h-3 w-24" />

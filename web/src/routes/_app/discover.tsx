@@ -22,7 +22,7 @@ function Discover() {
 
   return (
     <Page>
-      <PageHeader title="Discover">
+      <PageHeader compact title="Discover">
         <Button asChild variant="outline">
           <Link to="/connections">
             <UsersIcon />

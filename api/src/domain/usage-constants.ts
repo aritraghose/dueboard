@@ -6,7 +6,7 @@
  * `AI_MONTHLY_MESSAGE_QUOTA` (config) nor their `ai_quota_override` says
  * otherwise.
  */
-export const AI_MONTHLY_MESSAGE_QUOTA_DEFAULT = 300;
+export const AI_MONTHLY_MESSAGE_QUOTA_DEFAULT = 150;
 /**
  * The usage ledger counts units: one AI message is 2, so a relay turn can
  * charge half a message (1 unit) to each side.

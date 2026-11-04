@@ -4,6 +4,13 @@ import { LocalDate } from "./dates.ts";
 import { NOTIFICATION_KIND } from "./notification-constants.ts";
 import { RELAY_MESSAGE_MAX_LENGTH, RELAY_STATUS } from "./relay-constants.ts";
 import { TIBO_EVENING_TIMES, TIBO_MORNING_TIMES } from "./tibo-constants.ts";
+import {
+  ASK_DOCUMENT_MAX_LENGTH,
+  ASK_DOCUMENT_NAME_MAX_LENGTH,
+  ASK_INSTRUCTIONS_MAX_LENGTH,
+  ASK_MONTHLY_ANSWER_CAP_MAX,
+  ASK_SHARED_CONTEXT_MAX_LENGTH,
+} from "./ask-constants.ts";
 
 // The domain's values and typed errors. Pure Schemas with no database code,
 // so `../rpc.ts` (which the browser imports) can re-export them, and the
@@ -1126,6 +1133,8 @@ export class Profile extends Schema.Class<Profile>("Profile")({
   color: Schema.NullOr(UserColor),
   status: SocialStatus,
   counts: Schema.NullOr(ProfileCounts),
+  /** The owner's Ask page is on (step 22): the card shows "Ask Tibo". The owner always gets it, for a preview. */
+  askEnabled: Schema.Boolean,
 }) {}
 
 /**
@@ -1346,6 +1355,76 @@ export class AiUsage extends Schema.Class<AiUsage>("AiUsage")({
   resetsAt: Schema.Date,
 }) {}
 
+// ─── Ask page (`./ask.ts`, architecture.md §7.6) ─────────────────────────────
+
+export * from "./ask-constants.ts";
+
+export const AskSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  instructions: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(ASK_INSTRUCTIONS_MAX_LENGTH))),
+  sharedContext: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(ASK_SHARED_CONTEXT_MAX_LENGTH))),
+  monthlyAnswerCap: Schema.optionalKey(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: ASK_MONTHLY_ANSWER_CAP_MAX })),
+  ),
+});
+export type AskSettingsPatch = typeof AskSettingsPatch.Type;
+
+/** A file the owner added for their Ask agent, as the text it answers from. */
+export class AskDocument extends Schema.Class<AskDocument>("AskDocument")({
+  id: Schema.String,
+  name: Schema.String,
+  text: Schema.String,
+  createdAt: Schema.Date,
+}) {}
+
+/** A file's reviewed text, saved from Settings → Ask page after the website converted it. */
+export const AddAskDocumentInput = Schema.Struct({
+  name: Schema.String.check(Schema.isTrimmed(), Schema.isBetweenLength(1, ASK_DOCUMENT_NAME_MAX_LENGTH)),
+  text: Schema.String.check(Schema.isBetweenLength(1, ASK_DOCUMENT_MAX_LENGTH)),
+});
+export type AddAskDocumentInput = typeof AddAskDocumentInput.Type;
+
+export const AskDocumentRef = Schema.Struct({ id: Id });
+export type AskDocumentRef = typeof AskDocumentRef.Type;
+
+/** The owner's Ask page settings, with this month's answers (Settings → Ask page). */
+export class AskSettings extends Schema.Class<AskSettings>("AskSettings")({
+  /** Off until the owner turns it on. */
+  enabled: Schema.Boolean,
+  instructions: Schema.String,
+  sharedContext: Schema.String,
+  /** The Ask pool: answers for logged-out visitors each month (1–50). Signed-in visitors pay from their own quota. */
+  monthlyAnswerCap: Schema.Number,
+  /** Logged-out answers given this month, in the owner's time zone. */
+  poolUsed: Schema.Number,
+  /** When the pool refills. */
+  resetsAt: Schema.Date,
+  /** Files it answers from too, oldest first. */
+  documents: Schema.Array(AskDocument),
+}) {}
+
+/** A question a visitor asked the owner's Ask page, with the answer it got. */
+export class AskQuestion extends Schema.Class<AskQuestion>("AskQuestion")({
+  id: Schema.String,
+  question: Schema.String,
+  answer: Schema.String,
+  /** Who asked, when they were signed in; `null` for a logged-out visitor (or a deleted account). */
+  asker: Schema.NullOr(Person),
+  createdAt: Schema.Date,
+}) {}
+
+/** `/@username/ask`: the owner's card, and whether the viewer can ask anything. */
+export class AskPage extends Schema.Class<AskPage>("AskPage")({
+  person: Person,
+  color: Schema.NullOr(UserColor),
+  /** Off, or a block between them: the page shows "not available". Always true for the owner (a preview). */
+  available: Schema.Boolean,
+  /** The page is on for visitors (the owner's preview says when it's off). */
+  enabled: Schema.Boolean,
+  /** The viewer is the owner, previewing (their questions use their own requests). */
+  self: Schema.Boolean,
+}) {}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** Input that fails a rule its Schema can't express, or that skipped the RPC decode (Tibo). */
@@ -1430,6 +1509,16 @@ export class ActiveSessionExists extends Schema.TaggedError<ActiveSessionExists>
  * No onboarded user has that username, or they blocked the viewer: the two
  * look the same, so a block is never revealed.
  */
+/** The owner already has `ASK_DOCUMENTS_MAX` files on their Ask page. */
+export class AskDocumentLimit extends Schema.TaggedError<AskDocumentLimit>()("AskDocumentLimit", {
+  message: Schema.String,
+}) {}
+
+/** That file isn't on the owner's Ask page (any more). */
+export class AskDocumentNotFound extends Schema.TaggedError<AskDocumentNotFound>()("AskDocumentNotFound", {
+  message: Schema.String,
+}) {}
+
 export class UserNotFound extends Schema.TaggedError<UserNotFound>()("UserNotFound", {
   message: Schema.String,
   username: Schema.String,

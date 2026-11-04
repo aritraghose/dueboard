@@ -14,6 +14,7 @@ import { Hyperdrive } from "./database.ts";
 import { DEV_PORTS } from "./dev-ports.ts";
 import { AuthAccounts } from "./domain/account.ts";
 import { Database } from "./domain/database.ts";
+import * as AskService from "./domain/ask.ts";
 import * as SessionsService from "./domain/sessions.ts";
 import { RateLimiter } from "./domain/rate-limiter.ts";
 import { AiQuota } from "./domain/usage.ts";
@@ -31,6 +32,9 @@ import {
   Viewer,
 } from "./rpc.ts";
 import { relations } from "./schema.ts";
+
+/** The minute past each hour when the cron prunes old Ask page questions. */
+const ASK_PRUNE_MINUTE = 17;
 
 /**
  * The RPC API. A {@link Cloudflare.Workers.RpcWorker} that serves {@link ApiRpcs}
@@ -93,13 +97,23 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
     // Reads also complete them lazily, so a late or missed run only delays
     // the `session_completed` activity. Failures are logged, never thrown:
     // the next minute's run retries, and a run is safe to repeat.
+    // Once an hour, the same cron also deletes Ask page questions past
+    // their 30 days (`domain/ask.ts`); reads already hide them.
     yield* Cloudflare.Workers.cron("* * * * *", () =>
       SessionsService.sweepExpiredSessions().pipe(
         Effect.tap((completed) =>
           completed > 0 ? Effect.log(`Session sweep completed ${completed}`) : Effect.void,
         ),
-        Effect.provideService(Database, db),
         Effect.catchCause((cause) => Effect.logError("Session sweep failed", cause)),
+        Effect.andThen(
+          new Date().getUTCMinutes() === ASK_PRUNE_MINUTE
+            ? AskService.pruneAskQuestions().pipe(
+                Effect.tap((deleted) => (deleted > 0 ? Effect.log(`Ask prune deleted ${deleted}`) : Effect.void)),
+                Effect.catchCause((cause) => Effect.logError("Ask prune failed", cause)),
+              )
+            : Effect.void,
+        ),
+        Effect.provideService(Database, db),
       ),
     );
 

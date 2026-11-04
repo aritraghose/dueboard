@@ -2,10 +2,23 @@
 
 import { getAgentByName, routeAgentRequest } from "agents";
 import type { AgentEnv } from "./AgentWorker.ts";
+import { askEnv } from "./ask-env.ts";
+import { AskAgentBase } from "./ask/AskAgent.ts";
 import { tiboClient, type TiboEventJson } from "./domain-client.ts";
 import { TiboAgent } from "./tibo/TiboAgent.ts";
 
 export { TiboAgent };
+
+/**
+ * `/agents/ask-agent/<owner>~<visitor>`: one visitor's exchange with one
+ * owner's Ask page (`./ask/AskAgent.ts`). The runtime constructs it with the
+ * Worker's full env; this narrows it to `AskEnv` before the agent sees it.
+ */
+export class AskAgent extends AskAgentBase {
+  constructor(ctx: DurableObjectState, env: AgentEnv) {
+    super(ctx, askEnv(env));
+  }
+}
 
 /**
  * Wipes the Tibo threads of deleted accounts (`domain/tibo.ts`). Each wipe
@@ -80,7 +93,8 @@ async function syncRelays(env: AgentEnv) {
 
 export default {
   async fetch(request: Request, env: AgentEnv) {
-    // `/agents/tibo-agent/<user id>/…`, rewritten by the web stack's proxy.
+    // `/agents/tibo-agent/<user id>/…` and `/agents/ask-agent/<owner>~<visitor>/…`,
+    // both named by the web stack's proxy.
     return (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 });
   },
   async scheduled(controller: ScheduledController, env: AgentEnv, ctx: ExecutionContext) {

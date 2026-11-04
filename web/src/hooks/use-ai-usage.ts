@@ -24,7 +24,7 @@ export function useAiUsage() {
   return { usage: last.current, failed: !last.current && AsyncResult.isFailure(result), refresh };
 }
 
-/** "12 of 300 messages left this month". */
+/** "12 of 150 messages left this month". */
 export const usageLine = ({ remaining, limit }: AiUsage) =>
   `${remaining} of ${limit} ${limit === 1 ? "message" : "messages"} left this month`;
 

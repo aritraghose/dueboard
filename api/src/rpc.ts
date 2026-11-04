@@ -7,6 +7,14 @@ import { LocalDate } from "./domain/dates.ts";
 import {
   ActiveSessionExists,
   AiUsage,
+  AddAskDocumentInput,
+  AskDocumentLimit,
+  AskDocumentNotFound,
+  AskDocumentRef,
+  AskPage,
+  AskQuestion,
+  AskSettings,
+  AskSettingsPatch,
   AdjustGoalProgressInput,
   CheckInNotAllowed,
   ConnectionNotAllowed,
@@ -100,6 +108,8 @@ import {
 
 // The domain's values, inputs and errors, for the browser.
 export * from "./domain/model.ts";
+// Turning a converted PDF into the text an Ask page keeps (the website's upload route).
+export { documentText } from "./domain/ask-rules.ts";
 export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/dates.ts";
 // The pure session rules, so the UI counts time exactly as the API does.
 export { computeEndsAt, elapsed, remaining } from "./domain/session-rules.ts";
@@ -213,6 +223,16 @@ export class PublicRpcs extends RpcGroup.make(
   Rpc.make("GetContributionGraph", {
     payload: GetContributionGraphInput,
     success: ContributionGraph,
+    error: Schema.Union([InvalidInput, UserNotFound]),
+  }),
+  /**
+   * `/@username/ask`'s card and whether the viewer can ask (on, no block).
+   * `UserNotFound` like `GetProfile`. The questions themselves go to the
+   * owner's Ask agent through the website's `/agents/ask-agent/…` proxy.
+   */
+  Rpc.make("GetAskPage", {
+    payload: UsernameRef,
+    success: AskPage,
     error: Schema.Union([InvalidInput, UserNotFound]),
   }),
 ).middleware(OptionalAuthentication) {}
@@ -693,6 +713,30 @@ export class ApiRpcs extends RpcGroup.make(
    */
   Rpc.make("GetAiUsage", {
     success: AiUsage,
+  }),
+  /** Settings → Ask page: the user's page settings and this month's answers. */
+  Rpc.make("GetAskSettings", {
+    success: AskSettings,
+  }),
+  Rpc.make("UpdateAskSettings", {
+    payload: AskSettingsPatch,
+    success: AskSettings,
+    error: InvalidInput,
+  }),
+  /** Adds a file's reviewed text to the user's Ask page (the website converted the PDF). */
+  Rpc.make("AddAskDocument", {
+    payload: AddAskDocumentInput,
+    success: AskSettings,
+    error: Schema.Union([InvalidInput, AskDocumentLimit]),
+  }),
+  Rpc.make("DeleteAskDocument", {
+    payload: AskDocumentRef,
+    success: AskSettings,
+    error: Schema.Union([InvalidInput, AskDocumentNotFound]),
+  }),
+  /** What visitors asked the user's Ask page in the last 30 days, newest first, with the answers. */
+  Rpc.make("ListAskQuestions", {
+    success: Schema.Array(AskQuestion),
   }),
 )
   .middleware(Authentication)

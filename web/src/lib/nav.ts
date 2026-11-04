@@ -8,7 +8,7 @@ import {
   RepeatIcon,
   SearchIcon,
   SettingsIcon,
-  SunriseIcon,
+  HouseIcon,
   TargetIcon,
   TrendingUpIcon,
   type LucideIcon,
@@ -37,7 +37,7 @@ export type NavItem = {
 
 /** The top of the sidebar, and the phone tab bar (with Profile after it). */
 export const MAIN_NAV: readonly NavItem[] = [
-  { to: "/now", label: "Now", icon: SunriseIcon },
+  { to: "/now", label: "Now", icon: HouseIcon },
   { to: "/inbox", label: "Inbox", icon: MessageCircleIcon },
   { to: "/boards", label: "Boards", icon: LibraryIcon },
 ];

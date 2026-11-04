@@ -23,6 +23,12 @@
       "import": "./lib/tibo/protocol.js",
       "default": "./lib/tibo/protocol.js"
     },
+    "./ask": {
+      "bun": "./src/ask/protocol.ts",
+      "types": "./lib/ask/protocol.d.ts",
+      "import": "./lib/ask/protocol.js",
+      "default": "./lib/ask/protocol.js"
+    },
     "./limits": {
       "bun": "./src/limits.ts",
       "types": "./lib/limits.d.ts",

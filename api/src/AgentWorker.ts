@@ -1,10 +1,13 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import { ALCHEMY_DEV } from "alchemy";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 import type { DomainBinding } from "./domain-client.ts";
 import { DEV_PORTS } from "./dev-ports.ts";
 import DomainWorker from "./DomainWorker.ts";
 import { LIMITS, bindingProps } from "./limits.ts";
+import { TURNSTILE_TEST_SECRET, TURNSTILE_TEST_SITE_KEY } from "./ask/turnstile.ts";
 import { EMBEDDING_DIMENSIONS } from "./tibo/embeddings.ts";
 
 /**
@@ -51,6 +54,38 @@ export const MEMORY_METADATA = [
 ] as const;
 
 /**
+ * The website's hostname (from `AUTH_BASE_URL`), for Turnstile. Required to
+ * deploy, like the ApiWorker's own check (`./auth.ts`).
+ */
+const siteHostname = Effect.gen(function* () {
+  const baseURL = yield* Config.String("AUTH_BASE_URL");
+  if (!URL.canParse(baseURL)) {
+    return yield* Effect.die(new Error(`AUTH_BASE_URL must be the website's https origin, got "${baseURL}".`));
+  }
+  return new URL(baseURL).hostname;
+});
+
+/**
+ * The Ask page's Turnstile widget (step 22), for the website's hostname
+ * only. Deploys create it; its public sitekey goes to the page through the
+ * Ask agent's `thread` answer and its secret is bound as `secret_text`.
+ * Under `alchemy dev`, nothing is created: Cloudflare's test keys stand in.
+ */
+export const AskTurnstile = Effect.flatMap(siteHostname, (hostname) =>
+  Cloudflare.Turnstile.Widget("AskTurnstile", { domains: [hostname], mode: "managed" }),
+);
+
+/**
+ * A value from the widget on deploy (an Output Alchemy resolves at deploy),
+ * or the dev stand-in under `alchemy dev`. Typed loosely: the env only
+ * needs the resolved value, and `AgentEnv` below names its runtime type.
+ */
+const turnstile = (dev: string | Redacted.Redacted<string>, deployed: (widget: Effect.Success<typeof AskTurnstile>) => unknown) =>
+  Effect.flatMap(ALCHEMY_DEV, (isDev): Effect.Effect<unknown, never, never> =>
+    isDev ? Effect.succeed(dev) : (Effect.map(AskTurnstile, deployed) as Effect.Effect<unknown, never, never>),
+  ) as unknown as Effect.Effect<string>;
+
+/**
  * Tibo's Worker: a plain async Worker (`./agent.ts`) that hosts the
  * `TiboAgent` Durable Object (`./tibo/TiboAgent.ts`), one instance per user. Like the ApiWorker it
  * has no public URL; the web stack reaches it over a service binding through
@@ -75,6 +110,17 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     // Each turn is a paid model call, and chat messages arrive over the
     // WebSocket, past the web stack's HTTP rate limits (`./limits.ts`).
     CHAT_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.chat.name, bindingProps(LIMITS.chat)),
+    // One visitor's exchange with one owner's Ask page (step 22,
+    // `./ask/AskAgent.ts`). It gets a narrowed env (`askEnv` in `./agent.ts`).
+    AskAgent: Cloudflare.DurableObject("AskAgent"),
+    // Ask questions per visitor (and per IP when logged out), checked by
+    // `AskAgent` before each model call.
+    ASK_RATE_LIMIT: Cloudflare.RateLimit(LIMITS.ask.name, bindingProps(LIMITS.ask)),
+    // Turnstile on a visitor's first question: the public sitekey, the
+    // secret (secret_text) and the hostnames a token must come from.
+    TURNSTILE_SITE_KEY: turnstile(TURNSTILE_TEST_SITE_KEY, (widget) => widget.sitekey),
+    TURNSTILE_SECRET: turnstile(Redacted.make(TURNSTILE_TEST_SECRET), (widget) => widget.secret),
+    TURNSTILE_HOSTNAMES: Effect.flatMap(ALCHEMY_DEV, (isDev) => (isDev ? Effect.succeed("") : siteHostname)),
     // The domain services, as this agent's user only (`./DomainWorker.ts`):
     // Tibo's tools, the today snapshot, the AI quota ledger, the profile
     // facts and the wipe queue. Bound here and nowhere else.
@@ -97,7 +143,13 @@ export default AgentWorker;
 // give their Effect signatures, and the agent awaits plain promises.
 // `InferEnv` (beta.84) types a Vectorize binding as the resource, so
 // `MEMORY` is typed as the runtime binding here.
-export type AgentEnv = Omit<Cloudflare.InferEnv<typeof AgentWorker>, "DOMAIN" | "MEMORY"> & {
+export type AgentEnv = Omit<
+  Cloudflare.InferEnv<typeof AgentWorker>,
+  "DOMAIN" | "MEMORY" | "TURNSTILE_SECRET" | "TURNSTILE_SITE_KEY" | "TURNSTILE_HOSTNAMES"
+> & {
   DOMAIN: DomainBinding;
   MEMORY: Vectorize;
+  TURNSTILE_SITE_KEY: string;
+  TURNSTILE_SECRET: string;
+  TURNSTILE_HOSTNAMES: string;
 };

@@ -10,8 +10,7 @@ import {
   TimerIcon,
   UserRoundXIcon,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { AppLogo } from "@/components/app-logo";
+import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConnectionActions } from "@/components/connection-actions";
 import { ContributionGraph } from "@/components/contribution-graph";
@@ -19,7 +18,8 @@ import { DiaryView } from "@/components/diary-view";
 import { Page, PageEmpty } from "@/components/page";
 import { PersonAvatar } from "@/components/person-avatar";
 import { ProfileFeed } from "@/components/profile-feed";
-import { ThemeSwitcher } from "@/components/theme-switcher";
+import { PublicFrame } from "@/components/public-frame";
+import { TiboMark } from "@/components/tibo-mark";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -80,28 +80,6 @@ function ProfileRoute() {
     );
   }
   return <PublicFrame>{page}</PublicFrame>;
-}
-
-/** The chrome for logged-out visitors: the wordmark, theme and sign in. */
-function PublicFrame({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-svh flex-col">
-      <header className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-4">
-        <Link
-          to="/"
-          className="flex items-center gap-2 font-heading text-lg font-semibold tracking-tight"
-        >
-          <AppLogo className="size-7" />
-          Dueboard
-        </Link>
-        <ThemeSwitcher className="ml-auto" />
-        <Button asChild size="sm" variant="outline">
-          <Link to="/auth">Sign in</Link>
-        </Button>
-      </header>
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-1.5 pb-8">{children}</div>
-    </div>
-  );
 }
 
 function ProfilePage({ username, signedIn }: { username: string; signedIn: boolean }) {
@@ -258,7 +236,17 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
       <div className="flex flex-col gap-4 px-5 pb-5">
         <div className="-mt-11 flex flex-wrap items-end justify-between gap-3">
           <PersonAvatar person={person} className="size-22 text-2xl ring-4 ring-card" />
-          <ConnectionActions username={person.username} status={status} signedIn={signedIn} />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {profile.askEnabled && (
+              <Button asChild variant="outline">
+                <Link to="/@{$username}/ask" params={{ username: person.username }}>
+                  <TiboMark idle={false} className="size-4" />
+                  Ask Tibo
+                </Link>
+              </Button>
+            )}
+            <ConnectionActions username={person.username} status={status} signedIn={signedIn} />
+          </div>
         </div>
         <div className="flex flex-col gap-1">
           <h1 className="text-title font-semibold break-words">{person.name}</h1>

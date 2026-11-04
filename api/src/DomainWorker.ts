@@ -13,6 +13,8 @@ import { Database } from "./domain/database.ts";
 import { DEV_PORTS } from "./dev-ports.ts";
 import { AI_UNITS_PER_CHARGE_MAX, AiUsageReason, Id, RelayStatus, type AiUsage } from "./domain/model.ts";
 import { RateLimiter } from "./domain/rate-limiter.ts";
+import * as AskService from "./domain/ask.ts";
+import { ASK_ANSWER_MAX_LENGTH, ASK_QUESTION_MAX_LENGTH } from "./domain/ask-constants.ts";
 import * as RelayService from "./domain/relays.ts";
 import * as TiboService from "./domain/tibo.ts";
 import * as UsageService from "./domain/usage.ts";
@@ -38,6 +40,10 @@ const Units = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: AI_UNITS_
 const Ref = Schema.NullOr(Schema.String.check(Schema.isMaxLength(128)));
 const UserIds = Schema.Array(Id).check(Schema.isMaxLength(TIBO_WIPE_BATCH));
 const EventIds = Schema.Array(Id).check(Schema.isMaxLength(TIBO_EVENT_BATCH));
+const AskUsername = Schema.String.check(Schema.isMaxLength(64));
+const AskVisitor = Schema.NullOr(Id);
+const AskQuestionText = Schema.String.check(Schema.isMaxLength(ASK_QUESTION_MAX_LENGTH));
+const AskAnswerText = Schema.String.check(Schema.isMaxLength(ASK_ANSWER_MAX_LENGTH));
 
 const usageJson = (usage: AiUsage): AiUsageJson => ({
   used: usage.used,
@@ -259,6 +265,39 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
       relayExpireNow: (actorId: string, relayId: string) =>
         result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.expireRelayNow(id, relayId)))),
       relaySweep: () => exec(RelayService.sweepRelays().pipe(Effect.map((relays) => ({ relays })))),
+
+      // ─── The Ask page (`./domain/ask.ts`): the Ask agent's only two calls ──
+      /**
+       * Whether `visitorUserId` (`null` logged out) may ask `username`'s page
+       * now, and if so the owner's display name, username, instructions and
+       * shared context: nothing else about the owner.
+       */
+      askPrepare: (username: string, visitorUserId: string | null) =>
+        exec(
+          Effect.all({
+            username: Schema.decodeUnknownEffect(AskUsername)(username),
+            visitor: Schema.decodeUnknownEffect(AskVisitor)(visitorUserId),
+          }).pipe(
+            Effect.flatMap(({ username, visitor }) => AskService.prepareAsk(username, visitor)),
+            Effect.orDie,
+          ),
+        ),
+      /** Charges, counts and logs one answer the visitor was shown. */
+      askRecord: (username: string, visitorUserId: string | null, question: string, answer: string) =>
+        exec(
+          Effect.all({
+            username: Schema.decodeUnknownEffect(AskUsername)(username),
+            visitor: Schema.decodeUnknownEffect(AskVisitor)(visitorUserId),
+            question: Schema.decodeUnknownEffect(AskQuestionText)(question),
+            answer: Schema.decodeUnknownEffect(AskAnswerText)(answer),
+          }).pipe(
+            Effect.flatMap(({ username, visitor, question, answer }) =>
+              AskService.recordAsk(username, visitor, question, answer),
+            ),
+            Effect.as({ ok: true as const }),
+            Effect.orDie,
+          ),
+        ),
 
       // ─── Tibo's own facts, the event outbox and the wipe queue (`./domain/tibo.ts`)
       tiboProfile: (userId: string) =>

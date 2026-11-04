@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppLogo } from "@/components/app-logo";
 import { NavIcon } from "@/components/tibo-panel";
@@ -123,7 +123,7 @@ function BrandToggle() {
             className={cn("group/brand", railButton)}
           >
             <AppLogo className="group-hover/brand:hidden group-focus-visible/brand:hidden" />
-            <PanelLeftOpenIcon className="hidden size-[1.125rem]! group-hover/brand:block group-focus-visible/brand:block" />
+            <ChevronRightIcon className="hidden size-[1.125rem]! group-hover/brand:block group-focus-visible/brand:block" />
             <span className="sr-only">Expand menu</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -145,7 +145,7 @@ function BrandToggle() {
           aria-label="Collapse menu"
           className={cn("size-8 shrink-0 justify-center", railButton)}
         >
-          <PanelLeftCloseIcon />
+          <ChevronLeftIcon />
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>

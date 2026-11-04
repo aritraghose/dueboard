@@ -16,17 +16,22 @@ export function PageHeader({
   title,
   description,
   children,
+  compact = false,
 }: {
   title: string;
   description?: string;
   children?: ReactNode;
+  /** A smaller title for list-dense pages (Discover, Connections, Notifications, Leaderboard). */
+  compact?: boolean;
 }) {
   return (
     // Phones keep the top right corner free for the floating bell (`TopBar`).
     <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 max-md:pr-11">
       <div className="flex min-w-0 flex-col gap-1.5">
-        <h1 className="text-title font-semibold">{title}</h1>
-        {description && <p className="max-w-prose text-muted-foreground">{description}</p>}
+        <h1 className={cn("font-semibold", compact ? "text-xl" : "text-title")}>{title}</h1>
+        {description && (
+          <p className={cn("max-w-prose text-muted-foreground", compact && "text-sm")}>{description}</p>
+        )}
       </div>
       {children}
     </header>

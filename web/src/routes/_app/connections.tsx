@@ -21,7 +21,7 @@ function Connections() {
 
   return (
     <Page>
-      <PageHeader title="Connections">
+      <PageHeader compact title="Connections">
         <Button asChild variant="outline">
           <Link to="/discover">
             <SearchIcon />

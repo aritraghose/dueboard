@@ -44,7 +44,7 @@ import {
   transcriptLine,
   type SummaryLevel,
 } from "./memory-rules.ts";
-import { museSpark } from "./model.ts";
+import { museSpark } from "../muse.ts";
 import { TIBO_MEMORY_KINDS, type TiboMessage, type TiboMemoryKind } from "./protocol.ts";
 import type { Thread } from "./thread.ts";
 

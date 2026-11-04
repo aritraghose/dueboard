@@ -23,7 +23,11 @@ function Inbox() {
       <h1 className="sr-only">Inbox</h1>
       {/* The thread comes over Tibo's WebSocket, so it renders in the browser only. */}
       <ClientOnly fallback={<div className={height} />}>
-        <TiboThread className={`${height} min-h-96 text-foreground`} headerEnd={<NotificationsButton />} />
+        <TiboThread
+          fullPage
+          className={`${height} min-h-96 text-foreground`}
+          headerEnd={<NotificationsButton />}
+        />
       </ClientOnly>
     </main>
   );

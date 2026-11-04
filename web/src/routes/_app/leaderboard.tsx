@@ -53,6 +53,7 @@ function LeaderboardPage() {
   return (
     <Page>
       <PageHeader
+        compact
         title="Leaderboard"
         description="A point per settled task, finished session, checked habit or moved goal."
       />
@@ -89,7 +90,7 @@ function LeaderboardPage() {
           >
             <TabsList aria-label="Which days">
               {LEADERBOARD_PERIOD.map((value) => (
-                <TabsTrigger key={value} value={value} className="max-sm:px-1.5 max-sm:text-[0.8125rem]">
+                <TabsTrigger key={value} value={value} className="text-[0.8125rem] max-sm:px-1.5">
                   {PERIOD_LABEL[value]}
                 </TabsTrigger>
               ))}
@@ -121,7 +122,7 @@ function Board({ scope, period }: { scope: LeaderboardScope; period: Leaderboard
         {[0, 1, 2, 3].map((index) => (
           <div key={index} className="flex items-center gap-3">
             <Skeleton className="h-4 w-6" />
-            <Skeleton className="size-9 rounded-full" />
+            <Skeleton className="size-8 rounded-full" />
             <Skeleton className="h-4 w-40" />
           </div>
         ))}
@@ -180,28 +181,28 @@ function Row({ entry, me }: { entry: LeaderboardEntry; me: boolean }) {
       <Link
         to="/@{$username}"
         params={{ username: entry.person.username }}
-        className="flex items-center gap-3 rounded-md px-2 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex items-center gap-3 rounded-md px-2 py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span
           className={cn(
             "w-7 shrink-0 text-right tabular-nums",
-            podium ? "text-lg font-semibold" : "text-sm text-muted-foreground",
+            podium ? "text-base font-semibold" : "text-xs text-muted-foreground",
           )}
           aria-label={`Rank ${entry.rank}`}
         >
           {entry.rank}
         </span>
-        <PersonAvatar person={entry.person} />
+        <PersonAvatar person={entry.person} className="size-8" />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-medium">
+          <span className="truncate text-sm font-medium">
             {entry.person.name}
             {me && <span className="font-normal text-muted-foreground"> (you)</span>}
           </span>
-          <span className="truncate text-sm text-muted-foreground">@{entry.person.username}</span>
+          <span className="truncate text-xs text-muted-foreground">@{entry.person.username}</span>
         </span>
         <span className="flex shrink-0 items-baseline gap-1">
-          <span className="font-semibold tabular-nums">{entry.points.toLocaleString()}</span>
-          <span className="text-sm text-muted-foreground">{entry.points === 1 ? "pt" : "pts"}</span>
+          <span className="text-sm font-semibold tabular-nums">{entry.points.toLocaleString()}</span>
+          <span className="text-xs text-muted-foreground">{entry.points === 1 ? "pt" : "pts"}</span>
         </span>
       </Link>
     </li>

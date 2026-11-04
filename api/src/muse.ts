@@ -29,14 +29,17 @@ type AiRun = (
  * requests, and its `fetch` sends them to `/run` through the AI binding and
  * the gateway, which adds the stored Meta key (BYOK).
  *
- * Replies and Tibo's background memory jobs (`./memory-jobs.ts`) both use
- * it: Muse Spark is the only chat model.
+ * Tibo's replies, its background memory jobs (`./tibo/memory-jobs.ts`) and
+ * the Ask agent's answers (`./ask/AskAgent.ts`) all use it: Muse Spark is
+ * the only chat model. Kept outside `./tibo/` so the Ask agent imports
+ * nothing of Tibo's.
  */
 export function museSpark(
   env: { AI: Ai; AI_GATEWAY_ID: string },
+  /** The user the call is for, in the gateway's logs (the owner, for an Ask answer). */
   userId: string,
-  /** What the call is for, in the gateway's logs: a reply, or a background memory job (never charged). */
-  purpose: "reply" | "memory" = "reply",
+  /** What the call is for, in the gateway's logs: a reply, a background memory job (never charged) or an Ask answer. */
+  purpose: "reply" | "memory" | "ask" = "reply",
 ) {
   const run = env.AI.run.bind(env.AI) as unknown as AiRun;
   const meta = createOpenAI({

@@ -23,13 +23,13 @@ export function PeopleSection({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-col gap-0.5 px-1">
-        <h2 className="flex items-baseline gap-2 font-medium">
+        <h2 className="flex items-baseline gap-2 text-sm font-medium">
           {title}
           {count !== undefined && count > 0 && (
-            <span className="text-sm font-normal text-muted-foreground tabular-nums">{count}</span>
+            <span className="text-xs font-normal text-muted-foreground tabular-nums">{count}</span>
           )}
         </h2>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
       <div className="rounded-xl border bg-card px-4 py-1 shadow-(--card-shadow)">{children}</div>
     </section>
@@ -49,7 +49,7 @@ export function PeopleList({
   if (!people) {
     return (
       <div className="flex items-center gap-3 py-3" aria-hidden="true">
-        <Skeleton className="size-9 rounded-full" />
+        <Skeleton className="size-8 rounded-full" />
         <Skeleton className="h-4 w-40" />
       </div>
     );

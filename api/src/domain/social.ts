@@ -14,7 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Activity, Blocks, ConnectionRequests, Connections, UserSettings } from "../schema.ts";
+import { Activity, AskSettingsTable, Blocks, ConnectionRequests, Connections, UserSettings } from "../schema.ts";
 import { AuthUsers } from "./auth-users.ts";
 import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
 import {
@@ -39,6 +39,7 @@ import {
   decodeInput,
   type ConnectionState,
 } from "./model.ts";
+import { deleteAskQuestionsBetween } from "./ask.ts";
 import { RateLimiter } from "./rate-limiter.ts";
 import {
   connectionState,
@@ -482,6 +483,8 @@ export const blockUser = Effect.fn("blockUser")(function* (userId: string, input
       yield* cancelRelaysBetween(tx, userId, target.id);
       // Notifications between them go both ways, for good.
       yield* deleteNotificationsBetween(tx, userId, target.id);
+      // So do the Ask page questions they asked each other (step 22).
+      yield* deleteAskQuestionsBetween(tx, userId, target.id);
       return status("blocked");
     }),
   );
@@ -710,12 +713,18 @@ export const getProfile = Effect.fn("getProfile")(function* (
         .select({ color: UserSettings.color })
         .from(UserSettings)
         .where(eq(UserSettings.userId, owner.id));
+      const [ask] = yield* tx
+        .select({ enabled: AskSettingsTable.enabled })
+        .from(AskSettingsTable)
+        .where(eq(AskSettingsTable.userId, owner.id));
       return new Profile({
         person: toPerson(owner),
         joinedAt: owner.createdAt,
         color: settings?.color ?? null,
         status: social,
         counts: social.state === "blocked" ? null : yield* profileCounts(tx, owner.id),
+        // A block either way closes the Ask page (`domain/ask.ts`); the owner can always preview theirs.
+        askEnabled: social.state === "self" || (social.state !== "blocked" && (ask?.enabled ?? false)),
       });
     }),
   );
