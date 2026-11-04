@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { AppLogo } from "@/components/app-logo";
+import { NavIcon } from "@/components/tibo-panel";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
@@ -76,7 +77,7 @@ function NavLink({
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={pathname.startsWith(to)} tooltip={label} className={railButton}>
         <Link to={to}>
-          <Icon />
+          <NavIcon to={to} icon={Icon} />
           <span>{label}</span>
         </Link>
       </SidebarMenuButton>

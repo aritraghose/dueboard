@@ -29,10 +29,13 @@ import { relations } from "./schema.ts";
 
 /** Most queued Tibo wipes handed out per call. */
 const TIBO_WIPE_BATCH = 50;
+/** Most queued Tibo events handed out per call (the cron runs every minute). */
+const TIBO_EVENT_BATCH = 200;
 
 const Units = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: AI_UNITS_PER_CHARGE_MAX }));
 const Ref = Schema.NullOr(Schema.String.check(Schema.isMaxLength(128)));
 const UserIds = Schema.Array(Id).check(Schema.isMaxLength(TIBO_WIPE_BATCH));
+const EventIds = Schema.Array(Id).check(Schema.isMaxLength(TIBO_EVENT_BATCH));
 
 const usageJson = (usage: AiUsage): AiUsageJson => ({
   used: usage.used,
@@ -205,9 +208,21 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           ),
         ),
 
-      // ─── Tibo's own facts and the wipe queue (`./domain/tibo.ts`) ─────────
+      // ─── Tibo's own facts, the event outbox and the wipe queue (`./domain/tibo.ts`)
       tiboProfile: (userId: string) =>
         exec(Schema.decodeUnknownEffect(Id)(userId).pipe(Effect.flatMap(TiboService.getTiboProfile), Effect.orDie)),
+      tiboProactive: (userId: string) =>
+        exec(Schema.decodeUnknownEffect(Id)(userId).pipe(Effect.flatMap(TiboService.getTiboProactive), Effect.orDie)),
+      pendingTiboEvents: () =>
+        exec(TiboService.pendingTiboEvents(TIBO_EVENT_BATCH).pipe(Effect.map((events) => ({ events })))),
+      tiboEventsDone: (ids: readonly string[]) =>
+        exec(
+          Schema.decodeUnknownEffect(EventIds)(ids).pipe(
+            Effect.flatMap(TiboService.clearTiboEvents),
+            Effect.as({ ok: true as const }),
+            Effect.orDie,
+          ),
+        ),
       pendingWipes: () =>
         exec(TiboService.pendingTiboWipes(TIBO_WIPE_BATCH).pipe(Effect.map((userIds) => ({ userIds })))),
       wipesDone: (userIds: readonly string[]) =>

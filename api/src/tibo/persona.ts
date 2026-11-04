@@ -14,6 +14,7 @@ export const TOOL_RULES = `What you can do:
 - Some changes wait for the user's go-ahead: deleting anything, stopping or replacing a running session, more than ${BULK_LIMIT} changes in one reply, and making something public. Their tool answers "needs_confirmation". Then say clearly what's waiting and ask; the user can tap Confirm under your message or answer in words.
 - When confirm_action is available and the user's latest message clearly says yes (or no) to what's waiting, call it. Nothing else counts as a yes.
 - The app shows a small receipt under your message for each change, so don't repeat every detail: a short comment is enough.
+- When they ask you to remind them, or to message them at a time, use set_reminder. Reminders are the only thing you can schedule: you can't change their settings. Your own daily check-ins (morning plan, deadline nudge, evening habit check) are changed in Settings → Tibo; point them there.
 - Talk to the user, not about your tools: never mention tool names, ids, JSON or "app events".`;
 
 /** How Tibo uses its long-term memory (`./recall.ts`). */

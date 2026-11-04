@@ -47,8 +47,16 @@ import {
   TASK_IMPORTANCE_MAX,
   TASK_STATUS,
   TASK_TITLE_MAX_LENGTH,
+  TIBO_EVENING_TIMES,
+  TIBO_EVENING_TIME_DEFAULT,
+  TIBO_EVENT_KIND,
+  TIBO_MORNING_TIMES,
+  TIBO_MORNING_TIME_DEFAULT,
   USER_COLOR,
   type TagColor,
+  type TiboEveningTime,
+  type TiboEventKind,
+  type TiboMorningTime,
   type UserColor,
 } from "./domain/model.ts";
 import type { LocalDate } from "./domain/dates.ts";
@@ -109,12 +117,31 @@ export const UserSettings = pgTable("user_settings", {
   relayPolicy: relayPolicy("relay_policy").notNull().default("connections"),
   /** Replaces `AI_MONTHLY_MESSAGE_QUOTA` for this user when set. */
   aiQuotaOverride: integer("ai_quota_override"),
+  // Tibo's check-ins (step 20): the master switch, then each kind. Read by
+  // the user's `TiboAgent`, which re-plans its alarms when they change.
+  tiboProactive: boolean("tibo_proactive").notNull().default(true),
+  tiboMorningPlan: boolean("tibo_morning_plan").notNull().default(true),
+  /** `HH:MM`, local, one of `TIBO_MORNING_TIMES`. */
+  tiboMorningTime: text("tibo_morning_time").$type<TiboMorningTime>().notNull().default(TIBO_MORNING_TIME_DEFAULT),
+  tiboDeadlineNudges: boolean("tibo_deadline_nudges").notNull().default(true),
+  tiboHabitCheck: boolean("tibo_habit_check").notNull().default(true),
+  /** `HH:MM`, local, one of `TIBO_EVENING_TIMES`. */
+  tiboEveningTime: text("tibo_evening_time").$type<TiboEveningTime>().notNull().default(TIBO_EVENING_TIME_DEFAULT),
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
-});
+}, (t) => [
+  check(
+    "user_settings_tibo_morning_time",
+    sql`${t.tiboMorningTime} in (${sql.raw(TIBO_MORNING_TIMES.map((time) => `'${time}'`).join(", "))})`,
+  ),
+  check(
+    "user_settings_tibo_evening_time",
+    sql`${t.tiboEveningTime} in (${sql.raw(TIBO_EVENING_TIMES.map((time) => `'${time}'`).join(", "))})`,
+  ),
+]);
 export type UserSettingsRow = typeof UserSettings.$inferSelect;
 
 export const Tags = pgTable(
@@ -696,6 +723,29 @@ export const TiboWipes = pgTable("tibo_wipes", {
   userId: text("user_id").primaryKey(),
   requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Domain changes a user's `TiboAgent` should hear about (step 20): written
+ * in the change's own transaction, delivered by the AgentWorker's
+ * every-minute cron through the DomainWorker, then deleted. An outbox
+ * because neither the ApiWorker nor the DomainWorker can call the agent
+ * (the AgentWorker binds the DomainWorker, so a binding back is a cycle).
+ */
+export const TiboEvents = pgTable(
+  "tibo_events",
+  {
+    id: id(),
+    userId: userId(),
+    kind: text("kind").$type<TiboEventKind>().notNull(),
+    /** Nothing yet (`settings_changed` carries `{}`); room for events that need data. */
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("tibo_events_created_at_idx").on(t.createdAt),
+    check("tibo_events_kind", sql`${t.kind} in (${sql.raw(TIBO_EVENT_KIND.map((kind) => `'${kind}'`).join(", "))})`),
+  ],
+);
 
 export const relations = defineRelations(
   {

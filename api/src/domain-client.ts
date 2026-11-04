@@ -1,4 +1,7 @@
 import type { AiUsageReason } from "./domain/model.ts";
+import type { TiboEventJson, TiboProactiveContext } from "./domain/tibo.ts";
+
+export type { TiboEventJson, TiboProactiveContext, TiboProactiveSettings } from "./domain/tibo.ts";
 
 // The AgentWorker's side of the DomainWorker (`./DomainWorker.ts`): the RPC
 // methods its `env.DOMAIN` binding exposes, and typed clients over them.
@@ -93,6 +96,9 @@ export interface DomainBinding {
     ref: string | null,
   ): Promise<{ ok: true }>;
   tiboProfile(userId: string): Promise<{ firstName: string; timeZone: string }>;
+  tiboProactive(userId: string): Promise<TiboProactiveContext>;
+  pendingTiboEvents(): Promise<{ events: TiboEventJson[] }>;
+  tiboEventsDone(ids: readonly string[]): Promise<{ ok: true }>;
   pendingWipes(): Promise<{ userIds: string[] }>;
   wipesDone(userIds: readonly string[]): Promise<{ ok: true }>;
 }
@@ -114,6 +120,10 @@ export const usageClient = (domain: DomainBinding) => ({
 /** What `TiboAgent` reads from Postgres for itself (`domain/tibo.ts`). */
 export const tiboClient = (domain: DomainBinding) => ({
   profile: (userId: string) => domain.tiboProfile(userId),
+  /** The profile plus the user's check-in settings (`./tibo/proactive.ts`). */
+  proactive: (userId: string) => domain.tiboProactive(userId),
+  pendingEvents: () => domain.pendingTiboEvents(),
+  eventsDone: (ids: readonly string[]) => domain.tiboEventsDone(ids),
   pendingWipes: () => domain.pendingWipes(),
   wipesDone: (userIds: readonly string[]) => domain.wipesDone(userIds),
 });

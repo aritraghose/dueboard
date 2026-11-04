@@ -97,12 +97,25 @@ export type TiboClientFrame =
   /** The user reacts to one of Tibo's messages; `null` takes the reaction back. */
   | { readonly type: "react"; readonly messageId: string; readonly emoji: string | null }
   /** The user's answer to a `confirm` on one of Tibo's bubbles. */
-  | { readonly type: "confirm"; readonly actionId: string; readonly approve: boolean };
+  | { readonly type: "confirm"; readonly actionId: string; readonly approve: boolean }
+  /** A thread is on screen: everything so far is read (the unread dot clears on every device). */
+  | { readonly type: "read" };
 
 /** Agent → client. Broadcast to every tab of the user unless noted. */
 export type TiboServerFrame =
-  /** The latest messages, oldest first. Sent to a socket when it connects. */
-  | { readonly type: "history"; readonly messages: readonly TiboMessage[]; readonly hasMore: boolean }
+  /**
+   * The latest messages, oldest first. Sent to a socket when it connects.
+   * `unread`: Tibo wrote since a thread was last on screen (on any device),
+   * as when it messaged first while the app was closed.
+   */
+  | {
+      readonly type: "history";
+      readonly messages: readonly TiboMessage[];
+      readonly hasMore: boolean;
+      readonly unread: boolean;
+    }
+  /** Everything so far was read, on some device. */
+  | { readonly type: "read" }
   /** An answer to `loadOlder`, to that socket only; oldest first. */
   | { readonly type: "older"; readonly messages: readonly TiboMessage[]; readonly hasMore: boolean }
   /** Tibo is (or stopped) typing the next bubble. */

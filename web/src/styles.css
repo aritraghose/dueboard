@@ -117,9 +117,8 @@
   --bubble-tibo-border: oklch(0.88 0.035 185);
   /* Your message's double tick once Tibo has read it: bright on your teal bubble. */
   --tick-seen: oklch(0.86 0.11 190);
-  /* The dot on the Tibo button when it said something you haven't seen: a light teal. */
-  /* The light cream, 60% of the way to black. */
-  --tibo-unread: color-mix(in oklab, oklch(0.95 0.05 86) 40%, black);
+  /* The dot on the Tibo button when it said something you haven't seen: a clear notification blue. */
+  --tibo-unread: oklch(0.6 0.2 255);
   /* Goal cards' "Move Goal" tab: the card's own color, a little darker. */
   --goal-move: oklch(from var(--sidebar) calc(l - 0.07) c h);
   --goal-move-foreground: var(--sidebar-foreground);
@@ -191,6 +190,14 @@
   --usage-track: oklch(0.89 0.055 85);
   --usage-low: var(--tag-orange);
   --usage-empty: var(--destructive);
+
+  /*
+   * Settings' check-in day: when Tibo may write first, as marks on a strip
+   * of the waking day. The usage meter's colors, so the Tibo tab reads as
+   * one set.
+   */
+  --check-in-track: var(--usage-track);
+  --check-in-mark: var(--usage);
 
   /*
    * Tag palette. Keys match `TAG_COLOR` in api/src/domain/model.ts.
@@ -361,6 +368,8 @@
   --color-usage-track: var(--usage-track);
   --color-usage-low: var(--usage-low);
   --color-usage-empty: var(--usage-empty);
+  --color-check-in-track: var(--check-in-track);
+  --color-check-in-mark: var(--check-in-mark);
   --color-success: var(--success);
   --color-success-ink: var(--success-ink);
   --color-importance: var(--importance);
@@ -496,8 +505,8 @@
   --tibo-foreground: #f5f5f5;
   --tibo-soft: #1f1f1f;
   --tibo-disc: #1c1c1c;
-  /* Light mode's cream, not dark mode's gray `--cream`. */
-  --tibo-unread: color-mix(in oklab, oklch(0.95 0.05 86) 40%, black);
+  /* A step lighter, to stand out on black. */
+  --tibo-unread: oklch(0.68 0.18 255);
   /* Dark mode keeps the session pill in the focus colors. */
   --session-pill: var(--focus-soft);
   --session-pill-foreground: var(--focus-ink);

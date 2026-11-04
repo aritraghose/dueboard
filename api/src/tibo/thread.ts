@@ -207,6 +207,27 @@ export class Thread {
       .map((row) => row.id);
   }
 
+  /** When the user or Tibo last said something (ms), `null` for an empty thread. App events don't count. */
+  lastMessageAt(): number | null {
+    return (
+      this.sql
+        .exec<{ at: number | null }>(`SELECT max(created_at) AS at FROM messages WHERE role != 'system_event'`)
+        .one().at ?? null
+    );
+  }
+
+  /** Whether Tibo wrote after the order `afterSeq` (the unread dot). */
+  tiboAfter(afterSeq: number): boolean {
+    return (
+      this.sql.exec(`SELECT 1 FROM messages WHERE role = 'tibo' AND seq > ? LIMIT 1`, afterSeq).toArray().length > 0
+    );
+  }
+
+  /** Deletes one row (a check-in's app event when its turn showed nothing). */
+  remove(id: string) {
+    this.sql.exec(`DELETE FROM messages WHERE id = ?`, id);
+  }
+
   /** Whether the user wrote after Tibo's last bubble: a turn is owed. */
   awaitingReply(): boolean {
     const last = this.sql

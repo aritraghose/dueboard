@@ -86,6 +86,15 @@ function useOpeners(): Openers {
   return openers;
 }
 
+/**
+ * Receipts that aren't shown: memory and reminder lines ("Remembered: …",
+ * "Forgot: …", "Reminder set: …"). Tibo says those in its own words, and
+ * older messages still carry them. A failure always shows.
+ */
+const QUIET_RECEIPTS = ["Remembered:", "Forgot:", "Reminder set:", "Reminder cancelled:"];
+export const shownReceipts = (receipts: readonly TiboReceipt[]) =>
+  receipts.filter((receipt) => receipt.failed || !QUIET_RECEIPTS.some((prefix) => receipt.text.startsWith(prefix)));
+
 /** The receipts of one Tibo turn: item cards, and plain lines for the rest. */
 export function TiboReceipts({ receipts }: { receipts: readonly TiboReceipt[] }) {
   const cards = receipts.filter((receipt) => receipt.item && !receipt.failed);

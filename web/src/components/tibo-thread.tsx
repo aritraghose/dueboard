@@ -56,7 +56,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
-import { TiboItemsProvider, TiboReceipts } from "@/components/tibo-items";
+import { TiboItemsProvider, TiboReceipts, shownReceipts } from "@/components/tibo-items";
 import { useTibo, useTiboThread } from "@/hooks/use-tibo";
 import type { TiboThreadState } from "@/lib/tibo-store";
 import { cn } from "@/lib/utils";
@@ -723,7 +723,8 @@ function TurnActions({
   message: TiboMessage;
   onConfirm: EntryActions["onConfirm"];
 }) {
-  const { receipts = [], confirm } = message;
+  const { confirm } = message;
+  const receipts = shownReceipts(message.receipts ?? []);
   if (receipts.length === 0 && confirm?.status !== "pending") return null;
   return (
     <div className="flex w-full max-w-[min(85%,24rem)] flex-col gap-2 pt-1.5">

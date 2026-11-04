@@ -37,7 +37,11 @@ export interface TiboThreadState {
   /** A plain-text problem with what you sent (too long, say). */
   readonly notice: string | null;
   readonly usage: { readonly remaining: number; readonly limit: number } | null;
-  /** A Tibo bubble arrived while no thread was on screen. */
+  /**
+   * Tibo wrote since a thread was last on screen: a bubble arrived while none
+   * was, or the agent says so on connect (it wrote first while the app was
+   * closed). Cleared everywhere once any device shows the thread.
+   */
   readonly unread: boolean;
 }
 
@@ -74,6 +78,9 @@ export function createTiboStore() {
     for (const listener of listeners) listener();
   };
 
+  // A thread is on screen: tell the agent, so the dot clears on every device.
+  const markRead = () => socket?.send(JSON.stringify({ type: "read" }));
+
   const receive = (frame: TiboServerFrame) => {
     switch (frame.type) {
       case "history":
@@ -86,7 +93,12 @@ export function createTiboStore() {
           pending: state.pending.filter(
             (pending) => !frame.messages.some((message) => message.clientId === pending.clientId),
           ),
+          unread: viewers === 0 && (frame.unread || state.unread),
         });
+        if (viewers > 0 && frame.unread) markRead();
+        return;
+      case "read":
+        if (state.unread) set({ unread: false });
         return;
       case "older": {
         const known = new Set(state.messages.map((message) => message.id));
@@ -110,6 +122,7 @@ export function createTiboStore() {
           ...(message.role === "tibo" ? { errorBubble: null } : {}),
           ...(message.role === "tibo" && viewers === 0 ? { unread: true } : {}),
         });
+        if (message.role === "tibo" && viewers > 0) markRead();
         return;
       }
       case "updated":
@@ -229,7 +242,10 @@ export function createTiboStore() {
     /** A thread is on screen until the returned function runs. */
     view() {
       viewers += 1;
-      if (state.unread) set({ unread: false });
+      if (state.unread) {
+        set({ unread: false });
+        markRead();
+      }
       return () => {
         viewers -= 1;
       };

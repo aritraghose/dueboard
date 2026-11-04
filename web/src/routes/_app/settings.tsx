@@ -1,9 +1,13 @@
 import {
   PRIVACY,
   RELAY_POLICY,
+  TIBO_DEADLINE_NUDGE_TIME,
+  TIBO_EVENING_TIMES,
+  TIBO_MORNING_TIMES,
   type AiUsage,
   type Privacy,
   type RelayPolicy,
+  type Settings as UserSettings,
   type SettingsPatch,
 } from "@dueboard/api/rpc";
 import type { TiboMemory, TiboMemoryKind } from "@dueboard/api/tibo";
@@ -37,6 +41,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -389,7 +394,202 @@ function Tibo() {
           />
         </Row>
       </Panel>
+      <TiboCheckIns />
       <TiboMemories />
+    </div>
+  );
+}
+
+// ─── Tibo → Check-ins ────────────────────────────────────────────────────────
+
+type CheckInSettings = Pick<
+  UserSettings,
+  | "tiboProactive"
+  | "tiboMorningPlan"
+  | "tiboMorningTime"
+  | "tiboDeadlineNudges"
+  | "tiboHabitCheck"
+  | "tiboEveningTime"
+>;
+
+/** "8:00 AM" (or "08:00" where clocks run to 24) from `HH:MM`. */
+const clockLabel = (time: string, short = false) => {
+  const [hours = 0, minutes = 0] = time.split(":").map(Number);
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone: "UTC",
+    hour: "numeric",
+    ...(short && minutes === 0 ? {} : { minute: "2-digit" }),
+  }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
+};
+
+/**
+ * When Tibo messages first: the master switch, the day strip, then each
+ * kind. Every change saves at once and shows before the save answers;
+ * the agent re-plans its alarms within a minute.
+ */
+function TiboCheckIns() {
+  const settings = useBootstrap()?.settings;
+  const { save } = useSaveSetting();
+  // Picks not saved yet, over the saved settings.
+  const [picked, setPicked] = useState<Partial<CheckInSettings>>({});
+  const shown: CheckInSettings | undefined = settings && { ...settings, ...picked };
+  const on = shown?.tiboProactive ?? false;
+
+  const change = <K extends keyof CheckInSettings>(key: K, value: CheckInSettings[K], what: string) => {
+    setPicked((current) => ({ ...current, [key]: value }));
+    void save({ [key]: value } as SettingsPatch, what).then(() =>
+      setPicked(({ [key]: _saved, ...rest }) => rest as Partial<CheckInSettings>),
+    );
+  };
+
+  const kindSwitch = (key: "tiboMorningPlan" | "tiboDeadlineNudges" | "tiboHabitCheck", label: string) => (
+    <Switch
+      aria-label={label}
+      checked={shown?.[key] ?? false}
+      disabled={!shown || !on}
+      onCheckedChange={(checked) => change(key, checked, label.toLowerCase())}
+    />
+  );
+
+  const timeSelect = (key: "tiboMorningTime" | "tiboEveningTime", times: readonly string[], label: string, enabled: boolean) => (
+    <Select
+      value={shown?.[key]}
+      disabled={!shown || !on || !enabled}
+      onValueChange={(value) => change(key, value as CheckInSettings[typeof key], label.toLowerCase())}
+    >
+      <SelectTrigger size="sm" aria-label={label} className="w-28 tabular-nums">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="max-h-72">
+        {times.map((time) => (
+          <SelectItem key={time} value={time} className="tabular-nums">
+            {clockLabel(time)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  return (
+    <Panel>
+      <div className="flex flex-col gap-4 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h2 className="font-medium">Tibo messages you first</h2>
+            <p className="text-sm text-muted-foreground">
+              A few short check-ins a day, never while you're chatting. Each one counts as a request.
+            </p>
+          </div>
+          <Switch
+            aria-label="Tibo messages you first"
+            checked={on}
+            disabled={!shown}
+            onCheckedChange={(checked) => change("tiboProactive", checked, "check-ins")}
+          />
+        </div>
+        {shown && on && <CheckInDay settings={shown} />}
+      </div>
+      <div className={cn("flex flex-col divide-y transition-opacity", !on && "opacity-55")}>
+        <CheckInRow
+          title="Morning plan"
+          description="Your day, planned from your board."
+          time={timeSelect("tiboMorningTime", TIBO_MORNING_TIMES, "Morning plan time", shown?.tiboMorningPlan ?? false)}
+          toggle={kindSwitch("tiboMorningPlan", "Morning plan")}
+        />
+        <CheckInRow
+          title="Deadline nudge"
+          description={`At ${clockLabel(TIBO_DEADLINE_NUDGE_TIME)}, if something due today is still open.`}
+          toggle={kindSwitch("tiboDeadlineNudges", "Deadline nudge")}
+        />
+        <CheckInRow
+          title="Evening habit check"
+          description="If habits are still due."
+          time={timeSelect("tiboEveningTime", TIBO_EVENING_TIMES, "Evening habit check time", shown?.tiboHabitCheck ?? false)}
+          toggle={kindSwitch("tiboHabitCheck", "Evening habit check")}
+        />
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * One kind: its name and when, its time (if it has one), then its switch
+ * on the right. On phones the time drops under the description, so the
+ * name keeps the width.
+ */
+function CheckInRow({
+  title,
+  description,
+  time,
+  toggle,
+}: {
+  title: string;
+  description: string;
+  time?: ReactNode;
+  toggle: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2.5 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <h3 className="text-sm font-medium">{title}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      {time && <div className="max-sm:order-last max-sm:col-span-2">{time}</div>}
+      <div className={cn("flex", !time && "sm:col-span-2 sm:justify-self-end")}>{toggle}</div>
+    </div>
+  );
+}
+
+// The strip's span: the waking day, 5 AM to midnight.
+const DAY_START = 5;
+const DAY_END = 24;
+const hourOf = (time: string) => {
+  const [hours = 0, minutes = 0] = time.split(":").map(Number);
+  return hours + minutes / 60;
+};
+
+/**
+ * The day as a strip, with a mark at each time Tibo may write: the one
+ * picture of the schedule, so the times read at a glance. The deadline's
+ * label sits above the strip, the others below, so marks an hour apart
+ * never collide.
+ */
+function CheckInDay({ settings }: { settings: CheckInSettings }) {
+  const marks = [
+    settings.tiboMorningPlan && { key: "morning", time: settings.tiboMorningTime, name: "morning plan", above: false },
+    settings.tiboDeadlineNudges && { key: "deadline", time: TIBO_DEADLINE_NUDGE_TIME, name: "deadline nudge", above: true },
+    settings.tiboHabitCheck && { key: "evening", time: settings.tiboEveningTime, name: "habit check", above: false },
+  ].filter((mark) => mark !== false);
+  const description =
+    marks.length === 0
+      ? "Every kind of check-in is off."
+      : `Tibo may write at ${marks.map((mark) => `${clockLabel(mark.time)} (${mark.name})`).join(", ")}.`;
+
+  if (marks.length === 0) return <p className="text-sm text-muted-foreground">{description}</p>;
+  return (
+    <div role="img" aria-label={description} className="relative h-14 select-none">
+      <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-check-in-track" />
+      {marks.map((mark) => {
+        const left = ((hourOf(mark.time) - DAY_START) / (DAY_END - DAY_START)) * 100;
+        return (
+          <div
+            key={mark.key}
+            aria-hidden="true"
+            className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-[left] duration-300 motion-reduce:transition-none"
+            style={{ left: `clamp(1.25rem, ${left}%, calc(100% - 1.25rem))` }}
+          >
+            <span
+              className={cn(
+                "absolute left-1/2 -translate-x-1/2 text-xs whitespace-nowrap text-muted-foreground tabular-nums",
+                mark.above ? "bottom-4" : "top-4",
+              )}
+            >
+              {clockLabel(mark.time, true)}
+            </span>
+            <span className="size-3 rounded-full bg-check-in-mark ring-3 ring-card" />
+          </div>
+        );
+      })}
     </div>
   );
 }

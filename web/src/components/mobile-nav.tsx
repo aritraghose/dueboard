@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useRef } from "react";
+import { NavIcon } from "@/components/tibo-panel";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useTibo } from "@/hooks/use-tibo";
 import { MAIN_NAV } from "@/lib/nav";
@@ -57,7 +58,7 @@ export function MobileNav({ user, className }: { user: MenuUser; className?: str
           {MAIN_NAV.map(({ to, label, icon: Icon }) => (
             <li key={to}>
               <Link to={to} activeOptions={{ includeSearch: false }} className={item}>
-                <Icon />
+                <NavIcon to={to} icon={Icon} />
                 {label}
               </Link>
             </li>

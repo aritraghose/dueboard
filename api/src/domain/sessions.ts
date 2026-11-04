@@ -133,16 +133,6 @@ const closeOpenSegment = (tx: Executor, sessionId: string, at: Date) =>
 // ─── Completion ──────────────────────────────────────────────────────────────
 
 /**
- * Seam for step 20: called in the completing transaction with the sessions
- * whose time just ran out (by the sweep or a lazy read), so Tibo can send a
- * "session done" message. Sessions the user stopped never reach it.
- */
-export const onSessionCompleted = (
-  _tx: Executor,
-  _sessions: ReadonlyArray<FocusSessionRow>,
-): Effect.Effect<void> => Effect.void;
-
-/**
  * Completes up to `limit` running sessions whose `ends_at <= now` (only
  * `userId`'s when given): status `completed`, `ended_at` and the last
  * segment's end set to `ends_at`, one `session_completed` activity each.
@@ -210,7 +200,6 @@ export const completeExpiredSessions = Effect.fn("completeExpiredSessions")(func
       meta: {},
     })),
   );
-  yield* onSessionCompleted(tx, completed);
   return completed;
 });
 

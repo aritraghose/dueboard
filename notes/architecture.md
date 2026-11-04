@@ -15,7 +15,7 @@ There are two kinds of data, and each lives where it fits:
 
 | | Postgres (Neon, via Hyperdrive) | A Durable Object per user (`TiboAgent`) |
 |---|---|---|
-| What | Tasks, habits, goals, notes, sessions, tags, settings, connections, activity, relays, usage | Tibo's single thread, memory, summaries, schedules, live connections |
+| What | Tasks, habits, goals, notes, sessions, tags, settings, connections, activity, relays, usage | Tibo's single thread, memory, summaries, schedules, check-in log, live connections |
 | Why | Social features read **across users** (Live, diaries, profiles). A relational database does that well. | One user's agent is one long-lived, stateful thing with its own storage, alarms and WebSockets. |
 
 ## 2. Components
@@ -36,6 +36,7 @@ There are two kinds of data, and each lives where it fits:
                       │                                        ask settings ──────┘
                       └─ ⇄ other users' TiboAgent DOs (relays)
                      ApiWorker cron (every minute): auto-completes expired focus sessions
+                     AgentWorker cron (every minute): delivers the tibo_events outbox, wipes deleted threads
                      AI Gateway (BYOK Meta key) ◀── every model call
                      Vectorize: Tibo memory embeddings (namespace = user id)
 ```
@@ -343,6 +344,7 @@ Live and diary; search the conversation; relay (§7.5).
 
 - Destructive or surprising actions (delete, stop a running session, a bulk
   change) must ask the user to confirm first.
+- **Reminders (step 20)**: `set_reminder`, `list_reminders`, `cancel_reminder` (§7.8) are the one thing Tibo can schedule; settings stay out of `TIBO_RPCS`.
 - **Built (step 18)**: `api/src/tibo/tools.ts` (the tools, Zod schemas),
   `actions.ts` (turn ledger, pending actions, the confirmation design),
   `snapshot.ts` (today snapshot), `views.ts` (compact JSON for the model),
@@ -411,12 +413,21 @@ user** (§8).
 
 - `TiboAgent` uses Agents SDK scheduling (DO alarms) for:
   - a morning plan;
-  - deadline nudges (for example, 2 hours before);
+  - deadline nudges;
   - an evening habit check;
-  - session-ended messages.
+  - ~~session-ended messages~~: dropped in step 20 (it read as nagging).
 - Domain changes can wake it through the internal binding.
-- A **small daily cap** on Tibo-initiated messages (config) keeps proactivity from using up the monthly quota.
+- ~~A small daily cap on Tibo-initiated messages~~: dropped in step 20 at the user's request. Check-ins draw on the same monthly quota as every other request, and the user turns them off in Settings.
 - Delivery is in-app until web push exists (built last).
+- **Built (step 20)**: `api/src/tibo/proactive-rules.ts` (pure, tested), `proactive.ts` (DO SQLite), the check-in section of `TiboAgent.ts`, `domain/tibo.ts` (settings read, outbox), `domain/tibo-constants.ts`.
+  - **Settings**: `user_settings.tibo_*` columns (master switch, one per kind, morning and evening times on the half hour), part of `Settings`/`SettingsPatch`, edited in Settings → Tibo → "Tibo messages you first". The agent reads them with `DomainWorker.tiboProactive` (profile plus settings).
+  - **Alarms**: Date schedules (`proactiveFire`, payload `{ kind, at, day }`, idempotent), computed in the user's zone per day (`instantIn`), so DST moves the instant, not the local time. Cron schedules weren't used: the SDK's are UTC. `planProactive` cancels and re-arms all three; each alarm re-arms its own kind at its next slot. A fired alarm whose settings fingerprint (settings plus zone) no longer matches re-plans and is sent only if its slot still stands.
+  - **Domain → agent**: the `tibo_events` outbox (`settings_changed` from `updateSettings` and `syncTimeZone`), written in the change's transaction and drained every minute by the AgentWorker's cron (`DomainWorker.pendingTiboEvents`/`tiboEventsDone` → `TiboAgent.deliverEvents` over DO RPC), which re-plans the alarms. Neither the ApiWorker nor the DomainWorker can call the agent (the AgentWorker binds the DomainWorker, so a binding back is a cycle). Undelivered events are retried each minute and dropped after a day. Finished focus sessions send nothing.
+  - **Rules** (`gate`, in order): master and kind switches; stale (more than 30 min past its time: missed alarms never send late); dormant (no app visit for 7 days pauses the timed kinds); a turn running; quiet (a user or Tibo message in the last 10 minutes). Then something worth saying (`checkInFocus`), then the quota (`check`, 2 units). No count limit: each timed kind comes at most once a day by its slot. Skips are silent and final for that slot. `proactive_log` (one row per slot or session, `claim` first) stops repeats.
+  - **Reminders** (`tibo/reminders.ts`): `set_reminder({ date, time, about, message })`, `list_reminders`, `cancel_reminder` — the one thing Tibo may schedule from chat (settings stay out of `TIBO_RPCS`). Stored in DO SQLite `reminders`, each with its own `reminderFire` alarm. Tibo writes the words when it's set; the alarm sends them as a Tibo bubble after a typing pause, with no model call and no charge, and none of the check-in rules (the user asked). At most 25 pending, a year ahead; one delayed more than 6 hours is marked missed.
+  - **Turn**: a `system_event` row (hidden in the app) records the trigger, the context is the usual one plus a "You're messaging first" section, no tools, bubbles stream to every tab. Charged `tibo_proactive` (2 units) once a bubble showed; a turn that showed nothing deletes its event row. `notifyUser` is step 23's push seam.
+  - **Unread**: `agent_state.read_seq`; `history` carries `unread`, the client sends `read` while a thread is on screen and the agent broadcasts it, so a check-in sent while the app was closed lights the dot on the next visit, on every device.
+  - **Dev**: `POST …/dev/check-in?kind=<kind>[&bypass=quiet,stale|all]` runs one now through the same rules; `POST …/dev/alarm?kind=<timed kind>&at=HH:MM` arms a real alarm at any minute today; `GET …/dev/check-ins` shows the plan, armed alarms, log, pending reminders and usage.
 
 ## 8. AI usage quota
 
@@ -477,8 +488,9 @@ These are Cloudflare Rate Limiting bindings. Each `namespaceId` must be unique i
 - Pause closes the current segment. Resume opens a new one and recomputes
   `ends_at`. Extend adds minutes and recomputes `ends_at`.
 - **Auto-complete**: a cron sweep every minute completes `running` sessions
-  whose `ends_at <= now()`, writes `session_completed` and (later) notifies
-  Tibo. Reads also complete them lazily, so the UI is right even between sweeps.
+  whose `ends_at <= now()` and writes `session_completed`. Tibo sends no
+  message about it (§7.8). Reads also complete them lazily, so the UI is
+  right even between sweeps.
 
 ## 12. Web push (last)
 

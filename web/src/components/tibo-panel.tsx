@@ -1,7 +1,7 @@
 import { ClientOnly } from "@tanstack/react-router";
 import { useAgent } from "agents/react";
 import * as Reactivity from "effect/reactivity/Reactivity";
-import { XIcon } from "lucide-react";
+import { XIcon, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { TiboMark } from "@/components/tibo-mark";
 import { TiboThread } from "@/components/tibo-thread";
@@ -106,6 +106,30 @@ export function TiboButton() {
 }
 
 export { UnreadDot };
+
+/**
+ * A main nav item's icon. Inbox (Tibo's thread) carries the same unread
+ * dot as the Tibo button, in the sidebar and the phone tab bar.
+ */
+export function NavIcon({ to, icon: Icon }: { to: string; icon: LucideIcon }) {
+  if (to !== "/inbox") return <Icon />;
+  return <InboxIcon icon={Icon} />;
+}
+
+function InboxIcon({ icon: Icon }: { icon: LucideIcon }) {
+  const { unread } = useTiboThread();
+  return (
+    <span className="relative inline-flex shrink-0">
+      <Icon />
+      {unread && (
+        <>
+          <UnreadDot className="absolute -top-0.5 -right-1 size-2! ring-[1.5px]!" />
+          <span className="sr-only">, new message from Tibo</span>
+        </>
+      )}
+    </span>
+  );
+}
 
 /**
  * Floats off the screen edge with rounded corners. On wide screens it grows

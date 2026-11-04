@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { LocalDate } from "./dates.ts";
+import { TIBO_EVENING_TIMES, TIBO_MORNING_TIMES } from "./tibo-constants.ts";
 
 // The domain's values and typed errors. Pure Schemas with no database code,
 // so `../rpc.ts` (which the browser imports) can re-export them, and the
@@ -15,6 +16,14 @@ export type Privacy = typeof Privacy.Type;
 export const RELAY_POLICY = ["connections", "anyone", "none"] as const;
 export const RelayPolicy = Schema.Literals(RELAY_POLICY);
 export type RelayPolicy = typeof RelayPolicy.Type;
+
+// ─── Tibo check-ins (step 20) ────────────────────────────────────────────────
+
+export * from "./tibo-constants.ts";
+export const TiboMorningTime = Schema.Literals(TIBO_MORNING_TIMES);
+export type TiboMorningTime = typeof TiboMorningTime.Type;
+export const TiboEveningTime = Schema.Literals(TIBO_EVENING_TIMES);
+export type TiboEveningTime = typeof TiboEveningTime.Type;
 
 /** The three tags every user has. Recolorable, but never renamed or deleted. */
 export const SYSTEM_TAG_KIND = ["default", "habit", "goal"] as const;
@@ -300,8 +309,24 @@ export const SettingsPatch = Schema.Struct({
   defaultPrivacy: Schema.optionalKey(Privacy),
   defaultShareToLive: Schema.optionalKey(Schema.Boolean),
   relayPolicy: Schema.optionalKey(RelayPolicy),
+  tiboProactive: Schema.optionalKey(Schema.Boolean),
+  tiboMorningPlan: Schema.optionalKey(Schema.Boolean),
+  tiboMorningTime: Schema.optionalKey(TiboMorningTime),
+  tiboDeadlineNudges: Schema.optionalKey(Schema.Boolean),
+  tiboHabitCheck: Schema.optionalKey(Schema.Boolean),
+  tiboEveningTime: Schema.optionalKey(TiboEveningTime),
 });
 export type SettingsPatch = typeof SettingsPatch.Type;
+
+/** The `SettingsPatch` keys that change when Tibo reaches out first; a change re-plans its schedules. */
+export const TIBO_PROACTIVE_KEYS = [
+  "tiboProactive",
+  "tiboMorningPlan",
+  "tiboMorningTime",
+  "tiboDeadlineNudges",
+  "tiboHabitCheck",
+  "tiboEveningTime",
+] as const satisfies readonly (keyof SettingsPatch)[];
 
 export const CreateTagInput = Schema.Struct({ name: TagName, color: TagColor });
 export type CreateTagInput = typeof CreateTagInput.Type;
@@ -708,6 +733,14 @@ export class Settings extends Schema.Class<Settings>("Settings")({
   defaultPrivacy: Privacy,
   defaultShareToLive: Schema.Boolean,
   relayPolicy: RelayPolicy,
+  /** Tibo may message first (check-ins). Each kind below has its own switch. */
+  tiboProactive: Schema.Boolean,
+  tiboMorningPlan: Schema.Boolean,
+  tiboMorningTime: TiboMorningTime,
+  /** At `TIBO_DEADLINE_NUDGE_TIME`. */
+  tiboDeadlineNudges: Schema.Boolean,
+  tiboHabitCheck: Schema.Boolean,
+  tiboEveningTime: TiboEveningTime,
 }) {}
 
 export class Tag extends Schema.Class<Tag>("Tag")({

@@ -4,18 +4,49 @@ import { Agent, type Connection, type ConnectionContext, type WSMessage } from "
 import { asSchema, isStepCount, streamText, type ToolSet } from "ai";
 import type { AgentEnv } from "../AgentWorker.ts";
 import { AI_UNITS_PER_MESSAGE } from "../domain/usage-constants.ts";
-import { tiboClient, usageClient } from "../domain-client.ts";
+import {
+  tiboClient,
+  usageClient,
+  type TiboEventJson,
+  type TiboProactiveContext,
+} from "../domain-client.ts";
 import { MAX_CHAT_MESSAGE_LENGTH } from "../limits.ts";
 import { MAX_TOOL_STEPS, PendingActions, TurnLedger, receiptFor, type PendingAction } from "./actions.ts";
 import { BUBBLE_DELIMITER, BubbleSplitter, reactionLine, reactionOf, typingDelayMs } from "./bubbles.ts";
 import { RECENT_WINDOW, buildTurnContext, type ContextSection, type TurnContext } from "./context.ts";
-import { addDays, dayIn, startOfDayIn } from "./dates.ts";
+import { addDays, dayIn, instantIn, startOfDayIn } from "./dates.ts";
 import { devSeedThread } from "./dev-seed.ts";
 import { MemoryJobs, type JobContext } from "./memory-jobs.ts";
 import { MemoryStore } from "./memory.ts";
 import { DAILY_JOB_CAP, DEV_DAILY_JOB_CAP, SETTLE_MS, estimateTokens } from "./memory-rules.ts";
 import { MODEL, museSpark } from "./model.ts";
 import { PERSONA } from "./persona.ts";
+import { ProactiveStore, type CheckInOutcome } from "./proactive.ts";
+import {
+  MAX_PENDING_REMINDERS,
+  REMINDER_LATE_MS,
+  ReminderStore,
+  reminderInstant,
+  reminderWhen,
+} from "./reminders.ts";
+import {
+  PLAN_GRACE_MS,
+  PROACTIVE_KINDS,
+  SCHEDULED_KINDS,
+  checkInFocus,
+  checkInSection,
+  gate,
+  nextSlot,
+  planFingerprint,
+  slotStillPlanned,
+  slotTime,
+  triggerLine,
+  type CheckInFocus,
+  type GateInput,
+  type ProactiveKind,
+  type ProactiveSlot,
+  type SkipReason,
+} from "./proactive-rules.ts";
 import {
   MemoryRefs,
   deleteMemories,
@@ -68,6 +99,17 @@ const MEMORY_JOB_CONTINUE_S = 5;
 /** Past the user's midnight, so a finished day gets its summary. */
 const DAY_END_GRACE_MS = 5 * 60_000;
 
+/** A check-in about to be considered (`./proactive-rules.ts`). */
+interface CheckInTrigger {
+  /** Its log id: `morning_plan:2026-11-04`. */
+  readonly id: string;
+  readonly kind: ProactiveKind;
+  /** Its local day. */
+  readonly day: string;
+  /** When it was meant for (ms). */
+  readonly at: number;
+}
+
 /**
  * Tibo: one Durable Object per user, named by their user id (the web
  * stack's `/agents/*` proxy pins the name to the session's user, whatever the
@@ -85,6 +127,8 @@ export class TiboAgent extends Agent<AgentEnv> {
   private threadStore: Thread | undefined;
   private actionStore: PendingActions | undefined;
   private memoryStore: MemoryStore | undefined;
+  private proactiveStore: ProactiveStore | undefined;
+  private reminderStore: ReminderStore | undefined;
   /** A memory job is running (in memory: a restart drops it, and its schedule retries). */
   private memoryJobRunning = false;
   /** Another job run was asked for while one ran. */
@@ -122,6 +166,24 @@ export class TiboAgent extends Agent<AgentEnv> {
     return this.memoryStore;
   }
 
+  /** Check-ins sent and the agent's own facts (`./proactive.ts`). */
+  private get proactive() {
+    if (!this.proactiveStore) {
+      this.proactiveStore = new ProactiveStore(this.ctx.storage.sql);
+      this.proactiveStore.migrate();
+    }
+    return this.proactiveStore;
+  }
+
+  /** Reminders the user asked for in chat (`./reminders.ts`). */
+  private get reminders() {
+    if (!this.reminderStore) {
+      this.reminderStore = new ReminderStore(this.ctx.storage.sql);
+      this.reminderStore.migrate();
+    }
+    return this.reminderStore;
+  }
+
   private get dev() {
     return this.env.TIBO_DEV === "true";
   }
@@ -130,6 +192,8 @@ export class TiboAgent extends Agent<AgentEnv> {
     void this.thread;
     void this.actions;
     void this.memory;
+    void this.reminders;
+    this.proactive.prune(Date.now());
   }
 
   /** The thread lives in SQL, not in Agent state; browsers may not write state. */
@@ -138,8 +202,20 @@ export class TiboAgent extends Agent<AgentEnv> {
   }
 
   onConnect(connection: Connection, _ctx: ConnectionContext) {
+    // Every open app tab keeps a socket, so this is when the user was last around.
+    this.proactive.set("last_seen_at", Date.now());
+    // A thread with no read mark yet (before step 20) starts all read.
+    let readSeq = this.proactive.getNumber("read_seq");
+    if (readSeq === null) {
+      readSeq = this.thread.lastSeq();
+      this.proactive.set("read_seq", readSeq);
+    }
     const { messages, hasMore } = this.thread.latest(TIBO_HISTORY_PAGE);
-    this.sendTo(connection, { type: "history", messages, hasMore });
+    this.sendTo(connection, { type: "history", messages, hasMore, unread: this.thread.tiboAfter(readSeq) });
+    // The first time (a new user, or one from before check-ins), arm them.
+    if (this.proactive.get("proactive_plan") === null) {
+      void this.planProactive().catch((error: unknown) => console.error("Planning check-ins failed", error));
+    }
   }
 
   onMessage(connection: Connection, raw: WSMessage) {
@@ -157,6 +233,12 @@ export class TiboAgent extends Agent<AgentEnv> {
         console.error("Answering a held action failed", error);
         this.sendTo(connection, { type: "error", message: "That didn't go through. Please try again." });
       });
+      return;
+    }
+
+    if (frame.type === "read") {
+      this.proactive.set("read_seq", this.thread.lastSeq());
+      this.send({ type: "read" });
       return;
     }
 
@@ -186,6 +268,7 @@ export class TiboAgent extends Agent<AgentEnv> {
       meta: { clientId: frame.clientId, ...(replyTo ? { replyTo } : {}) },
     });
     this.send({ type: "bubble", message });
+    this.proactive.set("last_seen_at", Date.now());
     this.requestTurn();
   }
 
@@ -259,6 +342,9 @@ export class TiboAgent extends Agent<AgentEnv> {
       await this.scheduleMemoryJobs(1, "dev");
       return Response.json({ inserted: seeded.length });
     }
+    if (action === "check-in" && request.method === "POST") return this.devCheckIn(request);
+    if (action === "check-ins" && request.method === "GET") return this.devCheckIns();
+    if (action === "alarm" && request.method === "POST") return this.devAlarm(request);
     if (action === "memory-jobs" && request.method === "POST") {
       await this.scheduleMemoryJobs(1, "dev");
       return Response.json({ scheduled: true });
@@ -285,6 +371,68 @@ export class TiboAgent extends Agent<AgentEnv> {
       });
     }
     return new Response("Not found", { status: 404 });
+  }
+
+  /**
+   * Development only: `POST dev/check-in?kind=<kind>[&bypass=quiet,stale|all]`
+   * runs a check-in now, through the same rules as an alarm (or past the
+   * named ones), and answers its outcome.
+   */
+  private async devCheckIn(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const kind = url.searchParams.get("kind") as ProactiveKind | null;
+    if (!kind || !PROACTIVE_KINDS.includes(kind)) {
+      return Response.json({ error: `kind is one of ${PROACTIVE_KINDS.join(", ")}` }, { status: 400 });
+    }
+    const bypass = new Set((url.searchParams.get("bypass") ?? "").split(",").filter(Boolean)) as Set<SkipReason | "all">;
+    const context = await tiboClient(this.env.DOMAIN).proactive(this.name);
+    const now = Date.now();
+    const day = dayIn(context.timeZone, new Date(now));
+    const outcome = await this.checkIn(
+      { id: `dev:${kind}:${now}`, kind, day, at: now },
+      context,
+      bypass,
+    );
+    return Response.json({ outcome, sentToday: this.proactive.sentOn(day) });
+  }
+
+  /**
+   * Development only: `POST dev/alarm?kind=<timed kind>&at=HH:MM` arms a real
+   * check-in alarm today at any minute (settings only take half hours), so
+   * the alarm path runs without waiting for a planned slot. It skips the
+   * "slot still planned" check and logs under a `dev:` id.
+   */
+  private async devAlarm(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const kind = url.searchParams.get("kind") as ProactiveSlot["kind"] | null;
+    const time = url.searchParams.get("at") ?? "";
+    if (!kind || !(SCHEDULED_KINDS as readonly string[]).includes(kind) || !/^\d{2}:\d{2}$/.test(time)) {
+      return Response.json({ error: `kind is one of ${SCHEDULED_KINDS.join(", ")}; at is HH:MM` }, { status: 400 });
+    }
+    const context = await tiboClient(this.env.DOMAIN).proactive(this.name);
+    const day = dayIn(context.timeZone, new Date());
+    const slot: ProactiveSlot = { kind, day, at: instantIn(context.timeZone, day, time), dev: true };
+    await this.armSlot(slot);
+    return Response.json({ armed: { ...slot, firesAt: new Date(slot.at).toISOString() } });
+  }
+
+  /** Development only: `GET dev/check-ins`: the armed alarms, the log and the facts they read. */
+  private async devCheckIns(): Promise<Response> {
+    const lastSeenAt = this.proactive.getNumber("last_seen_at");
+    const lastMessageAt = this.thread.lastMessageAt();
+    return Response.json({
+      plan: JSON.parse(this.proactive.get("proactive_plan") ?? "null"),
+      armed: await this.armedSlots(),
+      log: this.proactive.recent(30),
+      lastSeenAt: lastSeenAt === null ? null : new Date(lastSeenAt).toISOString(),
+      lastMessageAt: lastMessageAt === null ? null : new Date(lastMessageAt).toISOString(),
+      readSeq: this.proactive.getNumber("read_seq"),
+      lastSeq: this.thread.lastSeq(),
+      reminders: this.reminders.pending(),
+      usage: await usageClient(this.env.DOMAIN)
+        .get(this.name)
+        .catch(() => null),
+    });
   }
 
   // ─── Long-term memory jobs ───────────────────────────────────────────────
@@ -370,6 +518,306 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
   }
 
+  // ─── Check-ins: Tibo messages first (step 20) ─────────────────────────────
+
+  /**
+   * Arms the check-in alarms from the user's settings, in their zone:
+   * cancels every armed one, then schedules the next slot of each timed
+   * kind that's on (Agents SDK `schedule`, on the DO's alarm). Runs on the
+   * first connect, when a `settings_changed` event arrives (a setting or
+   * the zone changed), and when an alarm finds the plan out of date.
+   * `firing` is the alarm running now: it's left alone, and its kind moves
+   * to its next slot.
+   */
+  private async planProactive(given?: TiboProactiveContext, firing?: { slot: ProactiveSlot; scheduleId: string }) {
+    const context = given ?? (await tiboClient(this.env.DOMAIN).proactive(this.name));
+    for (const schedule of await this.listSchedules()) {
+      if (schedule.callback === "proactiveFire" && schedule.id !== firing?.scheduleId) {
+        await this.cancelSchedule(schedule.id);
+      }
+    }
+    const now = Date.now();
+    for (const kind of SCHEDULED_KINDS) {
+      const time = slotTime(kind, context.proactive);
+      if (!time) continue;
+      await this.armSlot(
+        firing?.slot.kind === kind
+          ? nextSlot(kind, context.timeZone, time, Math.max(now, firing.slot.at))
+          : // A slot that came due a moment ago is kept: the log stops a repeat.
+            nextSlot(kind, context.timeZone, time, now, PLAN_GRACE_MS),
+      );
+    }
+    this.proactive.set("proactive_plan", planFingerprint(context.proactive, context.timeZone));
+    if (this.dev) console.log("Tibo check-ins planned", this.name, await this.armedSlots());
+  }
+
+  private armSlot(slot: ProactiveSlot) {
+    return this.schedule(new Date(slot.at), "proactiveFire", slot, { idempotent: true });
+  }
+
+  /** The armed check-in alarms (dev route, logs). */
+  private async armedSlots() {
+    return (await this.listSchedules())
+      .filter((schedule) => schedule.callback === "proactiveFire")
+      .map((schedule) => ({ ...(schedule.payload as ProactiveSlot), firesAt: new Date(schedule.time * 1000).toISOString() }));
+  }
+
+  /**
+   * A check-in alarm (scheduled by `planProactive`). Returns at once: the
+   * turn takes a model call, longer than a schedule callback should hold
+   * the agent's other jobs.
+   */
+  async proactiveFire(slot: ProactiveSlot, schedule?: { id: string }) {
+    void this.keepAliveWhile(() =>
+      this.runSlot(slot, schedule?.id ?? "").catch((error: unknown) => console.error("Tibo check-in alarm failed", slot, error)),
+    );
+  }
+
+  /** Retries planning after the settings couldn't be read. */
+  async replanProactive() {
+    await this.planProactive().catch((error: unknown) => {
+      console.error("Re-planning check-ins failed", error);
+      return this.schedule(10 * 60, "replanProactive", { retry: true }, { idempotent: true });
+    });
+  }
+
+  private async runSlot(slot: ProactiveSlot, scheduleId: string) {
+    let context: TiboProactiveContext;
+    try {
+      context = await tiboClient(this.env.DOMAIN).proactive(this.name);
+    } catch (error) {
+      // Today's goes unsent; the retry re-arms the next ones.
+      console.error("Reading check-in settings failed", error);
+      await this.schedule(5 * 60, "replanProactive", { retry: true }, { idempotent: true });
+      return;
+    }
+    if (this.proactive.get("proactive_plan") !== planFingerprint(context.proactive, context.timeZone)) {
+      // Settings or the zone moved and the event saying so was lost: re-plan,
+      // and send this one only if it still stands.
+      await this.planProactive(context, { slot, scheduleId });
+    } else {
+      // Re-arm: the same kind, at its next slot (tomorrow, or later if this one fired late).
+      const time = slotTime(slot.kind, context.proactive);
+      if (time) await this.armSlot(nextSlot(slot.kind, context.timeZone, time, Math.max(Date.now(), slot.at)));
+    }
+    if (!slot.dev && !slotStillPlanned(slot, context.proactive, context.timeZone)) return;
+    const id = slot.dev ? `dev:${slot.kind}:${slot.at}` : `${slot.kind}:${slot.day}`;
+    await this.checkIn({ id, kind: slot.kind, day: slot.day, at: slot.at }, context);
+  }
+
+  /**
+   * Domain events from the outbox (`domain/tibo.ts`), delivered by the
+   * AgentWorker's cron over RPC: a changed setting or zone re-plans the
+   * check-ins. Throws if the settings can't be read, so the cron delivers
+   * them again.
+   */
+  async deliverEvents(events: readonly TiboEventJson[]) {
+    if (events.some((event) => event.kind === "settings_changed")) await this.planProactive();
+    return { ok: true as const };
+  }
+
+  /**
+   * Considers one check-in: the log (never twice), the rules
+   * (`gate`: switches, staleness, dormancy, a running turn,
+   * mid-conversation quiet), whether the user's day gives Tibo something
+   * useful to say, and the quota. Skips silently; otherwise runs the turn.
+   * `bypass` is for the dev route only.
+   */
+  private async checkIn(
+    trigger: CheckInTrigger,
+    context: TiboProactiveContext,
+    bypass: ReadonlySet<SkipReason | "all"> = new Set(),
+  ): Promise<CheckInOutcome | "duplicate"> {
+    const now = Date.now();
+    if (!this.proactive.claim(trigger.id, trigger.kind, trigger.day, now)) return "duplicate";
+    const skip = (reason: SkipReason) => {
+      this.proactive.finish(trigger.id, reason);
+      if (this.dev) console.log("Tibo check-in skipped", trigger.id, reason);
+      return reason;
+    };
+    const reason = gateWith(
+      {
+        kind: trigger.kind,
+        settings: context.proactive,
+        now,
+        at: trigger.at,
+        lastMessageAt: this.thread.lastMessageAt(),
+        busy: this.running,
+        lastSeenAt: this.proactive.getNumber("last_seen_at"),
+      },
+      bypass,
+    );
+    if (reason) return skip(reason);
+
+    const board = await this.board(dayIn(context.timeZone, new Date(now)));
+    const focus = checkInFocus(trigger.kind, board?.day ?? null);
+    if (!focus) return skip(board ? "nothing" : "failed");
+    // Out of quota: silently nothing (the composer's notice covers it).
+    const { allowed } = await usageClient(this.env.DOMAIN)
+      .check(this.name, AI_UNITS_PER_MESSAGE)
+      .catch(() => ({ allowed: false }));
+    if (!allowed) return skip("quota");
+    // A turn may have started while this waited.
+    if (this.running) return skip("busy");
+    const { outcome } = await this.exclusive(
+      () => this.checkInTurn(trigger, context, focus, board),
+      ({ eventSeq }) => eventSeq,
+    );
+    return outcome;
+  }
+
+  /**
+   * A turn Tibo starts: an app event row (hidden in the app) records why,
+   * then the reply streams as normal bubbles to every tab, with no tools.
+   * Charged as one `tibo_proactive` message once a bubble showed. A turn
+   * that showed nothing takes its event row back and isn't charged.
+   */
+  private async checkInTurn(
+    trigger: CheckInTrigger,
+    context: TiboProactiveContext,
+    focus: CheckInFocus,
+    board: { day: DayJson; activeSession: SessionJson | null } | null,
+  ): Promise<{ outcome: CheckInOutcome; eventSeq: number }> {
+    const turnId = crypto.randomUUID();
+    const time = slotTime(trigger.kind, context.proactive) ?? "00:00";
+    const event = this.thread.add({
+      role: "system_event",
+      body: triggerLine(focus, time),
+      turnId,
+      meta: { checkIn: trigger.kind },
+    });
+    const eventSeq = this.thread.lastSeq();
+    try {
+      const now = new Date();
+      const today = dayIn(context.timeZone, now);
+      const recall: RecallContext = {
+        env: this.env,
+        userId: this.name,
+        store: this.memory,
+        thread: this.thread,
+        timeZone: context.timeZone,
+        today,
+      };
+      const refs = new MemoryRefs();
+      const memories = await recallMemories(recall, [event.body, ...focus.items].join("\n"));
+      const sections = [
+        board ? todaySnapshot({ ...board, timeZone: context.timeZone }) : null,
+        storySection(this.memory, today),
+        memoriesSection(memories, refs, context.timeZone),
+        checkInSection(focus),
+      ].filter((section): section is ContextSection => section !== null);
+      const turnContext = buildTurnContext({
+        persona: PERSONA,
+        profile: { firstName: context.firstName, timeZone: context.timeZone },
+        now,
+        recent: this.thread.latest(RECENT_WINDOW).messages,
+        sections,
+      });
+      await this.reply(turnId, turnContext, null, {}, new TurnLedger());
+      this.proactive.finish(trigger.id, "sent", turnId);
+      const after = await usageClient(this.env.DOMAIN)
+        .record(this.name, AI_UNITS_PER_MESSAGE, "tibo_proactive", turnId)
+        .catch((error: unknown) => {
+          console.error("Recording AI usage failed", error);
+          return null;
+        });
+      if (after) this.send({ type: "usage", remaining: after.remaining, limit: after.limit });
+      await this.notifyUser({ kind: trigger.kind, turnId });
+      if (this.dev) console.log("Tibo check-in sent", trigger.id);
+      return { outcome: "sent", eventSeq };
+    } catch (error) {
+      console.error("Tibo check-in failed", trigger.id, error);
+      this.thread.remove(event.id);
+      this.proactive.finish(trigger.id, "failed");
+      return { outcome: "failed", eventSeq };
+    } finally {
+      this.send({ type: "turnDone", turnId });
+    }
+  }
+
+  // ─── Reminders the user asks for ─────────────────────────────────────────
+
+  /** The reminder tools' backends for one turn (`./tools.ts`). */
+  private reminderTools(timeZone: string, today: string) {
+    return {
+      set: async (input: { date: string; time: string; about: string; message: string }) => {
+        if (this.reminders.countPending() >= MAX_PENDING_REMINDERS) {
+          return { error: `They already have ${MAX_PENDING_REMINDERS} reminders to come. Offer to cancel one first.` };
+        }
+        const now = Date.now();
+        const when = reminderInstant(input, timeZone, now, today);
+        if ("error" in when) return when;
+        const reminder = this.reminders.add({
+          at: when.at,
+          about: input.about.trim(),
+          message: input.message.trim(),
+          now,
+        });
+        await this.schedule(new Date(when.at), "reminderFire", { id: reminder.id });
+        // No receipt line: Tibo says it in its own words (like memories).
+        return { status: "done", id: reminder.id, when: reminderWhen(when.at, timeZone, today) };
+      },
+      list: async () => ({
+        reminders: this.reminders.pending().map((reminder) => ({
+          id: reminder.id,
+          when: reminderWhen(reminder.at, timeZone, today),
+          about: reminder.about,
+        })),
+      }),
+      cancel: async ({ id }: { id: string }) => {
+        // Its alarm stays and finds it cancelled.
+        const reminder = this.reminders.settle(id, "cancelled");
+        if (!reminder) return { error: "No reminder to come has that id. List them first." };
+        return { status: "done", cancelled: reminder.about };
+      },
+    };
+  }
+
+  /**
+   * A reminder's alarm: sends the words Tibo wrote when it was set, as a
+   * Tibo bubble after a short typing pause. No model call and no charge
+   * (the turn that set it was charged), so quota can't stop it; the user
+   * asked, so the check-in rules don't apply. Waits for a running reply to
+   * finish; one delayed past `REMINDER_LATE_MS` is marked missed.
+   */
+  async reminderFire(payload: { id: string }) {
+    const reminder = this.reminders.get(payload.id);
+    if (!reminder || reminder.status !== "pending") return;
+    if (Date.now() - reminder.at > REMINDER_LATE_MS) {
+      this.reminders.settle(reminder.id, "missed");
+      return;
+    }
+    if (this.running) {
+      await this.schedule(15, "reminderFire", payload);
+      return;
+    }
+    if (!this.reminders.settle(reminder.id, "sent")) return;
+    const turnId = crypto.randomUUID();
+    // Why Tibo spoke, for later turns (hidden in the app).
+    this.thread.add({
+      role: "system_event",
+      body: `A reminder the user asked for came due (${reminder.about}); it was sent as written.`,
+      turnId,
+      meta: { reminder: reminder.id },
+    });
+    this.send({ type: "typing", on: true });
+    await sleep(typingDelayMs(reminder.message));
+    const message = this.thread.add({ role: "tibo", body: reminder.message, turnId, meta: { reminder: reminder.id } });
+    this.send({ type: "typing", on: false });
+    this.send({ type: "bubble", message });
+    this.send({ type: "turnDone", turnId });
+    await this.notifyUser({ kind: "reminder", turnId });
+    if (this.dev) console.log("Tibo reminder sent", reminder.id);
+  }
+
+  /**
+   * Tells the user Tibo wrote first. In the app only for now: the bubbles
+   * were broadcast to every open tab, and the unread dot lights there or on
+   * their next visit (`read_seq`). Step 23 adds web push here, for when no
+   * tab is open (`this.getConnections()` is empty).
+   */
+  private async notifyUser(_note: { kind: ProactiveKind | "reminder"; turnId: string }) {}
+
   // ─── Turns ───────────────────────────────────────────────────────────────
 
   /**
@@ -382,14 +830,37 @@ export class TiboAgent extends Agent<AgentEnv> {
       this.owed = true;
       return;
     }
+    this.owed = false;
+    void this.exclusive(
+      () => this.turn(),
+      () => Number.MAX_SAFE_INTEGER,
+    );
+  }
+
+  /**
+   * Runs `job` (a reply turn or a check-in) holding the turn lock, then a
+   * reply turn while the user is owed one. Resolves with `job`'s result
+   * while the queue goes on. `sinceSeq` is where `job`'s own exchange
+   * started: a message the user sent after it is answered next, even though
+   * Tibo's bubbles came after that message.
+   */
+  private exclusive<T>(job: () => Promise<T>, sinceSeq: (value: T) => number): Promise<T> {
     this.running = true;
+    const result = job();
     // Kept alive (and off hibernation) until the queue drains.
     void this.keepAliveWhile(async () => {
       try {
-        do {
+        const value = await result;
+        if (this.owed && this.thread.lastUserSeq() > sinceSeq(value)) {
           this.owed = false;
           await this.turn();
-        } while (this.owed && this.thread.awaitingReply());
+        }
+        while (this.owed && this.thread.awaitingReply()) {
+          this.owed = false;
+          await this.turn();
+        }
+      } catch (error) {
+        console.error("Tibo's turn queue failed", error);
       } finally {
         this.running = false;
         // Fold the new messages into memory soon, off the reply's path.
@@ -398,6 +869,7 @@ export class TiboAgent extends Agent<AgentEnv> {
         );
       }
     });
+    return result;
   }
 
   private async turn() {
@@ -436,6 +908,12 @@ export class TiboAgent extends Agent<AgentEnv> {
       const today = dayIn(profile.timeZone, now);
       this.memory.set("time_zone", profile.timeZone);
       this.memory.set("first_name", profile.firstName);
+      // The zone moved and the event saying so hasn't arrived yet: the
+      // check-ins follow it now.
+      const plan = this.proactive.get("proactive_plan");
+      if (plan !== null && (JSON.parse(plan) as { timeZone?: string }).timeZone !== profile.timeZone) {
+        void this.planProactive().catch((error: unknown) => console.error("Re-planning check-ins failed", error));
+      }
       const recent = this.thread.latest(RECENT_WINDOW).messages;
       // Tibo may react to the newest thing the user said.
       const latestUserMessage = recent.findLast((message) => message.role === "user");
@@ -484,6 +962,7 @@ export class TiboAgent extends Agent<AgentEnv> {
             (await remember(recall, refs, { ...input, sourceMessageId: latestUserMessage?.id ?? null })).answer,
           forget: async (input) => (await forget(recall, refs, input)).answer,
         },
+        reminders: this.reminderTools(profile.timeZone, today),
       });
       if (this.dev) void this.logContextSizes(context, tools);
 
@@ -522,7 +1001,7 @@ export class TiboAgent extends Agent<AgentEnv> {
     turnId: string,
     context: TurnContext,
     reactTo: string | null,
-    tools: ReturnType<typeof tiboTools>,
+    tools: ToolSet,
     ledger: TurnLedger,
   ): Promise<boolean> {
     const bubbles = new Channel<string>();
@@ -632,6 +1111,12 @@ export class TiboAgent extends Agent<AgentEnv> {
 
   /** The today snapshot, or `null` (logged) if the domain couldn't answer. */
   private async snapshot(today: string, timeZone: string): Promise<ContextSection | null> {
+    const board = await this.board(today);
+    return board ? todaySnapshot({ ...board, timeZone }) : null;
+  }
+
+  /** The user's day and running session, or `null` (logged) if the domain couldn't answer. */
+  private async board(today: string): Promise<{ day: DayJson; activeSession: SessionJson | null } | null> {
     try {
       const [day, active] = await Promise.all([
         this.env.DOMAIN.run(this.name, "GetDay", { date: today }),
@@ -641,11 +1126,7 @@ export class TiboAgent extends Agent<AgentEnv> {
         console.error("Today snapshot failed", day.ok ? null : day.error, active.ok ? null : active.error);
         return null;
       }
-      return todaySnapshot({
-        day: day.value as DayJson,
-        activeSession: active.value as SessionJson | null,
-        timeZone,
-      });
+      return { day: day.value as DayJson, activeSession: active.value as SessionJson | null };
     } catch (error) {
       console.error("Today snapshot failed", error);
       return null;
@@ -791,8 +1272,32 @@ function parseFrame(raw: WSMessage): TiboClientFrame | null {
   ) {
     return { type: "confirm", actionId: frame.actionId, approve: frame.approve };
   }
+  if (frame.type === "read") return { type: "read" };
   if (frame.type === "loadOlder" && typeof frame.beforeId === "string" && frame.beforeId.length <= 64) {
     return { type: "loadOlder", beforeId: frame.beforeId };
+  }
+  return null;
+}
+
+/**
+ * `gate`, past the reasons in `bypass` (the dev route's; `all` passes
+ * everything but a running turn). Empty in production.
+ */
+function gateWith(input: GateInput, bypass: ReadonlySet<SkipReason | "all">): SkipReason | null {
+  let current = input;
+  for (let round = 0; round < 10; round++) {
+    const reason = gate(current);
+    if (reason === null || reason === "busy" || !(bypass.has("all") || bypass.has(reason))) return reason;
+    const relaxed: Partial<Record<SkipReason, Partial<GateInput>>> = {
+      off: { settings: { ...current.settings, enabled: true } },
+      kind_off: {
+        settings: { ...current.settings, morningPlan: true, deadlineNudges: true, habitCheck: true },
+      },
+      stale: { at: current.now },
+      dormant: { lastSeenAt: current.now },
+      quiet: { lastMessageAt: null },
+    };
+    current = { ...current, ...relaxed[reason] };
   }
   return null;
 }

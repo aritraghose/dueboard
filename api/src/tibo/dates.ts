@@ -61,9 +61,15 @@ const offsetAt = (timeZone: string, instant: number) => {
 };
 
 /** The instant (ms) a calendar day starts in the zone. */
-export const startOfDayIn = (timeZone: string, day: string): number => {
-  const midnightUtc = Date.parse(`${day}T00:00:00Z`);
-  const guess = midnightUtc - offsetAt(timeZone, midnightUtc);
-  // Once more, in case the offset changes between the guess and midnight (DST).
-  return midnightUtc - offsetAt(timeZone, guess);
+export const startOfDayIn = (timeZone: string, day: string): number => instantIn(timeZone, day, "00:00");
+
+/**
+ * The instant (ms) the zone's clocks show `time` (`HH:MM`) on `day`. A time
+ * skipped by a DST jump lands an hour off, on the nearest real one.
+ */
+export const instantIn = (timeZone: string, day: string, time: string): number => {
+  const wallUtc = Date.parse(`${day}T${time}:00Z`);
+  const guess = wallUtc - offsetAt(timeZone, wallUtc);
+  // Once more, in case the offset changes between the guess and the wall time (DST).
+  return wallUtc - offsetAt(timeZone, guess);
 };

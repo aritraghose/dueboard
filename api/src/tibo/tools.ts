@@ -14,6 +14,7 @@ import type { DomainBinding, DomainResult, TiboRpc } from "../domain-client.ts";
 import { BULK_LIMIT, MAX_TOOL_CALLS, receiptFor, type DomainCall, type TurnLedger } from "./actions.ts";
 import { dayLabel } from "./dates.ts";
 import { TIBO_MEMORY_KINDS, type TiboMemoryKind } from "./protocol.ts";
+import { REMINDER_MESSAGE_MAX } from "./reminders.ts";
 import {
   IMPORTANCE,
   goalView,
@@ -55,6 +56,15 @@ export interface ToolRuntime {
   readonly confirmPending: ((approve: boolean) => Promise<unknown>) | null;
   /** Long-term memory (`./recall.ts`), bound to this turn by the agent. */
   readonly memory: MemoryTools;
+  /** Reminders the user asks for (`./reminders.ts`), bound to this turn by the agent. */
+  readonly reminders: ReminderTools;
+}
+
+/** The reminder tools' backends. Their answers go to the model as they are. */
+export interface ReminderTools {
+  set(input: { date: string; time: string; about: string; message: string }): Promise<unknown>;
+  list(): Promise<unknown>;
+  cancel(input: { id: string }): Promise<unknown>;
 }
 
 /** The memory tools' backends. Their answers go to the model as they are. */
@@ -881,11 +891,39 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
   };
 
   // ─── Answering a held action in words ──────────────────────────────────
+  const reminderTools = {
+    set_reminder: tool({
+      description:
+        "Message the user at a time they ask for (\"remind me tomorrow at 8 PM to watch the match\", \"ping me in an hour\"). Only when they ask to be reminded. Write `message` now, in your voice, as the bubble they'll get then: short, specific, no question you can't follow up on. It's sent as written, without your tools or their board, and doesn't count as a new request.",
+      inputSchema: z.object({
+        date: day,
+        time: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .describe("24-hour HH:MM, the user's local time. Work out \"in an hour\" from the time right now."),
+        about: z.string().min(1).max(80).describe("What it's about, a few words (\"Real Madrid vs Barça\")"),
+        message: z.string().min(1).max(REMINDER_MESSAGE_MAX).describe("The reminder bubble, as they'll read it then"),
+      }),
+      execute: counted(rt, (input) => rt.reminders.set(input)),
+    }),
+    list_reminders: tool({
+      description: "The reminders still to come, soonest first, with their ids.",
+      inputSchema: z.object({}),
+      execute: counted(rt, () => rt.reminders.list()),
+    }),
+    cancel_reminder: tool({
+      description: "Cancel a reminder still to come, by its id from list_reminders. Only when the user asks.",
+      inputSchema: z.object({ id }),
+      execute: counted(rt, (input) => rt.reminders.cancel(input)),
+    }),
+  };
+
   const { confirmPending } = rt;
   return confirmPending
     ? {
         ...tools,
         ...memoryTools,
+        ...reminderTools,
         confirm_action: tool({
           description:
             "Run (approve: true) or drop (approve: false) the actions waiting for the user's go-ahead, when the user's latest message clearly answers your question about them. Never on your own judgment.",
@@ -893,5 +931,5 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           execute: counted(rt, ({ approve }) => confirmPending(approve)),
         }),
       }
-    : { ...tools, ...memoryTools };
+    : { ...tools, ...memoryTools, ...reminderTools };
 }

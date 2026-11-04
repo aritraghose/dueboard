@@ -85,8 +85,9 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     // jobs' daily cap and turns on the `dev/*` routes (seeding a thread).
     TIBO_DEV: Effect.map(ALCHEMY_DEV, (dev) => (dev ? "true" : "false")),
   },
-  // Wipes deleted accounts' Tibo threads (`./agent.ts`).
-  crons: ["*/5 * * * *"],
+  // Every minute: delivers domain events to the agents (changed check-in
+  // settings), and wipes deleted accounts' threads (`./agent.ts`).
+  crons: ["* * * * *"],
 });
 
 export default AgentWorker;

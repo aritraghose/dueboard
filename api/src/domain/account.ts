@@ -17,6 +17,7 @@ import {
   Notes,
   Tags,
   Tasks,
+  TiboEvents,
   UserSettings,
 } from "../schema.ts";
 import { Database, transaction, type Executor } from "./database.ts";
@@ -66,6 +67,7 @@ export const USER_OWNED_TABLES = [
   { table: Blocks, owner: (id: string) => or(eq(Blocks.blockerId, id), eq(Blocks.blockedId, id)) },
   { table: AiUsageEvents, owner: (id: string) => eq(AiUsageEvents.userId, id) },
   { table: AiUsageTotals, owner: (id: string) => eq(AiUsageTotals.userId, id) },
+  { table: TiboEvents, owner: (id: string) => eq(TiboEvents.userId, id) },
   { table: UserSettings, owner: (id: string) => eq(UserSettings.userId, id) },
 ] as const;
 

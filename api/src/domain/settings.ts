@@ -3,10 +3,13 @@ import * as Effect from "effect/Effect";
 import { Tags, UserSettings, type UserSettingsRow } from "../schema.ts";
 import { FALLBACK_TIME_ZONE, isValidTimeZone } from "./dates.ts";
 import { Database, newId, orDieOnDbError, transaction } from "./database.ts";
-import { Settings, SettingsPatch, USER_COLOR, decodeInput, type UserColor } from "./model.ts";
+import { Settings, SettingsPatch, TIBO_PROACTIVE_KEYS, USER_COLOR, decodeInput, type UserColor } from "./model.ts";
 import { SYSTEM_TAGS, listTags } from "./tags.ts";
+import { queueTiboEvent } from "./tibo.ts";
 
-// Per-user settings: time zone, privacy defaults and relay policy. The row
+// Per-user settings: time zone, privacy defaults, relay policy and Tibo's
+// check-ins. A change to the check-ins or the zone tells the user's
+// `TiboAgent` (a `settings_changed` event), which re-plans its alarms. The row
 // and the system tags are created lazily by `ensureUserSetup`, which
 // `Bootstrap` runs on every app load, so accounts made before this table
 // existed are backfilled the next time they open the app.
@@ -18,6 +21,12 @@ const toSettings = (row: UserSettingsRow): Settings =>
     defaultPrivacy: row.defaultPrivacy,
     defaultShareToLive: row.defaultShareToLive,
     relayPolicy: row.relayPolicy,
+    tiboProactive: row.tiboProactive,
+    tiboMorningPlan: row.tiboMorningPlan,
+    tiboMorningTime: row.tiboMorningTime,
+    tiboDeadlineNudges: row.tiboDeadlineNudges,
+    tiboHabitCheck: row.tiboHabitCheck,
+    tiboEveningTime: row.tiboEveningTime,
   });
 
 // `Bootstrap` creates the row on every app load, so a missing one is a bug.
@@ -86,12 +95,18 @@ export const updateSettings = Effect.fn("updateSettings")(function* (
   const values = yield* decodeInput(SettingsPatch)(patch);
   if (Object.keys(values).length === 0) return yield* getSettings(userId);
   const db = yield* Database;
-  const [row] = yield* db
-    .update(UserSettings)
-    .set(values)
-    .where(eq(UserSettings.userId, userId))
-    .returning()
-    .pipe(orDieOnDbError);
+  const touchesTibo = TIBO_PROACTIVE_KEYS.some((key) => key in values);
+  const row = yield* transaction(db, (tx) =>
+    Effect.gen(function* () {
+      const [updated] = yield* tx
+        .update(UserSettings)
+        .set(values)
+        .where(eq(UserSettings.userId, userId))
+        .returning();
+      if (updated && touchesTibo) yield* queueTiboEvent(tx, userId, "settings_changed");
+      return updated;
+    }),
+  );
   if (!row) return yield* missingSettings(userId);
   return toSettings(row);
 });
@@ -104,12 +119,18 @@ export const updateSettings = Effect.fn("updateSettings")(function* (
 export const syncTimeZone = Effect.fn("syncTimeZone")(function* (userId: string, timeZone: string) {
   if (!isValidTimeZone(timeZone)) return yield* getSettings(userId);
   const db = yield* Database;
-  const [row] = yield* db
-    .update(UserSettings)
-    .set({ timeZone })
-    .where(and(eq(UserSettings.userId, userId), ne(UserSettings.timeZone, timeZone)))
-    .returning()
-    .pipe(orDieOnDbError);
+  // Tibo's check-ins follow the zone, so a change re-plans them.
+  const row = yield* transaction(db, (tx) =>
+    Effect.gen(function* () {
+      const [updated] = yield* tx
+        .update(UserSettings)
+        .set({ timeZone })
+        .where(and(eq(UserSettings.userId, userId), ne(UserSettings.timeZone, timeZone)))
+        .returning();
+      if (updated) yield* queueTiboEvent(tx, userId, "settings_changed");
+      return updated;
+    }),
+  );
   return row ? toSettings(row) : yield* getSettings(userId);
 });
 
