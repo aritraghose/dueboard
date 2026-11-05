@@ -108,6 +108,7 @@ import {
 
 export * from "./domain/model.ts";
 export { documentText } from "./domain/ask-rules.ts";
+export { isValidUsername, usernameProblem, type UsernameProblem } from "./domain/username-rules.ts";
 export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/dates.ts";
 export { computeEndsAt, elapsed, remaining } from "./domain/session-rules.ts";
 export { goalPercent, goalValue, isReached } from "./domain/goal-rules.ts";

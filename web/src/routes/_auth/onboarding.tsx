@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  usernameProblem,
+  type UsernameProblem,
+} from "@dueboard/api/rpc";
 import { initials } from "@/lib/people";
 import { siteOrigin } from "@/lib/seo";
 import { cn } from "@/lib/utils";
@@ -24,16 +30,15 @@ export const Route = createFileRoute("/_auth/onboarding")({
   component: Onboarding,
 });
 
-const MIN = 3;
-const MAX = 30;
-const ALLOWED = /^[a-zA-Z0-9_.]+$/;
-
-function validate(username: string): string | null {
-  if (username.length < MIN) return `Use at least ${MIN} characters.`;
-  if (username.length > MAX) return `Use at most ${MAX} characters.`;
-  if (!ALLOWED.test(username)) return "Use only letters, numbers, underscores and dots.";
-  return null;
-}
+const PROBLEM_MESSAGES: Record<UsernameProblem, string> = {
+  too_short: `Use at least ${USERNAME_MIN_LENGTH} characters.`,
+  too_long: `Use at most ${USERNAME_MAX_LENGTH} characters.`,
+  space: "Usernames can't have spaces.",
+  dot: "Usernames can't have dots. Try an underscore instead.",
+  character: "Use only letters, numbers and underscores.",
+  reserved: "Usernames can't include “Dueboard” or “Admin”.",
+  tibo: "That username is reserved.",
+};
 
 type Availability = "checking" | "available" | "taken" | null;
 
@@ -46,7 +51,8 @@ function Onboarding() {
   const [saving, setSaving] = useState(false);
 
   const trimmed = username.trim();
-  const invalid = trimmed ? validate(trimmed) : null;
+  const problem = trimmed ? usernameProblem(trimmed) : null;
+  const invalid = problem ? PROBLEM_MESSAGES[problem] : null;
 
   useEffect(() => {
     if (!trimmed || invalid) {
@@ -86,7 +92,7 @@ function Onboarding() {
       ? "That username is available."
       : availability === "checking"
         ? "Checking…"
-        : `${MIN}–${MAX} characters: letters, numbers, underscores and dots.`;
+        : `${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} characters: letters, numbers and underscores.`;
 
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
   const ready = Boolean(trimmed) && !invalid && availability !== "taken";
@@ -118,7 +124,7 @@ function Onboarding() {
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
-                maxLength={MAX}
+                maxLength={USERNAME_MAX_LENGTH}
                 autoFocus
                 aria-invalid={Boolean(fieldError)}
                 aria-describedby="username-hint"
@@ -153,9 +159,10 @@ function Onboarding() {
         <UsernamePreview
           name={user.name}
           image={user.image}
-          username={trimmed && !invalid ? trimmed : null}
+          typed={trimmed}
+          username={trimmed && !problem ? trimmed : null}
           availability={availability}
-          invalid={Boolean(trimmed && invalid)}
+          problem={problem}
         />
       </TiboAside>
     </>
@@ -165,22 +172,24 @@ function Onboarding() {
 function UsernamePreview({
   name,
   image,
+  typed,
   username,
   availability,
-  invalid,
+  problem,
 }: {
   name: string;
   image: string | null;
+  typed: string;
   username: string | null;
   availability: Availability;
-  invalid: boolean;
+  problem: UsernameProblem | null;
 }) {
   const handle = username ?? "your_name";
   const host = new URL(siteOrigin()).host;
-  const tibo = invalid
-    ? "Letters, numbers, dots and underscores only. I don't make the rules. I do enforce them."
+  const tibo = problem
+    ? tiboOnProblem(problem, typed)
     : availability === "taken"
-      ? "Someone got there first. Try a dot or an underscore, it works wonders."
+      ? `@${username} is taken. Add a number or an underscore, it works wonders.`
       : availability === "available"
         ? `@${username}. I can work with that. Very you, probably. We just met.`
         : "Take your time. I'll be saying it a lot.";
@@ -225,4 +234,36 @@ function UsernamePreview({
       </p>
     </div>
   );
+}
+
+/** Tibo's take on a username that can't be claimed, with a fix when there's an obvious one. */
+function tiboOnProblem(problem: UsernameProblem, typed: string): string {
+  const fixed = (text: string) => (usernameProblem(text) === null ? text : null);
+  switch (problem) {
+    case "too_short": {
+      const left = USERNAME_MIN_LENGTH - typed.length;
+      const more = left === 1 ? "One more character" : `${left} more characters`;
+      return `${more}. Even I have ${USERNAME_MIN_LENGTH}, and I'm small.`;
+    }
+    case "too_long":
+      return `${USERNAME_MAX_LENGTH} characters max. Short enough that people can actually remember it.`;
+    case "dot": {
+      const swap = fixed(typed.replace(/\./g, "_"));
+      return swap
+        ? `No dots, sorry. @${swap} has a nice ring to it though.`
+        : "No dots, sorry. Underscores do the same job.";
+    }
+    case "space": {
+      const swap = fixed(typed.replace(/\s+/g, "_"));
+      return swap
+        ? `No spaces. Squish it into @${swap} and we're good.`
+        : "No spaces. Squish it together or use an underscore.";
+    }
+    case "character":
+      return "Letters, numbers and underscores only. I don't make the rules. I do enforce them.";
+    case "reserved":
+      return "Nice try. Nothing with “Dueboard” or “Admin” in it, nobody gets to look like they run the place.";
+    case "tibo":
+      return "That's my name. Get your own.";
+  }
 }

@@ -203,8 +203,10 @@ export const SESSION_PAGE_SIZE_MAX = 100;
 export const SESSION_CURSOR_MAX_LENGTH = 160;
 export const UPCOMING_DAYS_MAX = 60;
 
-export const USERNAME_MIN_LENGTH = 3;
-export const USERNAME_MAX_LENGTH = 30;
+export const USERNAME_MIN_LENGTH = 4;
+export const USERNAME_MAX_LENGTH = 15;
+/** Handles issued before the Twitter-style rules ran up to 30 characters; lookups still accept them. */
+export const HANDLE_LOOKUP_MAX_LENGTH = 30;
 export const CONNECTION_REQUESTS_PER_DAY = 20;
 export const PEOPLE_SEARCH_MIN_LENGTH = 2;
 export const PEOPLE_SEARCH_LIMIT = 10;
@@ -492,7 +494,7 @@ export const GetUpcomingInput = Schema.Struct({
 });
 export type GetUpcomingInput = typeof GetUpcomingInput.Type;
 
-export const UsernameInput = Schema.String.check(Schema.isBetweenLength(1, USERNAME_MAX_LENGTH + 1));
+export const UsernameInput = Schema.String.check(Schema.isBetweenLength(1, HANDLE_LOOKUP_MAX_LENGTH + 1));
 
 export const UsernameRef = Schema.Struct({ username: UsernameInput });
 export type UsernameRef = typeof UsernameRef.Type;

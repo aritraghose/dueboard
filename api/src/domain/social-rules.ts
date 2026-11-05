@@ -1,18 +1,16 @@
-import {
-  PEOPLE_SEARCH_MIN_LENGTH,
-  USERNAME_MAX_LENGTH,
-  USERNAME_MIN_LENGTH,
-  type ConnectionState,
-} from "./model.ts";
+import { HANDLE_LOOKUP_MAX_LENGTH, PEOPLE_SEARCH_MIN_LENGTH, type ConnectionState } from "./model.ts";
 
 export const orderedPair = (a: string, b: string): readonly [low: string, high: string] =>
   a < b ? [a, b] : [b, a];
 
+// Lookups accept any handle ever issued: before the Twitter-style rules (username-rules.ts),
+// usernames could be 3–30 characters and contain dots.
+const HANDLE_LOOKUP_MIN_LENGTH = 3;
 const USERNAME_CHARS = /^[a-z0-9_.]+$/;
 
 export const normalizeUsername = (input: string): string | null => {
   const value = input.trim().replace(/^@/, "").toLowerCase();
-  if (value.length < USERNAME_MIN_LENGTH || value.length > USERNAME_MAX_LENGTH) return null;
+  if (value.length < HANDLE_LOOKUP_MIN_LENGTH || value.length > HANDLE_LOOKUP_MAX_LENGTH) return null;
   return USERNAME_CHARS.test(value) ? value : null;
 };
 
@@ -23,7 +21,7 @@ export const searchPatterns = (
   const handle = text.replace(/^@/, "").toLowerCase();
   if (handle.length < PEOPLE_SEARCH_MIN_LENGTH) return null;
   const username =
-    handle.length <= USERNAME_MAX_LENGTH && USERNAME_CHARS.test(handle)
+    handle.length <= HANDLE_LOOKUP_MAX_LENGTH && USERNAME_CHARS.test(handle)
       ? `${handle.replace(/_/g, "\\_")}%`
       : null;
   return { exact: handle, username, name: `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%` };
