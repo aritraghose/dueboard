@@ -2,7 +2,7 @@
 	"id": "/now",
 	"name": "Dueboard",
 	"short_name": "Dueboard",
-	"description": "Tasks, habits, goals, notes and focus sessions on one board, with Tibo to keep you on track.",
+	"description": "Tasks, habits, goals and focus sessions, planned with Tibo, your AI friend.",
 	"start_url": "/now",
 	"scope": "/",
 	"display": "standalone",
