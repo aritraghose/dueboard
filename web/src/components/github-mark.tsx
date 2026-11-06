@@ -1,9 +1,10 @@
+import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 /** GitHub's mark, drawn in the current text color so it follows the theme. */
-export function GitHubMark({ className }: { className?: string }) {
+export function GitHubMark({ className, ...props }: ComponentProps<"svg">) {
   return (
-    <svg viewBox="0 0 1024 1024" aria-hidden="true" className={cn("size-4 shrink-0", className)}>
+    <svg viewBox="0 0 1024 1024" aria-hidden="true" {...props} className={cn("size-4 shrink-0", className)}>
       <path
         fill="currentColor"
         fillRule="evenodd"

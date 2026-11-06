@@ -1,6 +1,6 @@
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
-import { CodeXml } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
+import { GitHubMark } from "@/components/github-mark";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Button } from "@/components/ui/button";
 import { GITHUB_URL } from "@/lib/seo";
@@ -23,7 +23,7 @@ function PublicLayout() {
         </Link>
         <Button asChild size="lg" variant="ghost" className="ml-auto rounded-full px-3">
           <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-            <CodeXml data-icon="inline-start" aria-hidden="true" />
+            <GitHubMark data-icon="inline-start" />
             GitHub
           </a>
         </Button>
