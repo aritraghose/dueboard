@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_auth/auth")({
   validateSearch: (search: Record<string, unknown>): { error?: string } =>
     typeof search.error === "string" ? { error: search.error } : {},
   beforeLoad: async () => {
-    const user = await getSessionUser();
+    const user = await getSessionUser().catch(() => null);
     if (user) throw redirect({ to: user.username ? "/now" : "/onboarding" });
   },
   head: () => ({

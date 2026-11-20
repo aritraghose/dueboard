@@ -189,6 +189,12 @@
   --text-title--line-height: 1.15;
   --text-title--letter-spacing: -0.03em;
   /* Public pages (landing, sign-in, onboarding): Geist, carried by size and weight. */
+  --text-hero: clamp(2.35rem, 1.65rem + 2.8vw, 3.75rem);
+  --text-hero--line-height: 1.02;
+  --text-hero--letter-spacing: -0.042em;
+  --text-section: clamp(1.625rem, 1.3rem + 1.3vw, 2.375rem);
+  --text-section--line-height: 1.08;
+  --text-section--letter-spacing: -0.035em;
   --text-headline: clamp(1.875rem, 1.35rem + 2vw, 2.875rem);
   --text-headline--line-height: 1.04;
   --text-headline--letter-spacing: -0.04em;
@@ -479,6 +485,7 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
   }
   .dark {
     color-scheme: dark;
