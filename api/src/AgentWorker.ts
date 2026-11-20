@@ -70,7 +70,8 @@ const AgentWorker = Cloudflare.Worker("AgentWorker", {
     TIBO_FILES: TiboFiles,
     TIBO_DEV: Effect.map(ALCHEMY_DEV, (dev) => (dev ? "true" : "false")),
   },
-  crons: ["* * * * *"],
+  // Every 6 hours, two minutes before the ApiWorker sweep, so both share one Neon wake-up.
+  crons: ["15 */6 * * *"],
 });
 
 export default AgentWorker;

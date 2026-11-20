@@ -31,7 +31,10 @@ import {
 } from "./rpc.ts";
 import { relations } from "./schema.ts";
 
-const ASK_PRUNE_MINUTE = 17;
+// Neon scales to zero after 5 idle minutes and bills CU-hours while awake, so a frequent cron
+// keeps it running nonstop. This sweep is a slow safety net; owners already settle their own
+// expired sessions on read.
+const SAFETY_NET_CRON = "17 */6 * * *";
 
 export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()(
   "ApiWorker",
@@ -57,19 +60,17 @@ export default class ApiWorker extends Cloudflare.Workers.RpcWorker<ApiWorker>()
     );
     const aiQuota = Layer.succeed(AiQuota, { monthlyMessages });
 
-    yield* Cloudflare.Workers.cron("* * * * *", () =>
+    yield* Cloudflare.Workers.cron(SAFETY_NET_CRON, () =>
       SessionsService.sweepExpiredSessions().pipe(
         Effect.tap((completed) =>
           completed > 0 ? Effect.log(`Session sweep completed ${completed}`) : Effect.void,
         ),
         Effect.catchCause((cause) => Effect.logError("Session sweep failed", cause)),
         Effect.andThen(
-          new Date().getUTCMinutes() === ASK_PRUNE_MINUTE
-            ? AskService.pruneAskQuestions().pipe(
-                Effect.tap((deleted) => (deleted > 0 ? Effect.log(`Ask prune deleted ${deleted}`) : Effect.void)),
-                Effect.catchCause((cause) => Effect.logError("Ask prune failed", cause)),
-              )
-            : Effect.void,
+          AskService.pruneAskQuestions().pipe(
+            Effect.tap((deleted) => (deleted > 0 ? Effect.log(`Ask prune deleted ${deleted}`) : Effect.void)),
+            Effect.catchCause((cause) => Effect.logError("Ask prune failed", cause)),
+          ),
         ),
         Effect.provideService(Database, db),
       ),

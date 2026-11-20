@@ -73,9 +73,9 @@ export default {
   async fetch(request: Request, env: AgentEnv) {
     return (await routeAgentRequest(request, env)) ?? new Response("Not found", { status: 404 });
   },
-  async scheduled(controller: ScheduledController, env: AgentEnv, ctx: ExecutionContext) {
+  async scheduled(_controller: ScheduledController, env: AgentEnv, ctx: ExecutionContext) {
     ctx.waitUntil(deliverTiboEvents(env).catch((error: unknown) => console.error("Tibo event delivery failed", error)));
     ctx.waitUntil(syncRelays(env).catch((error: unknown) => console.error("Relay sync failed", error)));
-    if (new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0) ctx.waitUntil(wipeDeletedThreads(env));
+    ctx.waitUntil(wipeDeletedThreads(env).catch((error: unknown) => console.error("Tibo wipe failed", error)));
   },
 };
