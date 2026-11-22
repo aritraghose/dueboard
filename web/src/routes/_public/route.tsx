@@ -39,11 +39,14 @@ function PublicLayout() {
           className={cn(
             "mx-auto flex w-full items-center gap-3 transition-all duration-300 ease-out",
             scrolled
-              ? "max-w-4xl rounded-full border border-border/80 bg-chrome/90 px-5 py-3 shadow-lg ring-1 ring-foreground/5 backdrop-blur-xl"
+              ? "max-w-4xl rounded-full border border-border/80 bg-chrome/90 px-3 py-3 shadow-lg sm:px-5 ring-1 ring-foreground/5 backdrop-blur-xl"
               : "max-w-7xl rounded-none border border-transparent bg-transparent px-0 py-4 shadow-none ring-0 ring-transparent",
           )}
         >
-          <Link to="/" className="flex items-center gap-2 rounded-full pl-1 text-lg font-semibold tracking-tight">
+          <Link
+            to="/"
+            className="flex min-w-0 items-center gap-2 rounded-full pl-1 text-lg font-semibold tracking-tight"
+          >
             <AppLogo className="size-7" />
             <span>Dueboard</span>
           </Link>
@@ -55,15 +58,15 @@ function PublicLayout() {
             Features
           </a>
 
-          <div className="ml-auto flex items-center gap-1.5 sm:gap-2.5">
-            <Button asChild size="sm" variant="ghost" className="h-9 rounded-full px-3">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2.5">
+            <Button asChild size="sm" variant="ghost" className="h-9 rounded-full px-2 max-[400px]:hidden sm:px-3">
               <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="Dueboard on GitHub">
                 <GitHubMark data-icon="inline-start" />
                 <span className="max-sm:hidden">GitHub</span>
               </a>
             </Button>
             <ThemeSwitcher />
-            <Button asChild size="sm" className="h-9 rounded-full px-4.5 shadow-xs">
+            <Button asChild size="sm" className="h-9 rounded-full px-3.5 shadow-xs sm:px-4.5">
               <Link to={destination}>{user ? "Open board" : "Sign in"}</Link>
             </Button>
           </div>
