@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTags } from "@/hooks/use-tasks";
+import { formatDay, type LocalDate, WEEK_STARTS_ON } from "@/lib/dates";
 import { IMPORTANCE_LABEL } from "@/lib/tasks";
-import { type LocalDate, WEEK_STARTS_ON, formatDay } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 export function TagSelect({ value, onSelect }: { value: string; onSelect: (tag: Tag) => void }) {
@@ -45,7 +45,10 @@ export function TagSelect({ value, onSelect }: { value: string; onSelect: (tag: 
         <PopoverContent align="start" className="w-64! gap-0! p-1.5!">
           <ul aria-label="Tags" className="flex max-h-60 flex-col overflow-y-auto">
             {(tags ?? []).map((tag) => (
-              <li key={tag.id} className="group/tag flex items-center gap-0.5 rounded-md hover:bg-accent has-focus-visible:bg-accent">
+              <li
+                key={tag.id}
+                className="group/tag flex items-center gap-0.5 rounded-md hover:bg-accent has-focus-visible:bg-accent"
+              >
                 <button
                   type="button"
                   data-tag={tag.color}
@@ -119,10 +122,7 @@ export function DateField({
   onChange: (date: LocalDate | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const disabled = [
-    ...(min ? [{ before: toDate(min) }] : []),
-    ...(max ? [{ after: toDate(max) }] : []),
-  ];
+  const disabled = [...(min ? [{ before: toDate(min) }] : []), ...(max ? [{ after: toDate(max) }] : [])];
   return (
     <div className="flex items-center gap-1">
       <Popover open={open} onOpenChange={setOpen}>
@@ -155,7 +155,13 @@ export function DateField({
         </PopoverContent>
       </Popover>
       {value !== null && !required && (
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Clear ${label.toLowerCase()}`} onClick={() => onChange(null)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Clear ${label.toLowerCase()}`}
+          onClick={() => onChange(null)}
+        >
           <XIcon />
         </Button>
       )}
@@ -163,13 +169,7 @@ export function DateField({
   );
 }
 
-export function StarRating({
-  value,
-  onChange,
-}: {
-  value: number | null;
-  onChange: (value: number | null) => void;
-}) {
+export function StarRating({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
   const [hover, setHover] = useState<number | null>(null);
   const shown = hover ?? value ?? 0;
   const word = shown ? IMPORTANCE_LABEL[shown - 1] : null;

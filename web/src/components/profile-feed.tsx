@@ -1,14 +1,7 @@
-import type { ActivityKind, LocalDate, ProfileFeed as Feed, ProfileItem } from "@dueboard/api/rpc";
+import type { ActivityKind, ProfileFeed as Feed, LocalDate, ProfileItem } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import {
-  CheckIcon,
-  ListChecksIcon,
-  RepeatIcon,
-  TargetIcon,
-  TimerIcon,
-  type LucideIcon,
-} from "lucide-react";
+import { CheckIcon, ListChecksIcon, type LucideIcon, RepeatIcon, TargetIcon, TimerIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { PageEmpty } from "@/components/page";
 import { Button } from "@/components/ui/button";
@@ -31,7 +24,12 @@ const EMPTY: Record<Feed, { icon: LucideIcon; self: string; other: string }> = {
   sessions: { icon: TimerIcon, self: "Focus sessions you finish show here.", other: "No finished sessions to show." },
 };
 
-const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+const dayFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
 
 const formatLocalDay = (date: LocalDate) => dayFormat.format(new Date(`${date}T12:00:00`));
@@ -47,7 +45,12 @@ export function ProfileFeed({ username, feed, self }: { username: string; feed: 
   if (!data) {
     if (AsyncResult.isFailure(result)) {
       return (
-        <PageEmpty icon={EMPTY[feed].icon} title="Couldn't load this tab" description="Check your connection, then try again." className="min-h-48 flex-none rounded-xl border">
+        <PageEmpty
+          icon={EMPTY[feed].icon}
+          title="Couldn't load this tab"
+          description="Check your connection, then try again."
+          className="min-h-48 flex-none rounded-xl border"
+        >
           <Button variant="outline" onClick={() => void reload()}>
             Try again
           </Button>

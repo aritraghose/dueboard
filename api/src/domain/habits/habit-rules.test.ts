@@ -3,6 +3,9 @@ import type { LocalDate } from "../core/dates.ts";
 import {
   dayStatus,
   describeSchedule,
+  type HabitCheckinCount,
+  type HabitPause,
+  type HabitRule,
   indexCheckins,
   isPausedOn,
   isScheduledOn,
@@ -12,9 +15,6 @@ import {
   periodFor,
   progressFor,
   streak,
-  type HabitCheckinCount,
-  type HabitPause,
-  type HabitRule,
 } from "./habit-rules.ts";
 
 const d = (value: string) => value as LocalDate;
@@ -68,9 +68,7 @@ const period = (start: string, end: string) => ({ start: d(start), end: d(end) }
 
 describe("normalizeSchedule", () => {
   test("flexible keeps its period and drops nothing", () => {
-    expect(
-      normalizeSchedule({ kind: "flexible", targetCount: 3, periodUnit: "week", periodLength: 1 }),
-    ).toEqual({
+    expect(normalizeSchedule({ kind: "flexible", targetCount: 3, periodUnit: "week", periodLength: 1 })).toEqual({
       ok: true,
       columns: {
         scheduleKind: "flexible",
@@ -135,9 +133,7 @@ describe("normalizeSchedule", () => {
   test("specific days needs exactly one list", () => {
     expect(normalizeSchedule({ kind: "specific_days", targetCount: 1 }).ok).toBe(false);
     expect(normalizeSchedule({ kind: "specific_days", targetCount: 1, weekdays: [] }).ok).toBe(false);
-    expect(
-      normalizeSchedule({ kind: "specific_days", targetCount: 1, weekdays: [1], monthDays: [1] }).ok,
-    ).toBe(false);
+    expect(normalizeSchedule({ kind: "specific_days", targetCount: 1, weekdays: [1], monthDays: [1] }).ok).toBe(false);
     expect(normalizeSchedule({ kind: "specific_days", targetCount: 1, monthDays: [31, 1] })).toMatchObject({
       ok: true,
       columns: { monthDays: [1, 31], weekdays: null },
@@ -419,9 +415,13 @@ describe("streak (flexible)", () => {
   test("a pause spanning a week boundary skips both partly paused weeks", () => {
     const habit = flexible(3, 1, "week");
     const checkins = tapped(
-      "2026-10-18", "2026-10-19", "2026-10-20",
+      "2026-10-18",
+      "2026-10-19",
+      "2026-10-20",
       "2026-10-26",
-      "2026-11-09", "2026-11-10", "2026-11-11",
+      "2026-11-09",
+      "2026-11-10",
+      "2026-11-11",
     );
     const pauses = [pause("2026-10-29", "2026-11-04")];
     expect(streak(habit, pauses, checkins, d("2026-11-12"))).toBe(2);
@@ -485,7 +485,14 @@ describe("streak (specific days)", () => {
     const habit = onMonthDays([31], 1, "2026-01-01");
     const checkins = tapped("2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30");
     expect(streak(habit, [], checkins, d("2026-05-15"))).toBe(4);
-    expect(streak(habit, [], checkins.filter((c) => c.localDate !== "2026-02-28"), d("2026-05-15"))).toBe(2);
+    expect(
+      streak(
+        habit,
+        [],
+        checkins.filter((c) => c.localDate !== "2026-02-28"),
+        d("2026-05-15"),
+      ),
+    ).toBe(2);
   });
 
   test("a leap-year February 29th", () => {
@@ -532,7 +539,18 @@ describe("describeSchedule", () => {
 
   test("ordinal", () => {
     expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 30, 31].map(ordinal)).toEqual([
-      "1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "30th", "31st",
+      "1st",
+      "2nd",
+      "3rd",
+      "4th",
+      "11th",
+      "12th",
+      "13th",
+      "21st",
+      "22nd",
+      "23rd",
+      "30th",
+      "31st",
     ]);
   });
 });
@@ -543,14 +561,21 @@ describe("occurrences", () => {
   test("weekday habits show on each of their days", () => {
     const habit = onWeekdays([1, 3, 5]);
     expect(dates(occurrences(habit, [], [], d("2026-11-03"), d("2026-11-17")))).toEqual([
-      "2026-11-04", "2026-11-06", "2026-11-09", "2026-11-11", "2026-11-13", "2026-11-16",
+      "2026-11-04",
+      "2026-11-06",
+      "2026-11-09",
+      "2026-11-11",
+      "2026-11-13",
+      "2026-11-16",
     ]);
   });
 
   test("month-day habits, with the last-day fallback", () => {
     const habit = onMonthDays([15, 31]);
     expect(dates(occurrences(habit, [], [], d("2026-11-10"), d("2026-12-20")))).toEqual([
-      "2026-11-15", "2026-11-30", "2026-12-15",
+      "2026-11-15",
+      "2026-11-30",
+      "2026-12-15",
     ]);
   });
 
@@ -572,28 +597,37 @@ describe("occurrences", () => {
 
   test("a daily count shows every day", () => {
     expect(dates(occurrences(flexible(5, 1, "day"), [], [], d("2026-11-04"), d("2026-11-07")))).toEqual([
-      "2026-11-04", "2026-11-05", "2026-11-06",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
     ]);
   });
 
   test("multi-unit and monthly periods", () => {
     expect(dates(occurrences(flexible(2, 5, "day", "2026-11-01"), [], [], d("2026-11-03"), d("2026-11-17")))).toEqual([
-      "2026-11-03", "2026-11-06", "2026-11-11", "2026-11-16",
+      "2026-11-03",
+      "2026-11-06",
+      "2026-11-11",
+      "2026-11-16",
     ]);
     expect(dates(occurrences(flexible(10, 1, "month"), [], [], d("2026-11-20"), d("2027-01-05")))).toEqual([
-      "2026-11-20", "2026-12-01", "2027-01-01",
+      "2026-11-20",
+      "2026-12-01",
+      "2027-01-01",
     ]);
   });
 
   test("never before the start date, never while paused", () => {
     expect(dates(occurrences(onWeekdays([1, 3], 1, "2026-11-10"), [], [], d("2026-11-03"), d("2026-11-17")))).toEqual([
-      "2026-11-11", "2026-11-16",
+      "2026-11-11",
+      "2026-11-16",
     ]);
     const open: Array<HabitPause> = [{ startDate: d("2026-11-01"), endDate: null }];
     expect(occurrences(flexible(3, 1, "week"), open, [], d("2026-11-04"), d("2026-12-01"))).toEqual([]);
     const ending: Array<HabitPause> = [{ startDate: d("2026-11-01"), endDate: d("2026-11-11") }];
     expect(dates(occurrences(flexible(3, 1, "week"), ending, [], d("2026-11-04"), d("2026-11-16")))).toEqual([
-      "2026-11-11", "2026-11-15",
+      "2026-11-11",
+      "2026-11-15",
     ]);
   });
 });

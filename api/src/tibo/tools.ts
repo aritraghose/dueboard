@@ -1,36 +1,36 @@
-import { tool, type ToolSet } from "ai";
+import { type ToolSet, tool } from "ai";
 import { z } from "zod";
+import { RELAY_MESSAGE_MAX_LENGTH } from "../domain/relays/relay-constants.ts";
 import type { DomainBinding, DomainResult, TiboRpc } from "../domain-client.ts";
-import { BULK_LIMIT, MAX_TOOL_CALLS, receiptFor, type DomainCall, type TurnLedger } from "./actions.ts";
+import { IMAGE_SHAPES, type ImageShape } from "../muse-image.ts";
+import { BULK_LIMIT, type DomainCall, MAX_TOOL_CALLS, receiptFor, type TurnLedger } from "./actions.ts";
 import { dayLabel } from "./dates.ts";
+import { IMAGE_PROMPT_MAX, IMAGE_REFERENCES_MAX, IMAGES_PER_DAY } from "./image-rules.ts";
 import { TIBO_MEMORY_KINDS, type TiboMemoryKind } from "./protocol.ts";
 import { REMINDER_MESSAGE_MAX } from "./reminders.ts";
-import { IMAGES_PER_DAY, IMAGE_PROMPT_MAX, IMAGE_REFERENCES_MAX } from "./image-rules.ts";
-import { IMAGE_SHAPES, type ImageShape } from "../muse-image.ts";
-import { RELAY_MESSAGE_MAX_LENGTH } from "../domain/relays/relay-constants.ts";
 import {
-  IMPORTANCE,
-  goalView,
-  habitView,
-  importanceValue,
-  minutesLabel,
-  noteView,
-  sessionView,
-  taskReceipt,
-  taskStatusOf,
-  taskView,
   type DayTaskJson,
   type DiaryPageJson,
   type GoalJson,
   type GoalSummaryJson,
+  goalView,
   type HabitJson,
   type HabitOnDayJson,
   type HabitSummaryJson,
+  habitView,
+  IMPORTANCE,
+  importanceValue,
   type LiveEventJson,
+  minutesLabel,
   type NoteJson,
+  noteView,
   type SessionJson,
+  sessionView,
   type TagJson,
   type TaskJson,
+  taskReceipt,
+  taskStatusOf,
+  taskView,
   theirWords,
 } from "./views.ts";
 
@@ -136,7 +136,8 @@ const counted =
     rt.ledger.toolCalls += 1;
     if (rt.ledger.toolCalls > MAX_TOOL_CALLS) {
       return {
-        error: "That's the most actions for one reply. Stop here, say what's done and what's left, and offer to keep going.",
+        error:
+          "That's the most actions for one reply. Stop here, say what's done and what's left, and offer to keep going.",
       };
     }
     return execute(input);
@@ -275,7 +276,8 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           done: `Updated task: ${title}`,
           keys: TASKS,
           hold: input.privacy === "public" && task.privacy !== "public",
-          receipt: (value) => `Updated task: ${taskReceipt(value.title, value.assignedDate, value.deadlineDate, today)}`,
+          receipt: (value) =>
+            `Updated task: ${taskReceipt(value.title, value.assignedDate, value.deadlineDate, today)}`,
           view: taskView,
         });
       }),
@@ -381,7 +383,11 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
         if (!summary.ok) return { status: "done", result: { id: habit.id, title: habit.title } };
         const view = habitView(summary.value as HabitSummaryJson);
         const receipt = rt.ledger.receipts.at(-1);
-        if (receipt) rt.ledger.receipts[rt.ledger.receipts.length - 1] = { ...receipt, text: `${receipt.text} · ${view.schedule}` };
+        if (receipt)
+          rt.ledger.receipts[rt.ledger.receipts.length - 1] = {
+            ...receipt,
+            text: `${receipt.text} · ${view.schedule}`,
+          };
         return { status: "done", result: view };
       }),
     }),
@@ -485,7 +491,14 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           goals: value.map(({ goal, links }) => ({
             ...goalView(goal),
             ...(links.length > 0
-              ? { linked: links.map((link) => ({ type: link.itemType, id: link.itemId, title: link.itemTitle, adds: link.amount })) }
+              ? {
+                  linked: links.map((link) => ({
+                    type: link.itemType,
+                    id: link.itemId,
+                    title: link.itemTitle,
+                    adds: link.amount,
+                  })),
+                }
               : {}),
           })),
         })),
@@ -599,7 +612,8 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           item: { kind: "goal", id: goalId },
           done: `${action === "pause" ? "Paused" : action === "resume" ? "Resumed" : "Reopened"} a goal`,
           keys: GOALS,
-          receipt: (goal) => `${action === "pause" ? "Paused" : action === "resume" ? "Resumed" : "Reopened"} goal: ${goal.name}`,
+          receipt: (goal) =>
+            `${action === "pause" ? "Paused" : action === "resume" ? "Resumed" : "Reopened"} goal: ${goal.name}`,
           view: goalView,
         }),
       ),
@@ -648,10 +662,17 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
       inputSchema: z.object({ day: day.optional(), query: z.string().max(60).optional() }),
       execute: counted(rt, ({ day: date, query }) =>
         date && !query
-          ? read<{ notes: NoteJson[] }>(rt, "ListNotesForDay", { date }, (value) => ({ notes: value.notes.map(noteView) }))
-          : read<{ days: { notes: NoteJson[] }[] }>(rt, "ListNotes", { ...(query ? { query } : {}), limit: 30 }, (value) => ({
-              notes: value.days.flatMap((noteDay) => noteDay.notes.map(noteView)),
-            })),
+          ? read<{ notes: NoteJson[] }>(rt, "ListNotesForDay", { date }, (value) => ({
+              notes: value.notes.map(noteView),
+            }))
+          : read<{ days: { notes: NoteJson[] }[] }>(
+              rt,
+              "ListNotes",
+              { ...(query ? { query } : {}), limit: 30 },
+              (value) => ({
+                notes: value.days.flatMap((noteDay) => noteDay.notes.map(noteView)),
+              }),
+            ),
       ),
     }),
 
@@ -709,7 +730,10 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
           view: (session) => sessionView(session, rt.timeZone),
         });
         if ("code" in started && started.code === "ActiveSessionExists") {
-          return { ...started, next: "Another session is active. Ask whether to replace it; don't replace it on your own." };
+          return {
+            ...started,
+            next: "Another session is active. Ask whether to replace it; don't replace it on your own.",
+          };
         }
         return started;
       }),
@@ -730,7 +754,12 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
         if (action === "extend" && !minutes) return { error: "Say how many minutes to add." };
         const spec: { rpc: TiboRpc; summary: string; done: string; verb: string } = {
           pause: { rpc: "PauseSession" as const, summary: `Pause ${name}`, done: `Paused ${name}`, verb: "Paused" },
-          resume: { rpc: "ResumeSession" as const, summary: `Resume ${name}`, done: `Resumed ${name}`, verb: "Resumed" },
+          resume: {
+            rpc: "ResumeSession" as const,
+            summary: `Resume ${name}`,
+            done: `Resumed ${name}`,
+            verb: "Resumed",
+          },
           extend: {
             rpc: "ExtendSession" as const,
             summary: `Add ${minutesLabel(minutes ?? 0)} to ${name}`,
@@ -820,7 +849,7 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
   const memoryTools = {
     search_conversation: tool({
       description:
-        "Search the whole conversation with the user, back to its first day, by keywords and by meaning. Use it when they ask about something said before that isn't in your context (\"what did I tell you about X in 2025?\"). `from` and `to` (inclusive) narrow it to dates. Answers short dated excerpts.",
+        'Search the whole conversation with the user, back to its first day, by keywords and by meaning. Use it when they ask about something said before that isn\'t in your context ("what did I tell you about X in 2025?"). `from` and `to` (inclusive) narrow it to dates. Answers short dated excerpts.',
       inputSchema: z.object({
         query: z.string().min(1).max(200).describe("What to look for, in plain words"),
         from: day.optional(),
@@ -835,7 +864,7 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     }),
     remember: tool({
       description:
-        "Keep a lasting fact about the user when they ask you to remember something (\"remember that…\"). Write it as a short third-person sentence that makes sense alone. Pass `replaces` with the refs of memories it makes out of date.",
+        'Keep a lasting fact about the user when they ask you to remember something ("remember that…"). Write it as a short third-person sentence that makes sense alone. Pass `replaces` with the refs of memories it makes out of date.',
       inputSchema: z.object({
         text: z.string().min(3).max(300).describe('Like "Their sister Priya\'s birthday is March 3."'),
         kind: z.enum(TIBO_MEMORY_KINDS),
@@ -911,8 +940,8 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
         time: z
           .string()
           .regex(/^\d{2}:\d{2}$/)
-          .describe("24-hour HH:MM, the user's local time. Work out \"in an hour\" from the time right now."),
-        about: z.string().min(1).max(80).describe("What it's about, a few words (\"Real Madrid vs Barça\")"),
+          .describe('24-hour HH:MM, the user\'s local time. Work out "in an hour" from the time right now.'),
+        about: z.string().min(1).max(80).describe('What it\'s about, a few words ("Real Madrid vs Barça")'),
         message: z.string().min(1).max(REMINDER_MESSAGE_MAX).describe("The reminder bubble, as they'll read it then"),
       }),
       execute: counted(rt, (input) => rt.reminders.set(input)),
@@ -933,7 +962,11 @@ export function tiboTools(rt: ToolRuntime): ToolSet {
     make_image: tool({
       description: `Make a picture and send it in the chat, with Meta's image model: when the user asks for an image, a drawing, a sticker, a wallpaper, a mockup, or to change a picture (theirs or one you made). Each costs them one more message and they get ${IMAGES_PER_DAY} a day, so only when they ask, one at a time unless they ask for more. Write \`prompt\` as a full description: subject, style, mood, colors, composition, any text to show. To change or build on pictures in the chat, put their refs in \`from\` (the ref shown with each picture, like 3f2a9c1b) and say in \`prompt\` what to change and what to keep. Never a real person's likeness unless it's the user's own photo and they asked.`,
       inputSchema: z.object({
-        prompt: z.string().min(1).max(IMAGE_PROMPT_MAX).describe("What to draw, or what to change in the pictures in `from`"),
+        prompt: z
+          .string()
+          .min(1)
+          .max(IMAGE_PROMPT_MAX)
+          .describe("What to draw, or what to change in the pictures in `from`"),
         from: z
           .array(z.string().min(1).max(40))
           .max(IMAGE_REFERENCES_MAX)

@@ -37,9 +37,7 @@ export type ExtendSessionInput = typeof ExtendSessionInput.Type;
 
 export const ListSessionsInput = Schema.Struct({
   cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(SESSION_CURSOR_MAX_LENGTH))),
-  limit: Schema.optionalKey(
-    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: SESSION_PAGE_SIZE_MAX })),
-  ),
+  limit: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: SESSION_PAGE_SIZE_MAX }))),
 });
 export type ListSessionsInput = typeof ListSessionsInput.Type;
 
@@ -82,13 +80,10 @@ export class SessionNotFound extends Schema.TaggedError<SessionNotFound>()("Sess
   id: Schema.String,
 }) {}
 
-export class ActiveSessionExists extends Schema.TaggedError<ActiveSessionExists>()(
-  "ActiveSessionExists",
-  {
-    message: Schema.String,
-    session: FocusSession,
-  },
-) {}
+export class ActiveSessionExists extends Schema.TaggedError<ActiveSessionExists>()("ActiveSessionExists", {
+  message: Schema.String,
+  session: FocusSession,
+}) {}
 
 export class SessionTransitionNotAllowed extends Schema.TaggedError<SessionTransitionNotAllowed>()(
   "SessionTransitionNotAllowed",

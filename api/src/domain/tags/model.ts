@@ -20,19 +20,14 @@ export const TAG_COLOR = [
 export const TagColor = Schema.Literals(TAG_COLOR);
 export type TagColor = typeof TagColor.Type;
 
-export const USER_COLOR = TAG_COLOR.filter(
-  (color): color is Exclude<TagColor, "gray"> => color !== "gray",
-);
+export const USER_COLOR = TAG_COLOR.filter((color): color is Exclude<TagColor, "gray"> => color !== "gray");
 export const UserColor = Schema.Literals(USER_COLOR);
 export type UserColor = typeof UserColor.Type;
 
 export const TAG_NAME_MAX_LENGTH = 30;
 export const MAX_TAGS_PER_USER = 50;
 
-export const TagName = Schema.String.check(
-  Schema.isTrimmed(),
-  Schema.isBetweenLength(1, TAG_NAME_MAX_LENGTH),
-);
+export const TagName = Schema.String.check(Schema.isTrimmed(), Schema.isBetweenLength(1, TAG_NAME_MAX_LENGTH));
 
 export const CreateTagInput = Schema.Struct({ name: TagName, color: TagColor });
 export type CreateTagInput = typeof CreateTagInput.Type;

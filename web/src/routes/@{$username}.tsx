@@ -1,15 +1,9 @@
 import type { Profile } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
-import {
-  ListChecksIcon,
-  RepeatIcon,
-  TargetIcon,
-  TimerIcon,
-  UserRoundXIcon,
-} from "lucide-react";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import { ListChecksIcon, RepeatIcon, TargetIcon, TimerIcon, UserRoundXIcon } from "lucide-react";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConnectionActions } from "@/components/connection-actions";
@@ -24,10 +18,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { profileAtom, useSocialActions } from "@/hooks/use-social";
-import { type LocalDate, isLocalDate, todayIn } from "@/lib/dates";
-import { lastCheckedUser, rememberCheckedUser, type OnboardedUser } from "@/lib/session-cache";
-import { readSidebarOpen } from "@/lib/sidebar-state";
+import { isLocalDate, type LocalDate, todayIn } from "@/lib/dates";
 import { canonical, seo } from "@/lib/seo";
+import { lastCheckedUser, type OnboardedUser, rememberCheckedUser } from "@/lib/session-cache";
+import { readSidebarOpen } from "@/lib/sidebar-state";
 import { getSessionUser } from "../session.ts";
 
 const TABS = [
@@ -224,7 +218,9 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
   const { person, status, counts } = profile;
   const connections = counts?.connections;
   const connectionsText =
-    connections === undefined ? null : `${connections.toLocaleString()} ${connections === 1 ? "connection" : "connections"}`;
+    connections === undefined
+      ? null
+      : `${connections.toLocaleString()} ${connections === 1 ? "connection" : "connections"}`;
 
   return (
     <section
@@ -258,11 +254,7 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
             {person.name.split(/\s+/)[0]} asked to connect with you.
           </p>
         )}
-        {status.state === "blocked" && (
-          <p className="text-sm text-muted-foreground">
-            You blocked @{person.username}.
-          </p>
-        )}
+        {status.state === "blocked" && <p className="text-sm text-muted-foreground">You blocked @{person.username}.</p>}
         {connectionsText && (
           <div className="flex items-center justify-between gap-3 border-t pt-4">
             {status.state === "self" ? (
@@ -276,7 +268,10 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
               <span className="font-medium">{connectionsText}</span>
             )}
             {counts && (
-              <span className="flex items-baseline gap-1.5" title="+1 for each settled task and finished focus session, and for each habit checked or goal moved on a day">
+              <span
+                className="flex items-baseline gap-1.5"
+                title="+1 for each settled task and finished focus session, and for each habit checked or goal moved on a day"
+              >
                 <span className="text-lg font-semibold tabular-nums">{counts.points.toLocaleString()}</span>
                 <span className="text-sm text-muted-foreground">{counts.points === 1 ? "point" : "points"}</span>
               </span>

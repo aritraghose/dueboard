@@ -5,13 +5,13 @@ import {
   convertProgress,
   dayProgressAction,
   deltaError,
+  type GoalProgress,
   goalPercent,
   goalValue,
   isReached,
   linkedDelta,
   valueError,
   withValue,
-  type GoalProgress,
 } from "./goal-rules.ts";
 import { GOAL_COUNT_MAX } from "./model.ts";
 

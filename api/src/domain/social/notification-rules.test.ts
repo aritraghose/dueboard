@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  HIDDEN_REQUEST_STATUSES,
-  notificationState,
-  onRequestAccepted,
-  onRequestSent,
-} from "./notification-rules.ts";
+import { HIDDEN_REQUEST_STATUSES, notificationState, onRequestAccepted, onRequestSent } from "./notification-rules.ts";
 
 describe("onRequestSent", () => {
   test("tells the recipient who asked", () => {

@@ -32,5 +32,7 @@ export async function verifyTurnstile({ secret, token, remoteIp, hostnames, fetc
   }
   if (result.success !== true) return false;
   if (hostnames.length === 0) return true;
-  return result.action === ASK_TURNSTILE_ACTION && typeof result.hostname === "string" && hostnames.includes(result.hostname);
+  return (
+    result.action === ASK_TURNSTILE_ACTION && typeof result.hostname === "string" && hostnames.includes(result.hostname)
+  );
 }

@@ -3,7 +3,8 @@ export const BUBBLE_DELIMITER = "---";
 const DELIMITER_LINE = /^\s*-{3,}\s*$/;
 
 const REACT_LINE = /^\s*\[\s*react\s*:\s*(.+?)\s*\]\s*$/i;
-const ONE_EMOJI = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:[\u{FE0F}\u{20E3}\p{Emoji_Modifier}]|\u{200D}(?:\p{Extended_Pictographic}|\p{Regional_Indicator})|\p{Regional_Indicator})*$/u;
+const ONE_EMOJI =
+  /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:[\u{FE0F}\u{20E3}\p{Emoji_Modifier}]|\u{200D}(?:\p{Extended_Pictographic}|\p{Regional_Indicator})|\p{Regional_Indicator})*$/u;
 
 export const reactionOf = (line: string): string | null => {
   const emoji = REACT_LINE.exec(line)?.[1];

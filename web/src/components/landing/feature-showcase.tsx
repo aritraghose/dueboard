@@ -15,6 +15,7 @@ import {
   FlameIcon,
   ListChecksIcon,
   LockIcon,
+  type LucideIcon,
   MessageCircleQuestionIcon,
   MoreHorizontalIcon,
   NotebookPenIcon,
@@ -31,7 +32,6 @@ import {
   TimerIcon,
   UserRoundIcon,
   UsersIcon,
-  type LucideIcon,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -101,13 +101,15 @@ const FEATURES: readonly FeatureItem[] = [
   {
     id: "notes-sessions",
     title: "Notes and Sessions",
-    summary: "Share quick notes about what you are doing, how your day is going, or just random stuff. Or, start a Focus Session.",
+    summary:
+      "Share quick notes about what you are doing, how your day is going, or just random stuff. Or, start a Focus Session.",
     icon: TimerIcon,
   },
   {
     id: "diary",
     title: "Diary",
-    summary: "Every settled task, checked off habit, moved goal, completed focus session, and note forms your day. Your days form your diary.",
+    summary:
+      "Every settled task, checked off habit, moved goal, completed focus session, and note forms your day. Your days form your diary.",
     icon: BookOpenIcon,
   },
   {
@@ -210,11 +212,7 @@ export function FeatureShowcase() {
       </div>
 
       {/* Instagram-Story-style 8-segment progress bar */}
-      <div
-        role="group"
-        aria-label="Feature progress"
-        className="mt-6 grid grid-cols-8 gap-1.5 sm:gap-2"
-      >
+      <div role="group" aria-label="Feature progress" className="mt-6 grid grid-cols-8 gap-1.5 sm:gap-2">
         {FEATURES.map((feature, index) => {
           const fill = index < activeIndex ? 1 : index === activeIndex ? progress : 0;
           return (
@@ -567,7 +565,12 @@ function TasksHabitsGoalsPanel() {
                 >
                   <div className="flex items-start gap-2">
                     <span className="min-w-0 flex-1 pt-0.5 text-sm leading-5 font-medium">Ship v2 release</span>
-                    <span className={cn("pt-0.5 text-sm font-semibold tabular-nums", goalDone ? "text-success" : "text-tag-ink")}>
+                    <span
+                      className={cn(
+                        "pt-0.5 text-sm font-semibold tabular-nums",
+                        goalDone ? "text-success" : "text-tag-ink",
+                      )}
+                    >
                       {percent}%
                     </span>
                   </div>
@@ -705,8 +708,10 @@ function ConnectionsLivePanel() {
               {liveTab !== "mine" && (
                 <li className="flex items-baseline gap-2.5 py-1.5">
                   <p className="min-w-0 flex-1 text-muted-foreground">
-                    <span data-tag="indigo" className="font-semibold text-tag-ink">samdev</span> finished 45m of focus:{" "}
-                    <span className="text-foreground">Postgres query tuning</span>
+                    <span data-tag="indigo" className="font-semibold text-tag-ink">
+                      samdev
+                    </span>{" "}
+                    finished 45m of focus: <span className="text-foreground">Postgres query tuning</span>
                   </p>
                   <span className="text-xs text-muted-foreground tabular-nums">1h</span>
                 </li>
@@ -714,8 +719,10 @@ function ConnectionsLivePanel() {
               {liveTab !== "mine" && (
                 <li className="flex items-baseline gap-2.5 py-1.5">
                   <p className="min-w-0 flex-1 text-muted-foreground">
-                    <span data-tag="orange" className="font-semibold text-tag-ink">hannah</span> completed a habit:{" "}
-                    <span className="text-foreground">Morning yoga</span>
+                    <span data-tag="orange" className="font-semibold text-tag-ink">
+                      hannah
+                    </span>{" "}
+                    completed a habit: <span className="text-foreground">Morning yoga</span>
                   </p>
                   <span className="text-xs text-muted-foreground tabular-nums">18m</span>
                 </li>
@@ -723,8 +730,10 @@ function ConnectionsLivePanel() {
               {liveTab !== "mine" && (
                 <li className="flex items-baseline gap-2.5 py-1.5">
                   <p className="min-w-0 flex-1 text-muted-foreground">
-                    <span data-tag="violet" className="font-semibold text-tag-ink">maya</span> moved a goal:{" "}
-                    <span className="text-foreground">Bake 12 sourdough loaves (75%)</span>
+                    <span data-tag="violet" className="font-semibold text-tag-ink">
+                      maya
+                    </span>{" "}
+                    moved a goal: <span className="text-foreground">Bake 12 sourdough loaves (75%)</span>
                   </p>
                   <span className="text-xs text-muted-foreground tabular-nums">6m</span>
                 </li>
@@ -732,7 +741,10 @@ function ConnectionsLivePanel() {
               {liveTab !== "connections" && (
                 <li className="-mx-2 flex items-baseline gap-2.5 rounded-lg bg-secondary/45 px-2 py-1.5 transition-colors">
                   <p className="min-w-0 flex-1 text-muted-foreground">
-                    <span data-tag="teal" className="font-semibold text-tag-ink">rhys</span> settled a task
+                    <span data-tag="teal" className="font-semibold text-tag-ink">
+                      rhys
+                    </span>{" "}
+                    settled a task
                     {privacy === "connections" && (
                       <>
                         : <span className="text-foreground">Order Leo's surprise Lego set</span>
@@ -791,7 +803,14 @@ const TIBO_SCENARIOS = [
     reaction: "⚡",
     reply: "Added and marked working. Your future self says thanks.",
     receipts: [
-      { kind: "task" as const, title: "Write tests for sync worker", meta: "Due Fri · Working", verb: "Created", done: false, tag: { name: "Work", color: "teal" as TagColor } },
+      {
+        kind: "task" as const,
+        title: "Write tests for sync worker",
+        meta: "Due Fri · Working",
+        verb: "Created",
+        done: false,
+        tag: { name: "Work", color: "teal" as TagColor },
+      },
     ],
   },
   {
@@ -800,9 +819,7 @@ const TIBO_SCENARIOS = [
     user: "Merged two more PRs for v2, bump my release goal",
     reaction: "🔥",
     reply: "Moved Ship v2 release up to 80%. Four milestones to go.",
-    receipts: [
-      { kind: "goal" as const, title: "Ship v2 release", meta: "16 of 20 · 80%", verb: "Moved", done: false },
-    ],
+    receipts: [{ kind: "goal" as const, title: "Ship v2 release", meta: "16 of 20 · 80%", verb: "Moved", done: false }],
   },
   {
     id: "settle",
@@ -811,8 +828,22 @@ const TIBO_SCENARIOS = [
     reaction: "🧁",
     reply: "Both settled and saved to your diary. Cupcake mission complete.",
     receipts: [
-      { kind: "task" as const, title: "Pick up cupcakes for Maya's birthday", meta: "Today", verb: "Settled", done: true, tag: { name: "Family", color: "amber" as TagColor } },
-      { kind: "task" as const, title: "Review Sam's PR", meta: "Today", verb: "Settled", done: true, tag: { name: "Work", color: "blue" as TagColor } },
+      {
+        kind: "task" as const,
+        title: "Pick up cupcakes for Maya's birthday",
+        meta: "Today",
+        verb: "Settled",
+        done: true,
+        tag: { name: "Family", color: "amber" as TagColor },
+      },
+      {
+        kind: "task" as const,
+        title: "Review Sam's PR",
+        meta: "Today",
+        verb: "Settled",
+        done: true,
+        tag: { name: "Work", color: "blue" as TagColor },
+      },
     ],
   },
 ] as const;
@@ -881,9 +912,7 @@ function TiboActionsPanel() {
                       aria-hidden="true"
                       className={cn(
                         "mt-0.5 grid size-4.5 shrink-0 place-items-center rounded-full border",
-                        receipt.done
-                          ? "border-success bg-success text-background"
-                          : "border-muted-foreground/50",
+                        receipt.done ? "border-success bg-success text-background" : "border-muted-foreground/50",
                       )}
                     >
                       {receipt.done && <CheckIcon className="size-3" strokeWidth={3} />}
@@ -947,9 +976,21 @@ function TiboActionsPanel() {
               <PlusIcon aria-hidden="true" className="size-4.5" />
             </span>
           </InputGroupAddon>
-          <InputGroupInput readOnly value="" placeholder="Message Tibo…" aria-label="Message Tibo" className="h-11 text-sm" />
+          <InputGroupInput
+            readOnly
+            value=""
+            placeholder="Message Tibo…"
+            aria-label="Message Tibo"
+            className="h-11 text-sm"
+          />
           <InputGroupAddon align="inline-end" className="pr-1.5">
-            <InputGroupButton type="button" variant="ghost" size="icon-sm" tabIndex={-1} className="rounded-full text-muted-foreground opacity-60">
+            <InputGroupButton
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              tabIndex={-1}
+              className="rounded-full text-muted-foreground opacity-60"
+            >
               <SendIcon className="size-4.5" />
             </InputGroupButton>
           </InputGroupAddon>
@@ -1159,9 +1200,21 @@ function AskPagePanel() {
         </div>
 
         <InputGroup className="rounded-2xl! border-composer-border! bg-composer!">
-          <InputGroupInput readOnly value="" placeholder="Ask about Rhys…" aria-label="Ask preview" className="h-11 text-sm" />
+          <InputGroupInput
+            readOnly
+            value=""
+            placeholder="Ask about Rhys…"
+            aria-label="Ask preview"
+            className="h-11 text-sm"
+          />
           <InputGroupAddon align="inline-end" className="pr-1.5">
-            <InputGroupButton type="button" variant="ghost" size="icon-sm" tabIndex={-1} className="rounded-full text-muted-foreground opacity-60">
+            <InputGroupButton
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              tabIndex={-1}
+              className="rounded-full text-muted-foreground opacity-60"
+            >
               <SendIcon className="size-4.5" />
             </InputGroupButton>
           </InputGroupAddon>
@@ -1216,18 +1269,29 @@ function NotesSessionsPanel() {
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <span
               aria-hidden="true"
-              className={cn("size-2 rounded-full", running ? "animate-focus-breathe bg-focus" : "bg-muted-foreground/50")}
+              className={cn(
+                "size-2 rounded-full",
+                running ? "animate-focus-breathe bg-focus" : "bg-muted-foreground/50",
+              )}
             />
             <span>{running ? "Refactor webhook retries" : "Paused: Refactor webhook retries"}</span>
           </p>
 
           <div className="flex w-full max-w-sm flex-col items-center gap-2.5">
-            <p className={cn("text-[3.5rem] leading-none font-extralight tracking-[-0.045em] tabular-nums sm:text-[4rem]", !running && "text-muted-foreground")}>
+            <p
+              className={cn(
+                "text-[3.5rem] leading-none font-extralight tracking-[-0.045em] tabular-nums sm:text-[4rem]",
+                !running && "text-muted-foreground",
+              )}
+            >
               {formatClock(left)}
             </p>
             <div aria-hidden="true" className="h-1.5 w-full overflow-hidden rounded-full bg-focus/15">
               <div
-                className={cn("h-full rounded-full transition-[width] duration-300 ease-linear", running ? "bg-focus" : "bg-focus/40")}
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-300 ease-linear",
+                  running ? "bg-focus" : "bg-focus/40",
+                )}
                 style={{ width: `${Math.min(100, (left / (planned * 60)) * 100)}%` }}
               />
             </div>

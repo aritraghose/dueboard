@@ -36,7 +36,7 @@ import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
 import { useItemGoalDrafts, useItemGoalSync } from "@/hooks/use-goals";
 import type { TaskDialogTarget } from "@/hooks/use-task-dialog";
 import { failureMessage, taskAtom, useTags, useTaskActions } from "@/hooks/use-tasks";
-import { type LocalDate, formatDay, localDateOf } from "@/lib/dates";
+import { formatDay, type LocalDate, localDateOf } from "@/lib/dates";
 import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 import { formatMinutes } from "@/lib/tasks";
 
@@ -65,9 +65,7 @@ export function TaskDialog({
         {target?.mode === "edit" && (
           <EditTask key={target.task.id} initial={target.task} today={today} onClose={close} />
         )}
-        {target?.mode === "create" && (
-          <CreateTask key={version} date={target.date} today={today} onClose={close} />
-        )}
+        {target?.mode === "create" && <CreateTask key={version} date={target.date} today={today} onClose={close} />}
       </DialogContent>
     </Dialog>
   );
@@ -220,16 +218,25 @@ function EditTask({ initial, today, onClose }: { initial: Task; today: LocalDate
 
   const change = (field: Field, patch: Partial<Values>) =>
     field === "status" && patch.status
-      ? track("status", patch, () => actions.setStatus({ id: task.id, status: patch.status! }), "Couldn't change the status.")
+      ? track(
+          "status",
+          patch,
+          () => actions.setStatus({ id: task.id, status: patch.status! }),
+          "Couldn't change the status.",
+        )
       : track(field, patch, () => actions.update({ id: task.id, ...patch }), "Couldn't save this change.");
 
   return (
     <div className="flex flex-col">
       <header className="flex flex-col gap-1 border-b p-4 pr-12">
         <DialogTitle className="sr-only">{task.title}</DialogTitle>
-        <DialogDescription className="sr-only">Every detail of this task. Changes save as you make them.</DialogDescription>
+        <DialogDescription className="sr-only">
+          Every detail of this task. Changes save as you make them.
+        </DialogDescription>
         <TitleField value={task.title} onSave={(title) => change("title", { title })} error={errors.title} />
-        <p className="px-2 text-xs text-muted-foreground">Added {formatDay(localDateOf(task.createdAt, timeZone), today)}</p>
+        <p className="px-2 text-xs text-muted-foreground">
+          Added {formatDay(localDateOf(task.createdAt, timeZone), today)}
+        </p>
       </header>
 
       <TaskFields
@@ -488,13 +495,7 @@ function DescriptionField({
   );
 }
 
-function MinutesField({
-  value,
-  onSave,
-}: {
-  value: number | null;
-  onSave: (minutes: number | null) => unknown;
-}) {
+function MinutesField({ value, onSave }: { value: number | null; onSave: (minutes: number | null) => unknown }) {
   const [text, setText] = useState(value?.toString() ?? "");
   const [invalid, setInvalid] = useState(false);
   const hintId = useId();

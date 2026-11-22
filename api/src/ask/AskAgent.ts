@@ -15,13 +15,13 @@ import { askMessages, askSystemPrompt } from "./prompt.ts";
 import {
   ASK_QUESTION_PATH,
   ASK_THREAD_PATH,
-  parseAskInstanceName,
   type AskExchange,
   type AskRefusal,
   type AskRequest,
   type AskResponse,
   type AskThread,
   type AskVisitor,
+  parseAskInstanceName,
 } from "./protocol.ts";
 import { verifyTurnstile } from "./turnstile.ts";
 

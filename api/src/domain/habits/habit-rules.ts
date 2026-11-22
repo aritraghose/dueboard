@@ -3,10 +3,10 @@ import {
   dayOfWeek,
   daysBetween,
   daysInMonth,
+  type LocalDate,
   monthsBetween,
   startOfMonth,
   startOfWeek,
-  type LocalDate,
 } from "../core/dates.ts";
 import type { HabitDayStatus, HabitPeriodUnit, HabitSchedule, HabitScheduleKind } from "./model.ts";
 
@@ -125,11 +125,7 @@ export const periodFor = (habit: HabitRule, date: LocalDate): Period => {
   }
 };
 
-export const isScheduledOn = (
-  habit: HabitRule,
-  pauses: ReadonlyArray<HabitPause>,
-  date: LocalDate,
-): boolean =>
+export const isScheduledOn = (habit: HabitRule, pauses: ReadonlyArray<HabitPause>, date: LocalDate): boolean =>
   date >= habit.startDate &&
   !isPausedOn(pauses, date) &&
   (habit.scheduleKind === "flexible" || matchesDays(habit, date));

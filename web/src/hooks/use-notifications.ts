@@ -38,9 +38,7 @@ export function useMarkNotificationsSeen() {
   return useCallback(
     () =>
       run(
-        ApiClient.use((client) => client("MarkNotificationsSeen", undefined)).pipe(
-          Reactivity.mutation(NOTIFICATIONS),
-        ),
+        ApiClient.use((client) => client("MarkNotificationsSeen", undefined)).pipe(Reactivity.mutation(NOTIFICATIONS)),
       ),
     [run],
   );

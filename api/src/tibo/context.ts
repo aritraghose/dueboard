@@ -1,8 +1,8 @@
 import type { FilePart, ModelMessage, TextPart } from "ai";
 import { fileLine } from "./attachment-rules.ts";
 import { joinBubbles, reactionLine } from "./bubbles.ts";
-import { CONTEXT_BUDGET_TOKENS, MIN_RECENT_MESSAGES, estimateTokens } from "./memory-rules.ts";
 import { imageRef } from "./image-rules.ts";
+import { CONTEXT_BUDGET_TOKENS, estimateTokens, MIN_RECENT_MESSAGES } from "./memory-rules.ts";
 import {
   heldItem,
   type TiboAttachment,
@@ -102,7 +102,11 @@ export const buildTurnContext = ({
 };
 
 const messageTokens = (messages: readonly ModelMessage[]) =>
-  messages.reduce((sum, message) => sum + estimateTokens(typeof message.content === "string" ? message.content : JSON.stringify(message.content)), 0);
+  messages.reduce(
+    (sum, message) =>
+      sum + estimateTokens(typeof message.content === "string" ? message.content : JSON.stringify(message.content)),
+    0,
+  );
 
 const quoteLine = ({ role, body }: TiboQuote) =>
   `[Replying to ${role === "tibo" ? "your" : "my own"} earlier message: "${body.replace(/\s+/g, " ")}"]`;
@@ -117,9 +121,13 @@ const CONFIRM_NOTE: Record<TiboConfirm["status"], string> = {
 export const actionNote = (receipts: readonly TiboReceipt[] = [], confirm?: TiboConfirm): string | null => {
   const lines = [
     ...(receipts.length > 0
-      ? [`Your actions: ${receipts.map((receipt) => (receipt.failed ? `${receipt.text} (failed)` : receipt.text)).join("; ")}.`]
+      ? [
+          `Your actions: ${receipts.map((receipt) => (receipt.failed ? `${receipt.text} (failed)` : receipt.text)).join("; ")}.`,
+        ]
       : []),
-    ...(confirm ? [`${CONFIRM_NOTE[confirm.status]}: ${confirm.items.map((item) => heldItem(item).text).join("; ")}.`] : []),
+    ...(confirm
+      ? [`${CONFIRM_NOTE[confirm.status]}: ${confirm.items.map((item) => heldItem(item).text).join("; ")}.`]
+      : []),
   ];
   return lines.length > 0 ? lines.join("\n") : null;
 };
@@ -176,7 +184,12 @@ export const toModelMessages = (
     if (last && last.role === role && (role === "user" || last.turnId === message.turnId)) {
       last.parts.push(body);
     } else {
-      out.push({ role, parts: [body], turnId: message.turnId, ...(role === "assistant" && reaction ? { reaction } : {}) });
+      out.push({
+        role,
+        parts: [body],
+        turnId: message.turnId,
+        ...(role === "assistant" && reaction ? { reaction } : {}),
+      });
       if (role === "assistant") reaction = undefined;
     }
   }
@@ -188,7 +201,10 @@ export const toModelMessages = (
   );
 };
 
-export const withFiles = (messages: readonly ModelMessage[], parts: readonly (TextPart | FilePart)[]): ModelMessage[] => {
+export const withFiles = (
+  messages: readonly ModelMessage[],
+  parts: readonly (TextPart | FilePart)[],
+): ModelMessage[] => {
   const last = messages.at(-1);
   if (parts.length === 0 || !last || last.role !== "user") return [...messages];
   const text = typeof last.content === "string" ? [{ type: "text" as const, text: last.content }] : last.content;

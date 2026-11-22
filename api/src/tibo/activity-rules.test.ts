@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { THINKING_DETAIL_MAX, currentActivity, memoryRunDetail, thinkingDetail, toolLabel } from "./activity-rules.ts";
+import { currentActivity, memoryRunDetail, THINKING_DETAIL_MAX, thinkingDetail, toolLabel } from "./activity-rules.ts";
 import type { TiboActivity } from "./protocol.ts";
 
 const activity = (id: string, startedAt: number, extra: Partial<TiboActivity> = {}): TiboActivity => ({

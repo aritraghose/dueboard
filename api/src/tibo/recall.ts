@@ -1,23 +1,23 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import type { ContextSection } from "./context.ts";
-import { dayIn, startOfDayIn, addDays } from "./dates.ts";
+import { addDays, dayIn, startOfDayIn } from "./dates.ts";
 import { embedDocuments, embedQuery } from "./embeddings.ts";
-import { memoryVector, type MemoryEnv } from "./memory-jobs.ts";
-import { memoryVectorId, parseVectorId, type MemoryRow, type MemoryStore } from "./memory.ts";
+import { type MemoryRow, type MemoryStore, memoryVectorId, parseVectorId } from "./memory.ts";
+import { type MemoryEnv, memoryVector } from "./memory-jobs.ts";
 import {
+  estimateTokens,
+  ftsQuery,
   IMPORTANT_MEMORIES,
+  monthLabel,
+  periodEnd,
+  periodLabel,
   RELATED_SCORE,
   RELEVANT_MEMORIES,
   RELEVANT_SCORE,
   SECTION_BUDGET_TOKENS,
-  estimateTokens,
-  ftsQuery,
-  monthLabel,
-  periodEnd,
-  periodLabel,
-  truncateToTokens,
   type SummaryLevel,
+  truncateToTokens,
 } from "./memory-rules.ts";
 import type { TiboMemoryKind, TiboRole } from "./protocol.ts";
 import type { Thread } from "./thread.ts";
@@ -167,7 +167,11 @@ export async function searchConversation(
   }
 
   const excerpts = [
-    ...keyword.map((hit) => ({ day: dayIn(ctx.timeZone, new Date(hit.createdAt)), who: WHO[hit.role], text: hit.snippet })),
+    ...keyword.map((hit) => ({
+      day: dayIn(ctx.timeZone, new Date(hit.createdAt)),
+      who: WHO[hit.role],
+      text: hit.snippet,
+    })),
     ...meaning.map((chunk) => ({ day: chunk.day, who: "conversation", text: chunk.text })),
   ].sort((a, b) => a.day.localeCompare(b.day));
   return {
@@ -193,7 +197,11 @@ export async function remember(
     importance: 3,
     sourceMessageIds: input.sourceMessageId ? [input.sourceMessageId] : [],
   });
-  if (replacing.length > 0) ctx.store.supersede(replacing.map((old) => old.id), memory.id);
+  if (replacing.length > 0)
+    ctx.store.supersede(
+      replacing.map((old) => old.id),
+      memory.id,
+    );
 
   let similar: MemoryRow[] = [];
   try {
@@ -201,14 +209,17 @@ export async function remember(
     await ctx.env.MEMORY.upsert([memoryVector(memory, vector!, ctx.userId)]);
     ctx.store.markMemoriesEmbedded([memory.id]);
     if (replacing.length > 0) await ctx.env.MEMORY.deleteByIds(replacing.map((old) => memoryVectorId(old.id)));
-    const { matches } = await ctx.env.MEMORY.query(vector!, { namespace: ctx.userId, topK: 4, filter: { type: "memory" } });
-    similar = ctx.store
-      .activeMemories(
-        matches
-          .filter((found) => found.score >= RELATED_SCORE)
-          .map((found) => parseVectorId(found.id)?.id)
-          .filter((id): id is string => id !== undefined && id !== memory.id),
-      );
+    const { matches } = await ctx.env.MEMORY.query(vector!, {
+      namespace: ctx.userId,
+      topK: 4,
+      filter: { type: "memory" },
+    });
+    similar = ctx.store.activeMemories(
+      matches
+        .filter((found) => found.score >= RELATED_SCORE)
+        .map((found) => parseVectorId(found.id)?.id)
+        .filter((id): id is string => id !== undefined && id !== memory.id),
+    );
   } catch (error) {
     console.error("Embedding a remembered memory failed", error);
   }
@@ -229,21 +240,25 @@ export async function remember(
   };
 }
 
-export async function forget(
-  ctx: RecallContext,
-  refs: MemoryRefs,
-  input: { refs: readonly string[]; about?: string },
-) {
+export async function forget(ctx: RecallContext, refs: MemoryRefs, input: { refs: readonly string[]; about?: string }) {
   const chosen = ctx.store.activeMemories(refs.resolve(input.refs));
   if (chosen.length > 0) {
-    await deleteMemories(ctx.env, ctx.store, chosen.map((memory) => memory.id));
+    await deleteMemories(
+      ctx.env,
+      ctx.store,
+      chosen.map((memory) => memory.id),
+    );
     return { forgotten: chosen, answer: { status: "forgotten", memories: chosen.map((memory) => memory.text) } };
   }
   if (!input.about?.trim()) {
     return { forgotten: [], answer: { error: "Say which memory: pass refs, or `about` to look it up first." } };
   }
   const vector = await embedQuery(ctx.env, input.about);
-  const { matches } = await ctx.env.MEMORY.query(vector, { namespace: ctx.userId, topK: 5, filter: { type: "memory" } });
+  const { matches } = await ctx.env.MEMORY.query(vector, {
+    namespace: ctx.userId,
+    topK: 5,
+    filter: { type: "memory" },
+  });
   const found = ctx.store.activeMemories(
     matches
       .filter((match) => match.score >= RELEVANT_SCORE)

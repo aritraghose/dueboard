@@ -55,5 +55,4 @@ export function askMessages(past: readonly PastExchange[], question: string) {
   ];
 }
 
-const visitorTurn = (text: string) =>
-  `<visitor_question>\n${escapeTagText(text)}\n</visitor_question>`;
+const visitorTurn = (text: string) => `<visitor_question>\n${escapeTagText(text)}\n</visitor_question>`;

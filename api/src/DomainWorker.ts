@@ -3,31 +3,25 @@ import * as Drizzle from "@alchemy.run/drizzle/Postgres";
 import { RuntimeContext } from "alchemy";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 import * as Headers from "effect/http/Headers";
+import * as Layer from "effect/Layer";
 import { Rpc, RpcMessage } from "effect/rpc";
+import * as Schema from "effect/Schema";
 import { Hyperdrive } from "./database.ts";
-import { AuthAccounts } from "./domain/account/account.ts";
-import { Database } from "./domain/core/database.ts";
 import { DEV_PORTS } from "./dev-ports.ts";
-import { AI_UNITS_PER_CHARGE_MAX, AiUsageReason, Id, RelayStatus, type AiUsage } from "./domain/model.ts";
-import { RateLimiter } from "./domain/core/rate-limiter.ts";
+import { AuthAccounts } from "./domain/account/account.ts";
 import * as AskService from "./domain/ask/ask.ts";
 import { ASK_ANSWER_MAX_LENGTH, ASK_QUESTION_MAX_LENGTH } from "./domain/ask/ask-constants.ts";
+import { Database } from "./domain/core/database.ts";
+import { RateLimiter } from "./domain/core/rate-limiter.ts";
+import { AI_UNITS_PER_CHARGE_MAX, type AiUsage, AiUsageReason, Id, RelayStatus } from "./domain/model.ts";
 import * as RelayService from "./domain/relays/relays.ts";
 import * as TiboService from "./domain/tibo/tibo.ts";
 import * as UsageService from "./domain/usage/usage.ts";
 import { AiQuota } from "./domain/usage/usage.ts";
-import {
-  TIBO_RPCS,
-  type AiUsageJson,
-  type DomainError,
-  type DomainResult,
-  type TiboRpc,
-} from "./domain-client.ts";
+import { type AiUsageJson, type DomainError, type DomainResult, TIBO_RPCS, type TiboRpc } from "./domain-client.ts";
 import { apiHandlers } from "./handlers.ts";
-import { LIMITS, bindingProps } from "./limits.ts";
+import { bindingProps, LIMITS } from "./limits.ts";
 import { AI_MONTHLY_MESSAGE_QUOTA_DEFAULT, ApiRpcs, CurrentUser, Viewer } from "./rpc.ts";
 import { relations } from "./schema.ts";
 
@@ -116,13 +110,13 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
             } satisfies DomainResult;
           }
           const rpc = ApiRpcs.requests.get(name) as Rpc.AnyWithProps;
-          const decoded = yield* Schema.decodeUnknownEffect(rpc.payloadSchema as Schema.Codec<unknown, unknown>)(payload).pipe(
-            Effect.mapError((error) => ({ tag: "InvalidInput", message: error.message })),
-          );
+          const decoded = yield* Schema.decodeUnknownEffect(rpc.payloadSchema as Schema.Codec<unknown, unknown>)(
+            payload,
+          ).pipe(Effect.mapError((error) => ({ tag: "InvalidInput", message: error.message })));
           const handlers = yield* ApiRpcs.toHandlers(apiHandlers).pipe(Effect.provide(services));
-          const handler = yield* (ApiRpcs.accessHandler(name).pipe(
+          const handler = yield* ApiRpcs.accessHandler(name).pipe(
             Effect.provide(handlers),
-          ) as unknown as Effect.Effect<AnyHandler>);
+          ) as unknown as Effect.Effect<AnyHandler>;
           const outcome = yield* handler(decoded, {
             client: new Rpc.ServerClient(0),
             requestId: RpcMessage.RequestId(++nextRequestId),
@@ -134,14 +128,14 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
             Effect.catch((error) => Effect.succeed({ ok: false as const, error })),
           );
           if (outcome.ok) {
-            const value = yield* Schema.encodeUnknownEffect(rpc.successSchema as Schema.Codec<unknown, unknown>)(outcome.value).pipe(
-              Effect.orDie,
-            );
+            const value = yield* Schema.encodeUnknownEffect(rpc.successSchema as Schema.Codec<unknown, unknown>)(
+              outcome.value,
+            ).pipe(Effect.orDie);
             return { ok: true, value } satisfies DomainResult;
           }
-          const error = yield* Schema.encodeUnknownEffect(rpc.errorSchema as Schema.Codec<unknown, unknown>)(outcome.error).pipe(
-            Effect.orDie,
-          );
+          const error = yield* Schema.encodeUnknownEffect(rpc.errorSchema as Schema.Codec<unknown, unknown>)(
+            outcome.error,
+          ).pipe(Effect.orDie);
           return { ok: false, error: errorOf(error) } satisfies DomainResult;
         }).pipe(
           Effect.catch((error) => Effect.succeed({ ok: false, error } satisfies DomainResult)),
@@ -158,7 +152,10 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
         ),
       usageCheck: (userId: string, units: number) =>
         exec(
-          Effect.all({ userId: Schema.decodeUnknownEffect(Id)(userId), units: Schema.decodeUnknownEffect(Units)(units) }).pipe(
+          Effect.all({
+            userId: Schema.decodeUnknownEffect(Id)(userId),
+            units: Schema.decodeUnknownEffect(Units)(units),
+          }).pipe(
             Effect.flatMap(({ userId, units }) =>
               Effect.all({
                 allowed: UsageService.canSpend(userId, units),
@@ -181,13 +178,7 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
             Effect.orDie,
           ),
         ),
-      usageChargeSplit: (
-        userA: string,
-        userB: string,
-        unitsEach: number,
-        reason: AiUsageReason,
-        ref: string | null,
-      ) =>
+      usageChargeSplit: (userA: string, userB: string, unitsEach: number, reason: AiUsageReason, ref: string | null) =>
         exec(
           Effect.all({
             userA: Schema.decodeUnknownEffect(Id)(userA),
@@ -220,12 +211,12 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
         result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.declineRelay(id, relayId)))),
       relayAck: (actorId: string, relayId: string, status: string) =>
         result(
-          Effect.all({ id: actor(actorId), status: Schema.decodeUnknownEffect(RelayStatus)(status).pipe(Effect.orDie) }).pipe(
-            Effect.flatMap(({ id, status }) => RelayService.ackRelay(id, relayId, status)),
-          ),
+          Effect.all({
+            id: actor(actorId),
+            status: Schema.decodeUnknownEffect(RelayStatus)(status).pipe(Effect.orDie),
+          }).pipe(Effect.flatMap(({ id, status }) => RelayService.ackRelay(id, relayId, status))),
         ),
-      relayList: (actorId: string) =>
-        result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.listRelays(id)))),
+      relayList: (actorId: string) => result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.listRelays(id)))),
       relayExpireNow: (actorId: string, relayId: string) =>
         result(actor(actorId).pipe(Effect.flatMap((id) => RelayService.expireRelayNow(id, relayId)))),
       relaySweep: () => exec(RelayService.sweepRelays().pipe(Effect.map((relays) => ({ relays })))),
@@ -281,10 +272,7 @@ export default class DomainWorker extends Cloudflare.Worker<DomainWorker>()(
           ),
         ),
     };
-  }).pipe(
-    Effect.provide(Cloudflare.Workers.RateLimitBinding),
-    Effect.provide(Cloudflare.Hyperdrive.ConnectBinding),
-  ),
+  }).pipe(Effect.provide(Cloudflare.Workers.RateLimitBinding), Effect.provide(Cloudflare.Hyperdrive.ConnectBinding)),
 ) {}
 
 type AnyHandler = (

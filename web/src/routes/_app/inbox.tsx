@@ -28,8 +28,7 @@ function useSideOpen(): [boolean, (open: boolean) => void] {
     setOpen(next);
     try {
       window.localStorage.setItem(SIDE_KEY, next ? "open" : "closed");
-    } catch {
-    }
+    } catch {}
   }, []);
   return [open, set];
 }
@@ -72,7 +71,11 @@ function InboxSplit({ className }: { className: string }) {
             title={label}
             className="inline-flex size-8 items-center justify-center rounded-full text-foreground/80 transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            {expanded && !isMobile ? <ChevronRightIcon className="size-[1.125rem]" /> : <ChevronLeftIcon className="size-[1.125rem]" />}
+            {expanded && !isMobile ? (
+              <ChevronRightIcon className="size-[1.125rem]" />
+            ) : (
+              <ChevronLeftIcon className="size-[1.125rem]" />
+            )}
           </button>,
         ]}
         onTiboClick={toggle}
@@ -94,7 +97,9 @@ function InboxSplit({ className }: { className: string }) {
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetContent side="right" showCloseButton={false} className="gap-0 p-0 data-[side=right]:w-[90%]">
             <SheetTitle className="sr-only">What Tibo is doing</SheetTitle>
-            <SheetDescription className="sr-only">Tibo's current activity, shared files, memories and activity log.</SheetDescription>
+            <SheetDescription className="sr-only">
+              Tibo's current activity, shared files, memories and activity log.
+            </SheetDescription>
             <TiboSide
               className="h-full"
               trailing={

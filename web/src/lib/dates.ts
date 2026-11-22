@@ -1,7 +1,7 @@
-import { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "@dueboard/api/rpc";
+import { addDays, LocalDate, localDateOf, startOfWeek, todayIn } from "@dueboard/api/rpc";
 import * as Schema from "effect/Schema";
 
-export { LocalDate, addDays, localDateOf, startOfWeek, todayIn };
+export { addDays, LocalDate, localDateOf, startOfWeek, todayIn };
 
 export const isLocalDate = Schema.is(LocalDate);
 
@@ -31,9 +31,7 @@ const longDayFormat = new Intl.DateTimeFormat("en-US", {
 });
 
 export const formatDay = (date: LocalDate, today?: LocalDate): string =>
-  (today && date.slice(0, 4) !== today.slice(0, 4) ? dayFormatWithYear : dayFormat).format(
-    atNoonUtc(date),
-  );
+  (today && date.slice(0, 4) !== today.slice(0, 4) ? dayFormatWithYear : dayFormat).format(atNoonUtc(date));
 
 export const formatDayLong = (date: LocalDate): string => longDayFormat.format(atNoonUtc(date));
 

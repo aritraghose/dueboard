@@ -1,28 +1,26 @@
-import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import * as Effect from "effect/Effect";
 import { Activity, Blocks, Connections, FocusSessions, Goals, Habits, Notes, Tasks } from "../../schema.ts";
 import type { LiveScope } from "../activity/model.ts";
 import type { Privacy } from "../core/model.ts";
 import { areConnected, isBlocked } from "./social.ts";
-import { relationOf, visiblePrivacies, type ViewerRelation } from "./visibility-rules.ts";
+import { relationOf, type ViewerRelation, visiblePrivacies } from "./visibility-rules.ts";
 
 export {
   canSeeItem,
   canSeeOnLive,
-  liveDisplay,
-  relationOf,
-  visiblePrivacies,
   type LiveDisplay,
+  liveDisplay,
   type Relationship,
+  relationOf,
   type ViewerRelation,
+  visiblePrivacies,
 } from "./visibility-rules.ts";
 
-export const viewerRelation = Effect.fn("viewerRelation")(function* (
-  viewerId: string | null,
-  ownerId: string,
-) {
-  if (viewerId === null || viewerId === ownerId) return relationOf(viewerId, ownerId, { connected: false, blocked: false });
+export const viewerRelation = Effect.fn("viewerRelation")(function* (viewerId: string | null, ownerId: string) {
+  if (viewerId === null || viewerId === ownerId)
+    return relationOf(viewerId, ownerId, { connected: false, blocked: false });
   const blocked = yield* isBlocked(viewerId, ownerId);
   const connected = !blocked && (yield* areConnected(viewerId, ownerId));
   return relationOf(viewerId, ownerId, { connected, blocked }) as ViewerRelation;
@@ -77,8 +75,12 @@ export const activitySubjectJoin = {
 
 export const activitySubjectPrivacy = sql<Privacy | null>`coalesce(${Tasks.privacy}, ${Habits.privacy}, ${Goals.privacy}, ${FocusSessions.privacy}, ${Notes.privacy})`;
 
-export const activitySubjectShareToLive = sql<boolean | null>`coalesce(${Tasks.shareToLive}, ${Habits.shareToLive}, ${Goals.shareToLive}, ${FocusSessions.shareToLive}, ${Notes.shareToLive})`;
+export const activitySubjectShareToLive = sql<
+  boolean | null
+>`coalesce(${Tasks.shareToLive}, ${Habits.shareToLive}, ${Goals.shareToLive}, ${FocusSessions.shareToLive}, ${Notes.shareToLive})`;
 
-export const activitySubjectTitle = sql<string | null>`coalesce(${Tasks.title}, ${Habits.title}, ${Goals.name}, ${FocusSessions.label}, ${Notes.body})`;
+export const activitySubjectTitle = sql<
+  string | null
+>`coalesce(${Tasks.title}, ${Habits.title}, ${Goals.name}, ${FocusSessions.label}, ${Notes.body})`;
 
 export const activitySubjectExists = isNotNull(activitySubjectPrivacy);

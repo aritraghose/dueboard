@@ -14,7 +14,7 @@ import { useHabitColor } from "@/hooks/use-habits";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useOptimisticStatus, useTagMap, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
 import { UPCOMING_PAGE_DAYS, upcomingAtom } from "@/hooks/use-upcoming";
-import { type LocalDate, addDays, daysBetween, formatDay, formatDayLong } from "@/lib/dates";
+import { addDays, daysBetween, formatDay, formatDayLong, type LocalDate } from "@/lib/dates";
 import { roundPercent } from "@/lib/goals";
 import { upcomingHint } from "@/lib/habits";
 import { cn } from "@/lib/utils";
@@ -43,10 +43,7 @@ export function UpcomingSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side={mobile ? "bottom" : "right"}
-        className={cn(
-          "gap-0 p-0",
-          mobile ? "h-[88dvh]! rounded-t-2xl" : "w-full sm:max-w-md!",
-        )}
+        className={cn("gap-0 p-0", mobile ? "h-[88dvh]! rounded-t-2xl" : "w-full sm:max-w-md!")}
       >
         <SheetHeader className="border-b px-5 pt-5 pb-4">
           <SheetTitle className="text-base">Upcoming</SheetTitle>
@@ -126,7 +123,9 @@ function UpcomingList({
             {shown.days.map((day, index) => {
               const previous = index === 0 ? today : shown.days[index - 1]!.date;
               const free = daysBetween(previous, day.date) - 1;
-              const dayTasks = day.tasks.map(({ task }) => task).filter((task) => kept.has(task.id) && statusOf(task) !== "settled");
+              const dayTasks = day.tasks
+                .map(({ task }) => task)
+                .filter((task) => kept.has(task.id) && statusOf(task) !== "settled");
               return (
                 <li key={day.date} className="flex flex-col">
                   {free > 0 && <FreeDays count={free} />}
@@ -146,7 +145,13 @@ function UpcomingList({
                       </LayoutGroup>
                     )}
                     {day.habits.map((entry) => (
-                      <HabitRow key={entry.habit.id} entry={entry} today={today} color={habitColor} onOpen={onEditHabit} />
+                      <HabitRow
+                        key={entry.habit.id}
+                        entry={entry}
+                        today={today}
+                        color={habitColor}
+                        onOpen={onEditHabit}
+                      />
                     ))}
                     {day.goals.map((goal) => (
                       <GoalRow key={goal.id} goal={goal} color={goalColor} onOpen={onEditGoal} />

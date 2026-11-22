@@ -4,7 +4,6 @@ import { ArrowUpIcon } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import { toast } from "sonner";
 import { LiveToggle, PrivacyPill } from "@/components/privacy-controls";
-import { type MenuUser, UserAvatar } from "@/components/user-menu";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -14,12 +13,13 @@ import {
   InputGroupText,
 } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
+import { type MenuUser, UserAvatar } from "@/components/user-menu";
 import { useBootstrap } from "@/hooks/use-bootstrap";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
 import { useNoteActions } from "@/hooks/use-notes";
 import { failureMessage } from "@/hooks/use-tasks";
 import type { LocalDate } from "@/lib/dates";
-import { NOTE_BODY_MAX_LENGTH, NOTE_WARN_AT, cleanNoteBody } from "@/lib/notes";
+import { cleanNoteBody, NOTE_BODY_MAX_LENGTH, NOTE_WARN_AT } from "@/lib/notes";
 import { PRIVACY_HINT } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +28,11 @@ export function NoteCountdown({ length, className }: { length: number; className
   return (
     <span
       aria-hidden="true"
-      className={cn("text-xs tabular-nums", left <= NOTE_WARN_AT ? "text-note-limit-ink" : "text-muted-foreground", className)}
+      className={cn(
+        "text-xs tabular-nums",
+        left <= NOTE_WARN_AT ? "text-note-limit-ink" : "text-muted-foreground",
+        className,
+      )}
     >
       {left}
     </span>

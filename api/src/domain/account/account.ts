@@ -26,10 +26,10 @@ import {
   TiboEvents,
   UserSettings,
 } from "../../schema.ts";
-import { Database, transaction, type Executor } from "../core/database.ts";
-import { InvalidInput, decodeInput } from "../core/model.ts";
-import { DeleteAccountInput } from "./model.ts";
+import { Database, type Executor, transaction } from "../core/database.ts";
+import { decodeInput, InvalidInput } from "../core/model.ts";
 import { queueTiboWipe } from "../tibo/tibo.ts";
+import { DeleteAccountInput } from "./model.ts";
 
 export class AuthAccounts extends Context.Service<
   AuthAccounts,
@@ -90,9 +90,7 @@ export const deleteAccount = Effect.fn("deleteAccount")(function* (
     return yield* new InvalidInput({ message: `Type ${username} to confirm.` });
   }
   const db = yield* Database;
-  yield* transaction(db, (tx) =>
-    deleteUserData(tx, userId).pipe(Effect.andThen(onAccountDeleted(tx, userId))),
-  );
+  yield* transaction(db, (tx) => deleteUserData(tx, userId).pipe(Effect.andThen(onAccountDeleted(tx, userId))));
   const auth = yield* AuthAccounts;
   yield* auth.deleteUser(userId);
 });

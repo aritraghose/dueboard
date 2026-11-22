@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, ne, or, type SQL } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Activity, Tasks, UserSettings, type TaskRow } from "../../schema.ts";
+import { Activity, type TaskRow, Tasks, UserSettings } from "../../schema.ts";
 import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
 import { LocalDate } from "../core/dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { decodeInput, Id, InvalidInput } from "../core/model.ts";
 import { deleteLinksFor, onTaskSettled, onTaskUnsettled } from "../goals/goals.ts";
-import { Id, InvalidInput, decodeInput } from "../core/model.ts";
+import { findDefaultTag, findTag } from "../tags/tags.ts";
 import {
   CreateTaskInput,
   DayTask,
@@ -20,7 +21,6 @@ import {
   UnscheduledTasks,
   UpdateTaskInput,
 } from "./model.ts";
-import { findDefaultTag, findTag } from "../tags/tags.ts";
 import {
   dateRoleOn,
   decodeTaskCursor,
@@ -67,10 +67,7 @@ const findTask = (tx: Executor, userId: string, id: string, lock = false) =>
     return row;
   });
 
-export const createTask = Effect.fn("createTask")(function* (
-  userId: string,
-  input: CreateTaskInput,
-) {
+export const createTask = Effect.fn("createTask")(function* (userId: string, input: CreateTaskInput) {
   const values = yield* decodeInput(CreateTaskInput)(input);
   const assignedDate = values.assignedDate ?? null;
   const deadlineDate = values.deadlineDate ?? null;
@@ -78,9 +75,7 @@ export const createTask = Effect.fn("createTask")(function* (
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
     Effect.gen(function* () {
-      const tag = values.tagId
-        ? yield* findTag(tx, userId, values.tagId)
-        : yield* findDefaultTag(tx, userId);
+      const tag = values.tagId ? yield* findTag(tx, userId, values.tagId) : yield* findDefaultTag(tx, userId);
       const [settings] = yield* tx
         .select({
           defaultPrivacy: UserSettings.defaultPrivacy,
@@ -113,10 +108,7 @@ export const createTask = Effect.fn("createTask")(function* (
   );
 });
 
-export const updateTask = Effect.fn("updateTask")(function* (
-  userId: string,
-  input: UpdateTaskInput,
-) {
+export const updateTask = Effect.fn("updateTask")(function* (userId: string, input: UpdateTaskInput) {
   const { id, ...patch } = yield* decodeInput(UpdateTaskInput)(input);
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
@@ -137,10 +129,7 @@ export const updateTask = Effect.fn("updateTask")(function* (
   );
 });
 
-export const setTaskStatus = Effect.fn("setTaskStatus")(function* (
-  userId: string,
-  input: SetTaskStatusInput,
-) {
+export const setTaskStatus = Effect.fn("setTaskStatus")(function* (userId: string, input: SetTaskStatusInput) {
   const { id, status } = yield* decodeInput(SetTaskStatusInput)(input);
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
@@ -194,18 +183,13 @@ export const getTask = Effect.fn("getTask")(function* (userId: string, id: strin
   return toTask(yield* findTask(db, userId, id).pipe(orDieOnDbError));
 });
 
-export const listTasksForDay = Effect.fn("listTasksForDay")(function* (
-  userId: string,
-  date: LocalDate,
-) {
+export const listTasksForDay = Effect.fn("listTasksForDay")(function* (userId: string, date: LocalDate) {
   const day = yield* decodeInput(LocalDate)(date);
   const db = yield* Database;
   const rows = yield* db
     .select()
     .from(Tasks)
-    .where(
-      and(eq(Tasks.userId, userId), or(eq(Tasks.assignedDate, day), eq(Tasks.deadlineDate, day))),
-    )
+    .where(and(eq(Tasks.userId, userId), or(eq(Tasks.assignedDate, day), eq(Tasks.deadlineDate, day))))
     .orderBy(asc(Tasks.createdAt), asc(Tasks.id))
     .pipe(orDieOnDbError);
   const open: Array<DayTask> = [];
@@ -277,12 +261,7 @@ export const listUnscheduledTasks = Effect.fn("listUnscheduledTasks")(function* 
           ),
         )
         .where(
-          and(
-            eq(Tasks.userId, userId),
-            unscheduled,
-            eq(Tasks.status, "settled"),
-            eq(Activity.localDate, settledOn),
-          ),
+          and(eq(Tasks.userId, userId), unscheduled, eq(Tasks.status, "settled"), eq(Activity.localDate, settledOn)),
         )
         .orderBy(desc(Tasks.settledAt))
         .pipe(orDieOnDbError)
@@ -313,10 +292,7 @@ export const listTasks = Effect.fn("listTasks")(function* (userId: string, input
     from || to ? or(inRange(Tasks.assignedDate), inRange(Tasks.deadlineDate)) : undefined,
     pattern ? ilike(Tasks.title, pattern) : undefined,
     cursor
-      ? or(
-          lt(Tasks.createdAt, cursor.createdAt),
-          and(eq(Tasks.createdAt, cursor.createdAt), lt(Tasks.id, cursor.id)),
-        )
+      ? or(lt(Tasks.createdAt, cursor.createdAt), and(eq(Tasks.createdAt, cursor.createdAt), lt(Tasks.id, cursor.id)))
       : undefined,
   ];
   const limit = filters.limit ?? TASK_PAGE_SIZE_DEFAULT;

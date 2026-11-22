@@ -2,32 +2,32 @@ import { and, asc, eq, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import {
   Activity,
+  type HabitCheckinRow,
   HabitCheckins,
+  type HabitPauseRow,
   HabitPauses,
+  type HabitRow,
   Habits,
   UserSettings,
-  type HabitCheckinRow,
-  type HabitPauseRow,
-  type HabitRow,
 } from "../../schema.ts";
 import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
-import { LocalDate, addDays, startOfWeek, todayIn } from "../core/dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
+import { addDays, LocalDate, startOfWeek, todayIn } from "../core/dates.ts";
+import { decodeInput, Id, InvalidInput } from "../core/model.ts";
+import { UpcomingHabit } from "../days/model.ts";
 import { deleteLinksFor, onHabitCheckIn } from "../goals/goals.ts";
 import {
+  type CheckinIndex,
   dayStatus,
   describeSchedule,
+  type HabitPause,
   indexCheckins,
   isScheduledOn,
   normalizeSchedule,
   occurrences,
   progressFor,
   streak,
-  type CheckinIndex,
-  type HabitPause,
 } from "./habit-rules.ts";
-import { Id, InvalidInput, decodeInput } from "../core/model.ts";
-import { UpcomingHabit } from "../days/model.ts";
 import {
   CheckInNotAllowed,
   CreateHabitInput,
@@ -39,7 +39,7 @@ import {
   HabitNotFound,
   HabitOnDay,
   HabitProgress,
-  HabitSchedule,
+  type HabitSchedule,
   HabitSummary,
   HabitsForDay,
   UpdateHabitInput,
@@ -180,10 +180,7 @@ const habitSummary = (
   });
 };
 
-export const createHabit = Effect.fn("createHabit")(function* (
-  userId: string,
-  input: CreateHabitInput,
-) {
+export const createHabit = Effect.fn("createHabit")(function* (userId: string, input: CreateHabitInput) {
   const values = yield* decodeInput(CreateHabitInput)(input);
   const schedule = yield* scheduleColumns(values.schedule);
   const db = yield* Database;
@@ -213,10 +210,7 @@ export const createHabit = Effect.fn("createHabit")(function* (
   );
 });
 
-export const updateHabit = Effect.fn("updateHabit")(function* (
-  userId: string,
-  input: UpdateHabitInput,
-) {
+export const updateHabit = Effect.fn("updateHabit")(function* (userId: string, input: UpdateHabitInput) {
   const { id, schedule, ...rest } = yield* decodeInput(UpdateHabitInput)(input);
   const columns = schedule ? yield* scheduleColumns(schedule) : undefined;
   const db = yield* Database;
@@ -442,10 +436,7 @@ export const getHabit = Effect.fn("getHabit")(function* (userId: string, id: str
   }).pipe(orDieOnDbError);
 });
 
-export const listHabitsForDay = Effect.fn("listHabitsForDay")(function* (
-  userId: string,
-  date: LocalDate,
-) {
+export const listHabitsForDay = Effect.fn("listHabitsForDay")(function* (userId: string, date: LocalDate) {
   const day = yield* decodeInput(LocalDate)(date);
   const db = yield* Database;
   return yield* Effect.gen(function* () {
@@ -527,8 +518,6 @@ export const listHabits = Effect.fn("listHabits")(function* (userId: string) {
     const today = yield* userToday(db, userId);
     const pauses = yield* loadPauses(db, ids);
     const checkins = yield* loadCheckins(db, userId, ids);
-    return habits.map((habit) =>
-      habitSummary(habit, pauses.get(habit.id) ?? [], checkins.get(habit.id) ?? [], today),
-    );
+    return habits.map((habit) => habitSummary(habit, pauses.get(habit.id) ?? [], checkins.get(habit.id) ?? [], today));
   }).pipe(orDieOnDbError);
 });

@@ -1,4 +1,4 @@
-import { startOfMonth, startOfWeek, type LocalDate } from "../core/dates.ts";
+import { type LocalDate, startOfMonth, startOfWeek } from "../core/dates.ts";
 import type { LeaderboardPeriod } from "./model.ts";
 
 export const periodStart = (period: LeaderboardPeriod, today: LocalDate): LocalDate | null => {

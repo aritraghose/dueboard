@@ -25,7 +25,12 @@ export interface ImageReference {
 }
 
 export type ImageResult =
-  | { readonly ok: true; readonly bytes: Uint8Array<ArrayBuffer>; readonly mediaType: "image/jpeg"; readonly ms: number }
+  | {
+      readonly ok: true;
+      readonly bytes: Uint8Array<ArrayBuffer>;
+      readonly mediaType: "image/jpeg";
+      readonly ms: number;
+    }
   | {
       readonly ok: false;
       readonly reason: "blocked" | "failed";
@@ -77,7 +82,9 @@ export async function museImage(
     const text = await response.text().catch(() => "");
     const json = parseJson(text) as ResponsesBody | null;
     if (response.ok) {
-      const call = json?.output?.find((item) => item.type === "image_generation_call" && typeof item.result === "string");
+      const call = json?.output?.find(
+        (item) => item.type === "image_generation_call" && typeof item.result === "string",
+      );
       if (!call?.result) return { ok: false, reason: "failed", detail: "No image in the answer" };
       const ms = Date.now() - started;
       console.log("Muse image", { ms, attempt, references: request.references.length, shape: request.shape });
@@ -91,7 +98,11 @@ export async function museImage(
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       continue;
     }
-    return { ok: false, reason: "failed", detail: `${response.status} ${error?.message ?? (text.slice(0, 500) || response.statusText)}` };
+    return {
+      ok: false,
+      reason: "failed",
+      detail: `${response.status} ${error?.message ?? (text.slice(0, 500) || response.statusText)}`,
+    };
   }
 }
 

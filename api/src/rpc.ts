@@ -6,8 +6,9 @@ import * as Schema from "effect/Schema";
 import { LocalDate } from "./domain/core/dates.ts";
 import {
   ActiveSessionExists,
-  AiUsage,
   AddAskDocumentInput,
+  AdjustGoalProgressInput,
+  AiUsage,
   AskDocumentLimit,
   AskDocumentNotFound,
   AskDocumentRef,
@@ -15,7 +16,6 @@ import {
   AskQuestion,
   AskSettings,
   AskSettingsPatch,
-  AdjustGoalProgressInput,
   CheckInNotAllowed,
   ConnectionNotAllowed,
   ConnectionRequestNotFound,
@@ -29,23 +29,20 @@ import {
   Day,
   DeleteAccountInput,
   DiaryPage,
+  ExtendSessionInput,
+  FocusSession,
   GetContributionGraphInput,
   GetDiaryInput,
   GetLeaderboardInput,
   GetLiveInput,
   GetProfileItemsInput,
-  Leaderboard,
-  LivePage,
-  Path,
-  ExtendSessionInput,
-  FocusSession,
+  GetUpcomingInput,
   Goal,
   GoalItemRef,
   GoalLink,
   GoalNotFound,
   GoalSummary,
   GoalsForDay,
-  GetUpcomingInput,
   Habit,
   HabitCheckInInput,
   HabitNotFound,
@@ -55,37 +52,39 @@ import {
   Id,
   InvalidInput,
   ItemGoal,
+  Leaderboard,
   LinkGoalItemInput,
-  Note,
-  NoteLimitReached,
-  NoteNotFound,
-  NotePage,
-  NotesForDay,
-  PersonResult,
-  Profile,
-  ProfileItemPage,
-  SearchPeopleInput,
-  SocialLimitReached,
-  NotificationItem,
-  NotificationsUnseen,
-  SocialOverview,
-  SocialStatus,
   ListGoalsInput,
   ListNotesInput,
   ListSessionsInput,
   ListTasksInput,
   ListUnscheduledTasksInput,
-  SetGoalProgressInput,
+  LivePage,
+  Note,
+  NoteLimitReached,
+  NoteNotFound,
+  NotePage,
+  NotesForDay,
+  NotificationItem,
+  NotificationsUnseen,
+  Path,
+  PersonResult,
+  Profile,
+  ProfileItemPage,
+  SearchPeopleInput,
   SessionNotFound,
   SessionPage,
-  SessionTransitionNotAllowed,
   SessionsForDay,
+  SessionTransitionNotAllowed,
+  SetGoalProgressInput,
   SetTaskStatusInput,
   Settings,
   SettingsPatch,
+  SocialLimitReached,
+  SocialOverview,
+  SocialStatus,
   StartSessionInput,
   SystemTagLocked,
-  TIME_ZONE_MAX_LENGTH,
   Tag,
   TagLimitReached,
   TagNameTaken,
@@ -94,6 +93,7 @@ import {
   TaskNotFound,
   TaskPage,
   TasksForDay,
+  TIME_ZONE_MAX_LENGTH,
   UnlinkGoalItemInput,
   UnscheduledTasks,
   Upcoming,
@@ -106,11 +106,8 @@ import {
   UsernameRef,
 } from "./domain/model.ts";
 
-export * from "./domain/model.ts";
 export { documentText } from "./domain/ask/ask-rules.ts";
-export { isValidUsername, usernameProblem, type UsernameProblem } from "./domain/social/username-rules.ts";
-export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/core/dates.ts";
-export { computeEndsAt, elapsed, remaining } from "./domain/sessions/session-rules.ts";
+export { addDays, LocalDate, localDateOf, startOfWeek, todayIn } from "./domain/core/dates.ts";
 export { goalPercent, goalValue, isReached } from "./domain/goals/goal-rules.ts";
 export {
   dayStatus,
@@ -120,11 +117,13 @@ export {
   progressFor,
   streak,
 } from "./domain/habits/habit-rules.ts";
+export * from "./domain/model.ts";
+export { computeEndsAt, elapsed, remaining } from "./domain/sessions/session-rules.ts";
+export { isValidUsername, type UsernameProblem, usernameProblem } from "./domain/social/username-rules.ts";
 
-export class CurrentUser extends Context.Service<
-  CurrentUser,
-  { readonly id: string; readonly username: string }
->()("api/CurrentUser") {}
+export class CurrentUser extends Context.Service<CurrentUser, { readonly id: string; readonly username: string }>()(
+  "api/CurrentUser",
+) {}
 
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()("Unauthorized", {
   message: Schema.String,
@@ -134,20 +133,20 @@ export class TooManyRequests extends Schema.TaggedError<TooManyRequests>()("TooM
   message: Schema.String,
 }) {}
 
-export class Authentication extends RpcMiddleware.Service<
-  Authentication,
-  { provides: CurrentUser }
->()("api/Authentication", { error: Schema.Union([Unauthorized, TooManyRequests]) }) {}
+export class Authentication extends RpcMiddleware.Service<Authentication, { provides: CurrentUser }>()(
+  "api/Authentication",
+  { error: Schema.Union([Unauthorized, TooManyRequests]) },
+) {}
 
 export class Viewer extends Context.Service<
   Viewer,
   { readonly user: { readonly id: string; readonly username: string } | null }
 >()("api/Viewer") {}
 
-export class OptionalAuthentication extends RpcMiddleware.Service<
-  OptionalAuthentication,
-  { provides: Viewer }
->()("api/OptionalAuthentication", { error: TooManyRequests }) {}
+export class OptionalAuthentication extends RpcMiddleware.Service<OptionalAuthentication, { provides: Viewer }>()(
+  "api/OptionalAuthentication",
+  { error: TooManyRequests },
+) {}
 
 export class PublicRpcs extends RpcGroup.make(
   Rpc.make("GetProfile", {

@@ -46,7 +46,9 @@ export function TopBar({ className }: { className?: string }) {
   const floatingBell = bell && !phoneRow;
   const floating = (
     <>
-      {floatingBell && <NotificationsButton className="fixed top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-30 bg-chrome shadow-(--card-shadow) ring-1 ring-border backdrop-blur-md md:hidden" />}
+      {floatingBell && (
+        <NotificationsButton className="fixed top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-30 bg-chrome shadow-(--card-shadow) ring-1 ring-border backdrop-blur-md md:hidden" />
+      )}
       {session && (
         <SessionIndicator
           className={cn(

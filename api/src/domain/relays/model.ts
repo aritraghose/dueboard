@@ -10,17 +10,21 @@ export * from "./relay-constants.ts";
 export const RelayStatus = Schema.Literals(RELAY_STATUS);
 export type RelayStatus = typeof RelayStatus.Type;
 
-export const RelayText = Schema.String.check(
-  Schema.isTrimmed(),
-  Schema.isBetweenLength(1, RELAY_MESSAGE_MAX_LENGTH),
-);
+export const RelayText = Schema.String.check(Schema.isTrimmed(), Schema.isBetweenLength(1, RELAY_MESSAGE_MAX_LENGTH));
 
 export const RelayRecipient = Schema.String.check(Schema.isBetweenLength(1, 100));
 
 export const SendRelayInput = Schema.Struct({ toUsername: UsernameInput, message: RelayText });
 export type SendRelayInput = typeof SendRelayInput.Type;
 
-export const RELAY_REFUSAL = ["self", "blocked", "policy_none", "connections_only", "out_of_messages", "unavailable"] as const;
+export const RELAY_REFUSAL = [
+  "self",
+  "blocked",
+  "policy_none",
+  "connections_only",
+  "out_of_messages",
+  "unavailable",
+] as const;
 export type RelayRefusal = (typeof RELAY_REFUSAL)[number];
 
 export class RelayNotAllowed extends Schema.TaggedError<RelayNotAllowed>()("RelayNotAllowed", {

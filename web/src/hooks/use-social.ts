@@ -1,10 +1,4 @@
-import type {
-  LeaderboardPeriod,
-  LeaderboardScope,
-  ProfileFeed,
-  ProfileItem,
-  SocialStatus,
-} from "@dueboard/api/rpc";
+import type { LeaderboardPeriod, LeaderboardScope, ProfileFeed, ProfileItem, SocialStatus } from "@dueboard/api/rpc";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Atom from "effect/reactivity/Atom";
@@ -36,11 +30,9 @@ export const profileItemsAtom = Atom.family(
         let cursor: string | undefined;
         for (let page = 0; page < pages; page++) {
           const result = yield* get.result(
-            ApiClient.query(
-              "GetProfileItems",
-              cursor ? { username, feed, cursor } : { username, feed },
-              { reactivityKeys: SOCIAL },
-            ),
+            ApiClient.query("GetProfileItems", cursor ? { username, feed, cursor } : { username, feed }, {
+              reactivityKeys: SOCIAL,
+            }),
           );
           items.push(...result.items);
           if (!result.nextCursor) return { items, nextCursor: null };
@@ -96,12 +88,11 @@ export function useSocialActions() {
   );
 
   return useMemo(() => {
-    const byName = (rpc: "SendConnectionRequest" | "RemoveConnection" | "BlockUser" | "UnblockUser") =>
-      (username: string) =>
+    const byName =
+      (rpc: "SendConnectionRequest" | "RemoveConnection" | "BlockUser" | "UnblockUser") => (username: string) =>
         run(ApiClient.use((client) => client(rpc, { username })).pipe(Reactivity.mutation(SOCIAL)));
-    const byRequest = (
-      rpc: "AcceptConnectionRequest" | "DeclineConnectionRequest" | "CancelConnectionRequest",
-    ) =>
+    const byRequest =
+      (rpc: "AcceptConnectionRequest" | "DeclineConnectionRequest" | "CancelConnectionRequest") =>
       (requestId: string) =>
         run(ApiClient.use((client) => client(rpc, { requestId })).pipe(Reactivity.mutation(SOCIAL)));
     const send = byName("SendConnectionRequest");

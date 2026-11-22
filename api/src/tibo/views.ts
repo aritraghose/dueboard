@@ -177,14 +177,24 @@ export const sessionView = (session: SessionJson, timeZone: string) =>
     label: session.label,
     status: session.status,
     plannedMinutes: session.plannedMinutes,
-    minutesLeft: session.status === "running" || session.status === "paused" ? Math.ceil(session.remainingMs / 60_000) : undefined,
+    minutesLeft:
+      session.status === "running" || session.status === "paused" ? Math.ceil(session.remainingMs / 60_000) : undefined,
     endsAt: session.status === "running" && session.endsAt ? timeIn(session.endsAt, timeZone) : undefined,
   });
 
 export const noteView = (note: NoteJson) => ({ id: note.id, body: note.body, date: note.localDate });
 
-export const taskReceipt = (title: string, date: string | null | undefined, deadline: string | null | undefined, today: string) =>
-  [title, date ? dayLabel(date, today) : null, deadline && deadline !== date ? `Due ${dayLabel(deadline, today)}` : null]
+export const taskReceipt = (
+  title: string,
+  date: string | null | undefined,
+  deadline: string | null | undefined,
+  today: string,
+) =>
+  [
+    title,
+    date ? dayLabel(date, today) : null,
+    deadline && deadline !== date ? `Due ${dayLabel(deadline, today)}` : null,
+  ]
     .filter(Boolean)
     .join(" · ");
 

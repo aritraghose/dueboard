@@ -14,9 +14,18 @@ import {
 } from "../../schema.ts";
 import { AuthUsers } from "../core/auth-users.ts";
 import { Database, orDieOnDbError } from "../core/database.ts";
-import { FALLBACK_TIME_ZONE, addDays, todayIn } from "../core/dates.ts";
-import { InvalidInput, decodeInput } from "../core/model.ts";
-import { type UserColor } from "../tags/model.ts";
+import { addDays, FALLBACK_TIME_ZONE, todayIn } from "../core/dates.ts";
+import { decodeInput, InvalidInput } from "../core/model.ts";
+import {
+  activitySubjectExists,
+  activitySubjectJoin,
+  activitySubjectPrivacy,
+  activitySubjectShareToLive,
+  activitySubjectTitle,
+  liveActorSql,
+  liveDisplay,
+} from "../social/visibility.ts";
+import type { UserColor } from "../tags/model.ts";
 import {
   GetLiveInput,
   LIVE_PAGE_SIZE,
@@ -29,15 +38,6 @@ import {
   PathEventMeta,
 } from "./model.ts";
 import { decodeItemCursor, encodeItemCursor } from "./profile-rules.ts";
-import {
-  activitySubjectExists,
-  activitySubjectJoin,
-  activitySubjectPrivacy,
-  activitySubjectShareToLive,
-  activitySubjectTitle,
-  liveActorSql,
-  liveDisplay,
-} from "../social/visibility.ts";
 
 export const focusedMinutes = sql<number | null>`(
   select round(sum(extract(epoch from coalesce(${FocusSessionSegments.endedAt}, now()) - ${FocusSessionSegments.startedAt})) / 60)::int

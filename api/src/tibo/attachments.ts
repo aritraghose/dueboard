@@ -2,11 +2,11 @@
 
 import type { FilePart, TextPart } from "ai";
 import {
-  ORPHAN_TTL_MS,
   attachedFileBlock,
   attachmentLine,
   capText,
   imageSize,
+  ORPHAN_TTL_MS,
   objectKey,
   sniff,
   unreadableNote,
@@ -153,7 +153,12 @@ export class AttachmentStore {
     return toAttachment(row);
   }
 
-  async createMade(name: string, bytes: Uint8Array<ArrayBuffer>, prompt: string, edit: boolean): Promise<TiboAttachment> {
+  async createMade(
+    name: string,
+    bytes: Uint8Array<ArrayBuffer>,
+    prompt: string,
+    edit: boolean,
+  ): Promise<TiboAttachment> {
     const attachment = await this.create(name, bytes, async () => null);
     this.saveNote(attachment.id, { note: prompt, memorable: false });
     this.sql.exec(
@@ -166,7 +171,9 @@ export class AttachmentStore {
   }
 
   madeSince(since: number): number {
-    return this.sql.exec<{ made: number }>(`SELECT count(*) AS made FROM made_images WHERE created_at >= ?`, since).one().made;
+    return this.sql
+      .exec<{ made: number }>(`SELECT count(*) AS made FROM made_images WHERE created_at >= ?`, since)
+      .one().made;
   }
 
   isMade(id: string): boolean {
@@ -206,7 +213,11 @@ export class AttachmentStore {
     const claimed: TiboAttachment[] = [];
     for (const id of new Set(ids)) {
       const row = this.sql
-        .exec<Row>(`UPDATE attachments SET message_id = ? WHERE id = ? AND message_id IS NULL RETURNING *`, messageId, id)
+        .exec<Row>(
+          `UPDATE attachments SET message_id = ? WHERE id = ? AND message_id IS NULL RETURNING *`,
+          messageId,
+          id,
+        )
         .toArray()[0];
       if (row) claimed.push(toAttachment(row));
     }
@@ -277,7 +288,10 @@ export class AttachmentStore {
 
   async pruneOrphans(now: number) {
     const ids = this.sql
-      .exec<{ id: string }>(`SELECT id FROM attachments WHERE message_id IS NULL AND created_at < ? LIMIT 500`, now - ORPHAN_TTL_MS)
+      .exec<{ id: string }>(
+        `SELECT id FROM attachments WHERE message_id IS NULL AND created_at < ? LIMIT 500`,
+        now - ORPHAN_TTL_MS,
+      )
       .toArray()
       .map((row) => row.id);
     if (ids.length === 0) return;
@@ -349,7 +363,9 @@ export async function fileContent(
     }
     const text = stored.text.slice(0, budget.text);
     budget.text -= text.length;
-    parts.push(textPart(attachedFileBlock(attachment.name, text, stored.textTruncated || text.length < stored.text.length)));
+    parts.push(
+      textPart(attachedFileBlock(attachment.name, text, stored.textTruncated || text.length < stored.text.length)),
+    );
   }
   return parts;
 }

@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { SearchIcon } from "lucide-react";
 import { Page, PageHeader } from "@/components/page";

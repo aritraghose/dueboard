@@ -1,7 +1,6 @@
-import { HANDLE_LOOKUP_MAX_LENGTH, PEOPLE_SEARCH_MIN_LENGTH, type ConnectionState } from "./model.ts";
+import { type ConnectionState, HANDLE_LOOKUP_MAX_LENGTH, PEOPLE_SEARCH_MIN_LENGTH } from "./model.ts";
 
-export const orderedPair = (a: string, b: string): readonly [low: string, high: string] =>
-  a < b ? [a, b] : [b, a];
+export const orderedPair = (a: string, b: string): readonly [low: string, high: string] => (a < b ? [a, b] : [b, a]);
 
 // Lookups accept any handle ever issued: before the Twitter-style rules (username-rules.ts),
 // usernames could be 3–30 characters and contain dots.
@@ -21,9 +20,7 @@ export const searchPatterns = (
   const handle = text.replace(/^@/, "").toLowerCase();
   if (handle.length < PEOPLE_SEARCH_MIN_LENGTH) return null;
   const username =
-    handle.length <= HANDLE_LOOKUP_MAX_LENGTH && USERNAME_CHARS.test(handle)
-      ? `${handle.replace(/_/g, "\\_")}%`
-      : null;
+    handle.length <= HANDLE_LOOKUP_MAX_LENGTH && USERNAME_CHARS.test(handle) ? `${handle.replace(/_/g, "\\_")}%` : null;
   return { exact: handle, username, name: `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%` };
 };
 

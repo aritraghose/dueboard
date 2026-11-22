@@ -2,17 +2,17 @@ import { describe, expect, test } from "bun:test";
 import type { TiboProactiveSettings } from "../domain-client.ts";
 import { instantIn } from "./dates.ts";
 import {
-  DORMANT_MS,
-  QUIET_MS,
-  STALE_MS,
   checkInFocus,
   clockLabel,
+  DORMANT_MS,
+  type GateInput,
   gate,
   nextSlot,
   planFingerprint,
+  QUIET_MS,
+  STALE_MS,
   slotStillPlanned,
   slotTime,
-  type GateInput,
 } from "./proactive-rules.ts";
 import type { DayJson, HabitOnDayJson, TaskJson } from "./views.ts";
 
@@ -110,7 +110,6 @@ describe("gate", () => {
     expect(gate(input({ lastSeenAt: now - DORMANT_MS - 1 }))).toBe("dormant");
     expect(gate(input({ lastSeenAt: null }))).toBe("dormant");
   });
-
 });
 
 describe("what's worth saying", () => {
@@ -156,7 +155,10 @@ describe("what's worth saying", () => {
   test("the morning plan names tasks and due habits", () => {
     const focus = checkInFocus(
       "morning_plan",
-      day({ tasks: { open: [{ task: task("Report"), role: "assigned" }], settled: [] }, habits: { due: [habit("Run", "due")], settled: [], allChecked: false } }),
+      day({
+        tasks: { open: [{ task: task("Report"), role: "assigned" }], settled: [] },
+        habits: { due: [habit("Run", "due")], settled: [], allChecked: false },
+      }),
     );
     expect(focus?.items).toEqual(["Report", "Run"]);
   });

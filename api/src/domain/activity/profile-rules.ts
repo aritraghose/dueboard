@@ -7,8 +7,7 @@ export const FEED_KINDS: Record<ProfileFeed, readonly ActivityKind[]> = {
   sessions: ["session_completed"],
 };
 
-export const encodeItemCursor = (occurredAt: Date, id: string): string =>
-  `${occurredAt.toISOString()}|${id}`;
+export const encodeItemCursor = (occurredAt: Date, id: string): string => `${occurredAt.toISOString()}|${id}`;
 
 export const decodeItemCursor = (cursor: string): { occurredAt: Date; id: string } | null => {
   const separator = cursor.indexOf("|");

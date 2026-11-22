@@ -1,4 +1,9 @@
-import { type FocusSession, SESSION_LABEL_MAX_LENGTH, SESSION_MINUTES_MAX, type SessionStatus } from "@dueboard/api/rpc";
+import {
+  type FocusSession,
+  SESSION_LABEL_MAX_LENGTH,
+  SESSION_MINUTES_MAX,
+  type SessionStatus,
+} from "@dueboard/api/rpc";
 
 export { SESSION_LABEL_MAX_LENGTH, SESSION_MINUTES_MAX };
 
@@ -41,7 +46,10 @@ export const isActive = (session: { readonly status: SessionStatus }): boolean =
   session.status === "running" || session.status === "paused";
 
 export const cleanLabel = (text: string): string | undefined =>
-  text.replace(/\s*[\r\n]+\s*/g, " ").trim().slice(0, SESSION_LABEL_MAX_LENGTH) || undefined;
+  text
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .trim()
+    .slice(0, SESSION_LABEL_MAX_LENGTH) || undefined;
 
 export const parseMinutes = (text: string, max = SESSION_MINUTES_MAX): number | null => {
   const value = Number(text.trim());

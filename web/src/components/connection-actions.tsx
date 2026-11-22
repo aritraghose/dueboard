@@ -92,7 +92,12 @@ export function ConnectionActions({
   const moreMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size={compact ? "icon-sm" : "icon"} variant="ghost" aria-label={`More for @${username}`} disabled={busy}>
+        <Button
+          size={compact ? "icon-sm" : "icon"}
+          variant="ghost"
+          aria-label={`More for @${username}`}
+          disabled={busy}
+        >
           {compact ? <EllipsisVerticalIcon /> : <EllipsisIcon />}
         </Button>
       </DropdownMenuTrigger>
@@ -124,9 +129,7 @@ export function ConnectionActions({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={() => void go(() => actions.cancel(username, status.requestId ?? ""))}
-            >
+            <DropdownMenuItem onSelect={() => void go(() => actions.cancel(username, status.requestId ?? ""))}>
               <XIcon />
               Cancel request
             </DropdownMenuItem>
@@ -182,12 +185,7 @@ export function ConnectionActions({
       break;
     case "blocked":
       buttons = (
-        <Button
-          size={size}
-          variant="outline"
-          disabled={busy}
-          onClick={() => void go(() => actions.unblock(username))}
-        >
+        <Button size={size} variant="outline" disabled={busy} onClick={() => void go(() => actions.unblock(username))}>
           Unblock
         </Button>
       );
@@ -200,9 +198,7 @@ export function ConnectionActions({
       <AlertDialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirm === "block" ? `Block @${username}?` : `Remove @${username}?`}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{confirm === "block" ? `Block @${username}?` : `Remove @${username}?`}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirm === "block"
                 ? "You'll stop seeing each other, and any connection between you ends. They aren't told."

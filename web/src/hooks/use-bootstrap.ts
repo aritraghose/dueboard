@@ -1,8 +1,8 @@
 import type { Settings } from "@dueboard/api/rpc";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Atom from "effect/reactivity/Atom";
-import * as Exit from "effect/Exit";
 import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { ApiClient } from "../rpc-client.ts";
@@ -35,10 +35,7 @@ export function useBootstrap() {
   const result = useAtomValue(bootstrapAtom);
   const saved = useAtomValue(savedSettingsAtom);
   const value = AsyncResult.isSuccess(result) ? result.value : undefined;
-  return useMemo(
-    () => (value && saved ? { tags: value.tags, settings: saved } : value),
-    [value, saved],
-  );
+  return useMemo(() => (value && saved ? { tags: value.tags, settings: saved } : value), [value, saved]);
 }
 
 export function useTimeZone(): string {

@@ -3,25 +3,28 @@ import * as Effect from "effect/Effect";
 import {
   AskDocuments,
   AskQuestions,
+  type AskSettingsRow,
   AskSettingsTable,
   AskUsage,
   Blocks,
   UserSettings,
-  type AskSettingsRow,
 } from "../../schema.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
+import { decodeInput, InvalidInput, UserNotFound } from "../core/model.ts";
+import { Person, UsernameRef } from "../social/model.ts";
+import { normalizeUsername } from "../social/social-rules.ts";
+import { canSpend, charge, timeZoneOf } from "../usage/usage.ts";
+import { nextResetAt, periodOf } from "../usage/usage-rules.ts";
 import {
   ASK_ANSWER_MAX_LENGTH,
   ASK_DOCUMENTS_MAX,
   ASK_MONTHLY_ANSWER_CAP_DEFAULT,
-  ASK_QUESTIONS_LIST_LIMIT,
   ASK_QUESTION_MAX_LENGTH,
+  ASK_QUESTIONS_LIST_LIMIT,
   ASK_UNITS_PER_ANSWER,
 } from "./ask-constants.ts";
-import { askGate, askRetentionCutoff, cleanAskText, type AskGate } from "./ask-rules.ts";
-import { AuthUsers } from "../core/auth-users.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
-import { InvalidInput, UserNotFound, decodeInput } from "../core/model.ts";
-import { Person, UsernameRef } from "../social/model.ts";
+import { type AskGate, askGate, askRetentionCutoff, cleanAskText } from "./ask-rules.ts";
 import {
   AddAskDocumentInput,
   AskDocument,
@@ -33,9 +36,6 @@ import {
   AskSettings,
   AskSettingsPatch,
 } from "./model.ts";
-import { normalizeUsername } from "../social/social-rules.ts";
-import { canSpend, charge, timeZoneOf } from "../usage/usage.ts";
-import { nextResetAt, periodOf } from "../usage/usage-rules.ts";
 
 const findOwner = (db: Executor, input: string) =>
   Effect.gen(function* () {
@@ -200,8 +200,7 @@ export const getAskPage = Effect.fn("getAskPage")(function* (viewerId: string | 
   const owner = yield* findOwner(db, username);
   const notFound = new UserNotFound({ message: `There's no one called @${username.replace(/^@/, "")}.`, username });
   if (!owner?.username) return yield* notFound;
-  const blocks =
-    viewerId !== null && viewerId !== owner.id ? yield* blocksBetween(db, viewerId, owner.id) : null;
+  const blocks = viewerId !== null && viewerId !== owner.id ? yield* blocksBetween(db, viewerId, owner.id) : null;
   if (blocks?.bBlockedA) return yield* notFound;
   const blocked = blocks?.aBlockedB ?? false;
   const row = yield* settingsRow(db, owner.id);

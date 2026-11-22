@@ -18,9 +18,7 @@ export const goalPercent = (goal: GoalProgress): number => {
 };
 
 export const isReached = (goal: GoalProgress): boolean =>
-  goal.progressMode === "slider"
-    ? goal.progressPercent >= 100
-    : (goal.currentCount ?? 0) >= (goal.targetCount ?? 1);
+  goal.progressMode === "slider" ? goal.progressPercent >= 100 : (goal.currentCount ?? 0) >= (goal.targetCount ?? 1);
 
 export const goalValue = (goal: GoalProgress): number =>
   goal.progressMode === "slider" ? goal.progressPercent : (goal.currentCount ?? 0);

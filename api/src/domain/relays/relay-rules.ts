@@ -1,3 +1,4 @@
+import type { RelayPolicy, RelayRefusal } from "./model.ts";
 import {
   RELAY_OPEN_PER_PAIR,
   RELAY_OPEN_PER_RECIPIENT,
@@ -6,7 +7,6 @@ import {
   RELAYS_PER_DAY,
   type RelayStatus,
 } from "./relay-constants.ts";
-import type { RelayPolicy, RelayRefusal } from "./model.ts";
 
 export interface RelayFacts {
   readonly self: boolean;

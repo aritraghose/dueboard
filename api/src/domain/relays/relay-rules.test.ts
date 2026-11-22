@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { RELAY_OPEN_PER_PAIR, RELAY_OPEN_PER_RECIPIENT, RELAY_TTL_MS, RELAYS_PER_DAY } from "./relay-constants.ts";
-import { expiresAtFor, isOpen, relayCapMessage, relayDecision, syncAfter, type RelayFacts } from "./relay-rules.ts";
+import { expiresAtFor, isOpen, type RelayFacts, relayCapMessage, relayDecision, syncAfter } from "./relay-rules.ts";
 
 const facts = (overrides: Partial<RelayFacts> = {}): RelayFacts => ({
   self: false,
@@ -42,7 +42,11 @@ describe("relayCapMessage", () => {
     expect(relayCapMessage(counts, "bea")).toBeNull();
     expect(
       relayCapMessage(
-        { sentToday: RELAYS_PER_DAY - 1, openToPair: RELAY_OPEN_PER_PAIR - 1, openForRecipient: RELAY_OPEN_PER_RECIPIENT - 1 },
+        {
+          sentToday: RELAYS_PER_DAY - 1,
+          openToPair: RELAY_OPEN_PER_PAIR - 1,
+          openForRecipient: RELAY_OPEN_PER_RECIPIENT - 1,
+        },
         "bea",
       ),
     ).toBeNull();

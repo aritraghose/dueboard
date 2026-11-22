@@ -1,14 +1,7 @@
 import { type LucideIcon, PlusIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({
@@ -26,9 +19,7 @@ export function PageHeader({
     <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 max-md:pr-11">
       <div className="flex min-w-0 flex-col gap-1.5">
         <h1 className={cn("font-semibold", compact ? "text-xl" : "text-title")}>{title}</h1>
-        {description && (
-          <p className={cn("max-w-prose text-muted-foreground", compact && "text-sm")}>{description}</p>
-        )}
+        {description && <p className={cn("max-w-prose text-muted-foreground", compact && "text-sm")}>{description}</p>}
       </div>
       {children}
     </header>
@@ -66,15 +57,7 @@ export function Page({ children }: { children: ReactNode }) {
   return <main className="flex w-full flex-1 flex-col gap-6 px-3 pt-3 md:px-6 md:pt-4">{children}</main>;
 }
 
-export function CreateButton({
-  label,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
+export function CreateButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <Button
       onClick={onClick}

@@ -4,8 +4,8 @@ import { TiboAside, TiboBubble } from "@/components/tibo-aside";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { authClient } from "../../auth-client.ts";
 import { SITE_DESCRIPTION, seo } from "@/lib/seo";
+import { authClient } from "../../auth-client.ts";
 import { getSessionUser } from "../../session.ts";
 
 export const Route = createFileRoute("/_auth/auth")({

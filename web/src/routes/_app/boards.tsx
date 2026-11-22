@@ -1,8 +1,8 @@
-import { Link, createFileRoute, type LinkProps } from "@tanstack/react-router";
-import { UserRoundIcon, type LucideIcon } from "lucide-react";
+import { createFileRoute, Link, type LinkProps } from "@tanstack/react-router";
+import { type LucideIcon, UserRoundIcon } from "lucide-react";
 import { Page, PageHeader } from "@/components/page";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BOARDS, BOARD_EXTRAS } from "@/lib/nav";
+import { BOARD_EXTRAS, BOARDS } from "@/lib/nav";
 
 export const Route = createFileRoute("/_app/boards")({
   head: () => ({ meta: [{ title: "Boards · Dueboard" }] }),

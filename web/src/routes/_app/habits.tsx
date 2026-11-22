@@ -46,7 +46,7 @@ import { habitListAtom, useHabitActions, useHabitColor } from "@/hooks/use-habit
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
 import { useToday } from "@/hooks/use-now";
 import { failureMessage } from "@/hooks/use-tasks";
-import { type LocalDate, addDays, formatDay, startOfWeek } from "@/lib/dates";
+import { addDays, formatDay, type LocalDate, startOfWeek } from "@/lib/dates";
 import { progressHint, streakUnit } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 
@@ -111,7 +111,11 @@ function Habits() {
       </Tabs>
 
       {AsyncResult.isFailure(result) ? (
-        <PageEmpty icon={RepeatIcon} title="Couldn't load your habits" description="Check your connection, then try again.">
+        <PageEmpty
+          icon={RepeatIcon}
+          title="Couldn't load your habits"
+          description="Check your connection, then try again."
+        >
           <Button variant="outline" onClick={() => void reload()}>
             Try again
           </Button>
@@ -130,7 +134,12 @@ function Habits() {
       ) : (
         <ul data-tag={color} aria-label={`${STATUS_LABEL[status]} habits`} className="flex flex-col divide-y pb-8">
           {shown.map((summary) => (
-            <HabitRow key={summary.habit.id} summary={summary} today={today} onEdit={() => dialog.openHabit(summary.habit)} />
+            <HabitRow
+              key={summary.habit.id}
+              summary={summary}
+              today={today}
+              onEdit={() => dialog.openHabit(summary.habit)}
+            />
           ))}
         </ul>
       )}
@@ -167,19 +176,26 @@ function HabitRow({ summary, today, onEdit }: { summary: HabitSummary; today: Lo
   const { habit, progress, streak } = summary;
   return (
     <li className="grid grid-cols-[auto_1fr_auto] items-start gap-x-3 gap-y-3 py-4 md:grid-cols-[auto_1fr_auto_auto] md:items-center md:gap-x-6">
-      <HabitRing done={progress.done} target={progress.target} size={36} className={cn(habit.status !== "active" && "opacity-50")} />
+      <HabitRing
+        done={progress.done}
+        target={progress.target}
+        size={36}
+        className={cn(habit.status !== "active" && "opacity-50")}
+      />
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={onEdit} className="text-left font-medium wrap-break-word outline-none hover:underline focus-visible:underline">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="text-left font-medium wrap-break-word outline-none hover:underline focus-visible:underline"
+          >
             {habit.title}
           </button>
           {habit.status !== "active" && <Badge variant="outline">{STATUS_LABEL[habit.status]}</Badge>}
         </div>
         <p className="text-sm text-muted-foreground">{summary.schedule}</p>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          {habit.status === "active" && progress.target > 1 && (
-            <span>{progressHint(habit, progress, today)}</span>
-          )}
+          {habit.status === "active" && progress.target > 1 && <span>{progressHint(habit, progress, today)}</span>}
           <span className={cn("inline-flex items-center gap-1", streak > 0 && "font-medium text-tag-ink")}>
             <FlameIcon aria-hidden="true" className="size-3" />
             {streak > 0 ? `${streakUnit(habit, streak)} in a row` : "No streak yet"}
@@ -201,7 +217,10 @@ function Heatmap({ summary, today }: { summary: HabitSummary; today: LocalDate }
   const { habit, history } = summary;
   const counts = useMemo(() => new Map(history.map((day) => [day.date, day.count])), [history]);
   const first = addDays(startOfWeek(today), -7 * (HABIT_HISTORY_WEEKS - 1));
-  const perDay = habit.scheduleKind === "specific_days" || (habit.periodUnit === "day" && habit.periodLength === 1) ? habit.targetCount : 1;
+  const perDay =
+    habit.scheduleKind === "specific_days" || (habit.periodUnit === "day" && habit.periodLength === 1)
+      ? habit.targetCount
+      : 1;
   const days = Array.from({ length: HABIT_HISTORY_WEEKS * 7 }, (_, i) => addDays(first, i));
   const total = history.reduce((sum, day) => sum + day.count, 0);
   const activeDays = history.filter((day) => day.count > 0).length;
@@ -217,7 +236,11 @@ function Heatmap({ summary, today }: { summary: HabitSummary; today: LocalDate }
         return (
           <span
             key={day}
-            title={day <= today ? `${formatDay(day, today)}: ${count === 1 ? "1 check-in" : `${count} check-ins`}` : undefined}
+            title={
+              day <= today
+                ? `${formatDay(day, today)}: ${count === 1 ? "1 check-in" : `${count} check-ins`}`
+                : undefined
+            }
             className={cn(
               "size-2.5 rounded-[3px]",
               day > today
@@ -254,7 +277,12 @@ function HabitActions({ summary, onEdit }: { summary: HabitSummary; onEdit: () =
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`More for "${habit.title}"`}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label={`More for "${habit.title}"`}
+          >
             <MoreHorizontalIcon />
           </Button>
         </DropdownMenuTrigger>
@@ -265,7 +293,9 @@ function HabitActions({ summary, onEdit }: { summary: HabitSummary; onEdit: () =
           </DropdownMenuItem>
           {habit.status === "active" && (
             <DropdownMenuItem
-              onSelect={() => void act(() => actions.pause(habit.id), `Paused "${habit.title}"`, "Couldn't pause the habit.")}
+              onSelect={() =>
+                void act(() => actions.pause(habit.id), `Paused "${habit.title}"`, "Couldn't pause the habit.")
+              }
             >
               <PauseIcon />
               Pause
@@ -273,7 +303,9 @@ function HabitActions({ summary, onEdit }: { summary: HabitSummary; onEdit: () =
           )}
           {habit.status === "paused" && (
             <DropdownMenuItem
-              onSelect={() => void act(() => actions.resume(habit.id), `Resumed "${habit.title}"`, "Couldn't resume the habit.")}
+              onSelect={() =>
+                void act(() => actions.resume(habit.id), `Resumed "${habit.title}"`, "Couldn't resume the habit.")
+              }
             >
               <PlayIcon />
               Resume
@@ -281,14 +313,18 @@ function HabitActions({ summary, onEdit }: { summary: HabitSummary; onEdit: () =
           )}
           {habit.status === "archived" ? (
             <DropdownMenuItem
-              onSelect={() => void act(() => actions.resume(habit.id), `Restored "${habit.title}"`, "Couldn't restore the habit.")}
+              onSelect={() =>
+                void act(() => actions.resume(habit.id), `Restored "${habit.title}"`, "Couldn't restore the habit.")
+              }
             >
               <PlayIcon />
               Restore
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem
-              onSelect={() => void act(() => actions.archive(habit.id), `Archived "${habit.title}"`, "Couldn't archive the habit.")}
+              onSelect={() =>
+                void act(() => actions.archive(habit.id), `Archived "${habit.title}"`, "Couldn't archive the habit.")
+              }
             >
               <ArchiveIcon />
               Archive

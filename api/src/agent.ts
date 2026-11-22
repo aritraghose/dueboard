@@ -2,9 +2,9 @@
 
 import { getAgentByName, routeAgentRequest } from "agents";
 import type { AgentEnv } from "./AgentWorker.ts";
-import { askEnv } from "./ask-env.ts";
 import { AskAgentBase } from "./ask/AskAgent.ts";
-import { tiboClient, type TiboEventJson } from "./domain-client.ts";
+import { askEnv } from "./ask-env.ts";
+import { type TiboEventJson, tiboClient } from "./domain-client.ts";
 import { TiboAgent } from "./tibo/TiboAgent.ts";
 
 export { TiboAgent };
@@ -56,16 +56,17 @@ async function syncRelays(env: AgentEnv) {
   const { relays } = await env.DOMAIN.relaySweep();
   const agent = (userId: string) => getAgentByName(env.TiboAgent as DurableObjectNamespace<TiboAgent>, userId);
   await Promise.all(
-    relays.flatMap((relay) => [
-      ...(relay.recipientSynced ? [] : [relay.toUserId]),
-      ...(relay.senderSynced ? [] : [relay.fromUserId]),
-    ].map(async (userId) => {
-      try {
-        await (await agent(userId)).relaySync(relay.id);
-      } catch (error) {
-        console.error("Syncing a relay failed", relay.id, userId, error);
-      }
-    })),
+    relays.flatMap((relay) =>
+      [...(relay.recipientSynced ? [] : [relay.toUserId]), ...(relay.senderSynced ? [] : [relay.fromUserId])].map(
+        async (userId) => {
+          try {
+            await (await agent(userId)).relaySync(relay.id);
+          } catch (error) {
+            console.error("Syncing a relay failed", relay.id, userId, error);
+          }
+        },
+      ),
+    ),
   );
 }
 

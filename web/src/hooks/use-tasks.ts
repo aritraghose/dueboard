@@ -90,9 +90,7 @@ export function useRun() {
       const atom = ApiClient.runtime.fn((_: void) => effect);
       const release = registry.mount(atom);
       registry.set(atom, undefined);
-      return Effect.runPromiseExit(
-        AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }),
-      ).finally(release);
+      return Effect.runPromiseExit(AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true })).finally(release);
     },
     [registry],
   );
@@ -109,9 +107,7 @@ export function useTaskActions() {
       update: (payload: UpdateTaskInput) =>
         run(ApiClient.use((client) => client("UpdateTask", payload)).pipe(Reactivity.mutation(TASK_WRITES))),
       setStatus: (payload: SetTaskStatusInput) =>
-        run(
-          ApiClient.use((client) => client("SetTaskStatus", payload)).pipe(Reactivity.mutation(TASK_WRITES)),
-        ),
+        run(ApiClient.use((client) => client("SetTaskStatus", payload)).pipe(Reactivity.mutation(TASK_WRITES))),
       remove: async (id: string) => {
         registry.update(removedTasksAtom, ({ ids }) => ({ ids: new Set(ids).add(id) }));
         const exit = await run(
@@ -132,9 +128,7 @@ export function useTaskActions() {
       updateTag: (payload: UpdateTagInput) =>
         run(ApiClient.use((client) => client("UpdateTag", payload)).pipe(Reactivity.mutation(TAGS))),
       deleteTag: (id: string) =>
-        run(
-          ApiClient.use((client) => client("DeleteTag", { id })).pipe(Reactivity.mutation([...TAGS, ...TASKS])),
-        ),
+        run(ApiClient.use((client) => client("DeleteTag", { id })).pipe(Reactivity.mutation([...TAGS, ...TASKS]))),
     }),
     [run, registry],
   );
@@ -142,16 +136,14 @@ export function useTaskActions() {
 
 export function useOptimisticStatus(tasks: readonly Task[]) {
   const { setStatus } = useTaskActions();
-  const [clicks, setClicks] = useState<
-    ReadonlyMap<string, { status: TaskStatus; token: number; answered: boolean }>
-  >(new Map());
+  const [clicks, setClicks] = useState<ReadonlyMap<string, { status: TaskStatus; token: number; answered: boolean }>>(
+    new Map(),
+  );
   const nextToken = useRef(0);
 
   useEffect(() => {
     const serverStatus = new Map(tasks.map((task) => [task.id, task.status]));
-    const agreed = [...clicks].filter(
-      ([id, click]) => click.answered && serverStatus.get(id) === click.status,
-    );
+    const agreed = [...clicks].filter(([id, click]) => click.answered && serverStatus.get(id) === click.status);
     if (agreed.length === 0) return;
     setClicks((current) => {
       const next = new Map(current);
@@ -182,10 +174,7 @@ export function useOptimisticStatus(tasks: readonly Task[]) {
     [setStatus],
   );
 
-  const overridden = useMemo(
-    () => new Map([...clicks].map(([id, click]) => [id, click.status] as const)),
-    [clicks],
-  );
+  const overridden = useMemo(() => new Map([...clicks].map(([id, click]) => [id, click.status] as const)), [clicks]);
   const statusOf = useCallback((task: Task): TaskStatus => overridden.get(task.id) ?? task.status, [overridden]);
 
   return { statusOf, change, overridden };

@@ -1,6 +1,6 @@
 import type { CreateHabitInput, HabitOnDay, TagColor, UpdateHabitInput } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import * as Effect from "effect/Effect";
+import type * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Reactivity from "effect/reactivity/Reactivity";
@@ -21,7 +21,8 @@ export const habitAtom = (id: string) => ApiClient.query("GetHabit", { id }, { r
 export function useHabitActions() {
   const run = useRun();
   return useMemo(() => {
-    const call = <A, E>(effect: Effect.Effect<A, E, ApiClient | Reactivity.Reactivity>) => run(effect.pipe(Reactivity.mutation(HABIT_WRITES)));
+    const call = <A, E>(effect: Effect.Effect<A, E, ApiClient | Reactivity.Reactivity>) =>
+      run(effect.pipe(Reactivity.mutation(HABIT_WRITES)));
     return {
       create: (payload: CreateHabitInput) => call(ApiClient.use((client) => client("CreateHabit", payload))),
       update: (payload: UpdateHabitInput) => call(ApiClient.use((client) => client("UpdateHabit", payload))),
@@ -29,10 +30,8 @@ export function useHabitActions() {
       resume: (id: string) => call(ApiClient.use((client) => client("ResumeHabit", { id }))),
       archive: (id: string) => call(ApiClient.use((client) => client("ArchiveHabit", { id }))),
       remove: (id: string) => call(ApiClient.use((client) => client("DeleteHabit", { id }))),
-      checkIn: (id: string, date: LocalDate) =>
-        call(ApiClient.use((client) => client("CheckInHabit", { id, date }))),
-      undo: (id: string, date: LocalDate) =>
-        call(ApiClient.use((client) => client("UndoCheckInHabit", { id, date }))),
+      checkIn: (id: string, date: LocalDate) => call(ApiClient.use((client) => client("CheckInHabit", { id, date }))),
+      undo: (id: string, date: LocalDate) => call(ApiClient.use((client) => client("UndoCheckInHabit", { id, date }))),
       reload: () => run(Reactivity.invalidate(HABITS)),
     };
   }, [run]);

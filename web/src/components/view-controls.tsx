@@ -109,7 +109,11 @@ export function ViewControls({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm">
                 <LayersIcon />
-                {group === groups[0] ? "Group" : group.value === "none" ? "Ungrouped" : `By ${group.label.toLowerCase()}`}
+                {group === groups[0]
+                  ? "Group"
+                  : group.value === "none"
+                    ? "Ungrouped"
+                    : `By ${group.label.toLowerCase()}`}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">

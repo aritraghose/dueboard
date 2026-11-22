@@ -51,11 +51,7 @@ type AiRun = (
   },
 ) => Promise<Response>;
 
-export function museSpark(
-  env: { AI: Ai; AI_GATEWAY_ID: string },
-  userId: string,
-  purpose: MusePurpose = "reply",
-) {
+export function museSpark(env: { AI: Ai; AI_GATEWAY_ID: string }, userId: string, purpose: MusePurpose = "reply") {
   const run = env.AI.run.bind(env.AI) as unknown as AiRun;
   const meta = createOpenAI({
     apiKey: "byok",

@@ -26,10 +26,7 @@ export const GOAL_LINKS_MAX = 50;
 export const GOAL_EVENTS_IN_LIST = 10;
 export const GOAL_EVENTS_IN_DETAIL = 50;
 
-export const GoalName = Schema.String.check(
-  Schema.isTrimmed(),
-  Schema.isBetweenLength(1, GOAL_NAME_MAX_LENGTH),
-);
+export const GoalName = Schema.String.check(Schema.isTrimmed(), Schema.isBetweenLength(1, GOAL_NAME_MAX_LENGTH));
 export const GoalDescription = Schema.String.check(Schema.isMaxLength(GOAL_DESCRIPTION_MAX_LENGTH));
 export const GoalTargetCount = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: GOAL_COUNT_MAX }));
 export const GoalValue = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: GOAL_COUNT_MAX }));

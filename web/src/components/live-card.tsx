@@ -14,7 +14,7 @@ import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
 import { notesCountAtom } from "@/hooks/use-day";
 import { useLiveFeed, useLivePolling, usePath } from "@/hooks/use-live";
 import { useNow, useToday } from "@/hooks/use-now";
-import { formatDay, formatTime, localDateOf, relativeDay, type LocalDate } from "@/lib/dates";
+import { formatDay, formatTime, type LocalDate, localDateOf, relativeDay } from "@/lib/dates";
 import { liveAction, liveRelativeTime, liveTitle, pathAction } from "@/lib/live";
 import { noteCount } from "@/lib/notes";
 import { cn } from "@/lib/utils";
@@ -372,15 +372,13 @@ function useLiveTab() {
     try {
       const saved = localStorage.getItem(TAB_KEY);
       if (saved === "path" || (LIVE_SCOPE as readonly string[]).includes(saved ?? "")) setTab(saved as LiveTab);
-    } catch {
-    }
+    } catch {}
   }, []);
   const update = (next: LiveTab) => {
     setTab(next);
     try {
       localStorage.setItem(TAB_KEY, next);
-    } catch {
-    }
+    } catch {}
   };
   return [tab, update] as const;
 }

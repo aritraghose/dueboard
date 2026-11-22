@@ -48,7 +48,10 @@ const offsetAt = (timeZone: string, instant: number) => {
     second: "2-digit",
   }).formatToParts(instant);
   const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
-  return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - Math.floor(instant / 1000) * 1000;
+  return (
+    Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) -
+    Math.floor(instant / 1000) * 1000
+  );
 };
 
 export const startOfDayIn = (timeZone: string, day: string): number => instantIn(timeZone, day, "00:00");

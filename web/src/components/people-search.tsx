@@ -3,12 +3,12 @@ import { useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { SearchIcon, UserRoundSearchIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ConnectionActions } from "@/components/connection-actions";
-import { PersonAvatar } from "@/components/person-avatar";
 import { PeopleSkeleton } from "@/components/people-lists";
-import { failureMessage } from "@/hooks/use-tasks";
+import { PersonAvatar } from "@/components/person-avatar";
 import { peopleSearchAtom } from "@/hooks/use-social";
+import { failureMessage } from "@/hooks/use-tasks";
 import { cn } from "@/lib/utils";
 
 const DEBOUNCE_MS = 300;

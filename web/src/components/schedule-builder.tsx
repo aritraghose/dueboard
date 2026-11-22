@@ -4,12 +4,12 @@ import type { ReactNode } from "react";
 import { Segmented } from "@/components/task-fields";
 import { Button } from "@/components/ui/button";
 import {
+  describeDraft,
+  draftProblem,
   PRESET_LABEL,
   SCHEDULE_PRESETS,
   type ScheduleDraft,
   type SchedulePreset,
-  describeDraft,
-  draftProblem,
   withPreset,
 } from "@/lib/habits";
 import { cn } from "@/lib/utils";
@@ -77,7 +77,12 @@ export function ScheduleBuilder({
       {draft.preset === "custom" && (
         <div className="flex flex-col gap-2">
           <Phrase>
-            <Stepper label="Times" value={draft.count} max={HABIT_TARGET_MAX} onChange={(value) => set({ count: value })} />
+            <Stepper
+              label="Times"
+              value={draft.count}
+              max={HABIT_TARGET_MAX}
+              onChange={(value) => set({ count: value })}
+            />
             {draft.count === 1 ? "time every" : "times every"}
             <Stepper
               label="Period length"

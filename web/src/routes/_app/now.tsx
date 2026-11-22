@@ -1,6 +1,6 @@
 import type { Goal, Habit, Task } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import {
   CalendarRangeIcon,
@@ -10,15 +10,15 @@ import {
   ChevronUpIcon,
   CircleCheckIcon,
   ListTodoIcon,
+  type LucideIcon,
   PlusIcon,
   RepeatIcon,
   StickyNoteIcon,
   TargetIcon,
   TimerIcon,
-  type LucideIcon,
 } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { DayStepper, NowClock } from "@/components/day-navigator";
 import { SessionIndicator, SessionList, SessionWidget } from "@/components/focus-session";
 import { GoalDialog } from "@/components/goal-dialog";
@@ -26,20 +26,19 @@ import { CompletedGoals, DayGoalCards } from "@/components/goal-progress";
 import { HabitDialog } from "@/components/habit-dialog";
 import { DueHabits, SettledHabits } from "@/components/habit-section";
 import { LiveCard } from "@/components/live-card";
-import { TaskDialog } from "@/components/task-card";
 import { TagChip } from "@/components/tag-chip";
 import { TagFilter } from "@/components/tag-filter";
+import { TaskDialog } from "@/components/task-card";
 import { TaskList } from "@/components/task-list";
-import { UpcomingSheet } from "@/components/upcoming-sheet";
-import { ViewControls } from "@/components/view-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UpcomingSheet } from "@/components/upcoming-sheet";
+import { ViewControls } from "@/components/view-controls";
 import { useTimeZone } from "@/hooks/use-bootstrap";
-import { useToday } from "@/hooks/use-now";
 import {
   dayAtom,
   dayUnscheduledAtom,
@@ -53,12 +52,13 @@ import { type DayGoals, useDayGoals, useGoalActions } from "@/hooks/use-goals";
 import { useHabitDialog } from "@/hooks/use-habit-dialog";
 import { type DayHabits, useDayHabits, useHabitActions } from "@/hooks/use-habits";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
+import { useToday } from "@/hooks/use-now";
 import { useOpenSessionsTab, useSessionActions, useSessionsTabRequest, useTimerSession } from "@/hooks/use-sessions";
 import { useTaskDialog } from "@/hooks/use-task-dialog";
 import { useOptimisticStatus, useTagMap, useTags, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
 import { setTopBarHidden, useTopBarHidden } from "@/hooks/use-top-bar-hidden";
-import { type ViewOptions, useViewOptions } from "@/hooks/use-view-options";
-import { type LocalDate, formatDay, isLocalDate } from "@/lib/dates";
+import { useViewOptions, type ViewOptions } from "@/hooks/use-view-options";
+import { formatDay, isLocalDate, type LocalDate } from "@/lib/dates";
 import { noteCount } from "@/lib/notes";
 import { formatMinutes, groupByTag, sortTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
@@ -357,9 +357,7 @@ function DayBody({
   const goalsInline = view.show === "all" && activeGoals > 0;
   const inlineBelow = habitsInline || goalsInline;
   const settledCount =
-    day && unscheduled && habits.loaded && goals.loaded
-      ? settledList.length + settledHabits + completedGoals
-      : null;
+    day && unscheduled && habits.loaded && goals.loaded ? settledList.length + settledHabits + completedGoals : null;
   const sessionGoing = date === today && Boolean(activeSession);
   const everythingSettled =
     settledCount !== null &&
@@ -369,44 +367,52 @@ function DayBody({
     !sessionGoing &&
     settledCount > 0;
   const tasksBody = failed ? (
-      <EmptyState>
-        Couldn't load your tasks.
-        <Button variant="outline" size="sm" onClick={() => void reload()}>
-          Try again
-        </Button>
-      </EmptyState>
-    ) : !day ? (
-      <TaskRowsSkeleton />
-    ) : open.length > 0 ? (
-      view.group === "tag" ? (
-        groupByTag(open, tagList ?? []).map(({ tag, tasks }) => (
-          <section key={tag?.id ?? "other"} aria-label={tag?.name ?? "Other"} className="flex flex-col gap-0.5 pt-2 first:pt-0">
-            <h3 className="px-2">
-              {tag ? <TagChip name={tag.name} color={tag.color} /> : <span className="text-xs text-muted-foreground">Other</span>}
-            </h3>
-            <TaskList tasks={tasks} label={tag?.name ?? "Other"} {...rowProps} />
-          </section>
-        ))
-      ) : (
-        <TaskList tasks={open} label={`Tasks ${onDay}`} {...rowProps} />
-      )
-    ) : view.show === "all" && settledCount === null ? (
-      <TaskRowsSkeleton />
-    ) : view.show === "all" && everythingSettled ? (
-      <SettledState>Everything {onDay} is settled.</SettledState>
-    ) : dayTasks.length > 0 ? (
-      <SettledState className={cn(inlineBelow && "flex-none")}>All tasks {onDay} settled.</SettledState>
+    <EmptyState>
+      Couldn't load your tasks.
+      <Button variant="outline" size="sm" onClick={() => void reload()}>
+        Try again
+      </Button>
+    </EmptyState>
+  ) : !day ? (
+    <TaskRowsSkeleton />
+  ) : open.length > 0 ? (
+    view.group === "tag" ? (
+      groupByTag(open, tagList ?? []).map(({ tag, tasks }) => (
+        <section
+          key={tag?.id ?? "other"}
+          aria-label={tag?.name ?? "Other"}
+          className="flex flex-col gap-0.5 pt-2 first:pt-0"
+        >
+          <h3 className="px-2">
+            {tag ? (
+              <TagChip name={tag.name} color={tag.color} />
+            ) : (
+              <span className="text-xs text-muted-foreground">Other</span>
+            )}
+          </h3>
+          <TaskList tasks={tasks} label={tag?.name ?? "Other"} {...rowProps} />
+        </section>
+      ))
     ) : (
-      <EmptyState className={cn(inlineBelow && "flex-none")}>
-        {filtering
-          ? `No tasks with these tags ${onDay}.`
-          : tense === "past"
-            ? `No tasks were planned ${onDay}.`
-            : tense === "future"
-              ? `Nothing planned ${onDay} yet. Add a task with New task, or press N.`
-              : `No tasks ${onDay}. Add one with New task, or press N.`}
-      </EmptyState>
-    );
+      <TaskList tasks={open} label={`Tasks ${onDay}`} {...rowProps} />
+    )
+  ) : view.show === "all" && settledCount === null ? (
+    <TaskRowsSkeleton />
+  ) : view.show === "all" && everythingSettled ? (
+    <SettledState>Everything {onDay} is settled.</SettledState>
+  ) : dayTasks.length > 0 ? (
+    <SettledState className={cn(inlineBelow && "flex-none")}>All tasks {onDay} settled.</SettledState>
+  ) : (
+    <EmptyState className={cn(inlineBelow && "flex-none")}>
+      {filtering
+        ? `No tasks with these tags ${onDay}.`
+        : tense === "past"
+          ? `No tasks were planned ${onDay}.`
+          : tense === "future"
+            ? `Nothing planned ${onDay} yet. Add a task with New task, or press N.`
+            : `No tasks ${onDay}. Add one with New task, or press N.`}
+    </EmptyState>
+  );
 
   const newLabel = view.show === "habits" ? "New habit" : view.show === "goals" ? "New goal" : "New task";
 
@@ -436,15 +442,16 @@ function DayBody({
   return (
     <LayoutGroup>
       {tense !== "today" && (
-        <DaySummary items={summary} empty={tense === "past" ? "Nothing was recorded this day." : "Nothing planned yet."} />
+        <DaySummary
+          items={summary}
+          empty={tense === "past" ? "Nothing was recorded this day." : "Nothing planned yet."}
+        />
       )}
       <ViewControls
         view={view}
         onChange={onViewChange}
         kinds
-        filter={
-          <TagFilter tags={tagList} value={tagFilter} onChange={(next) => onViewChange({ tags: next })} />
-        }
+        filter={<TagFilter tags={tagList} value={tagFilter} onChange={(next) => onViewChange({ tags: next })} />}
         groups={[
           { value: "auto", label: "None" },
           { value: "tag", label: "Tag" },
@@ -559,7 +566,6 @@ function DayBody({
           },
         ]}
       />
-
     </LayoutGroup>
   );
 }
@@ -594,7 +600,9 @@ function HabitsView({
   if (habits.due.length === 0 && habits.settled.length === 0) {
     return (
       <EmptyState>
-        {tense === "past" ? `No habits were due ${onDay}.` : `No habits due ${onDay}. Add one with New habit, or press N.`}
+        {tense === "past"
+          ? `No habits were due ${onDay}.`
+          : `No habits due ${onDay}. Add one with New habit, or press N.`}
       </EmptyState>
     );
   }
@@ -758,10 +766,8 @@ function EmptyState({ children, className }: { children: ReactNode; className?: 
   );
 }
 
-const paneClass =
-  "relative flex min-h-0 flex-col data-[state=inactive]:hidden md:data-[state=inactive]:flex";
-const cardClass =
-  "min-h-0 flex-1 rounded-2xl [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(5)]";
+const paneClass = "relative flex min-h-0 flex-col data-[state=inactive]:hidden md:data-[state=inactive]:flex";
+const cardClass = "min-h-0 flex-1 rounded-2xl [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(5)]";
 
 function CardGlow() {
   return (
@@ -792,7 +798,10 @@ function Counted({ label, count }: { label: string; count: number | null }) {
         transition={{ type: "spring", stiffness: 600, damping: 18 }}
         className="inline-flex"
       >
-        <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.6875rem] tabular-nums sm:h-4.5 sm:min-w-4.5 sm:text-xs">
+        <Badge
+          variant="secondary"
+          className="h-4 min-w-4 px-1 text-[0.6875rem] tabular-nums sm:h-4.5 sm:min-w-4.5 sm:text-xs"
+        >
           {count ?? 0}
         </Badge>
       </motion.span>
@@ -885,15 +894,13 @@ function useLiveCollapsed() {
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(LIVE_COLLAPSED_KEY) === "true");
-    } catch {
-    }
+    } catch {}
   }, []);
   const update = (next: boolean) => {
     setCollapsed(next);
     try {
       localStorage.setItem(LIVE_COLLAPSED_KEY, String(next));
-    } catch {
-    }
+    } catch {}
   };
   return [collapsed, update] as const;
 }

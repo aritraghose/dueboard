@@ -58,13 +58,7 @@ export function AppSidebar({ user }: { user: MenuUser }) {
   );
 }
 
-function NavLink({
-  item: { to, label, icon: Icon },
-  children,
-}: {
-  item: NavItem;
-  children?: ReactNode;
-}) {
+function NavLink({ item: { to, label, icon: Icon }, children }: { item: NavItem; children?: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
     <SidebarMenuItem>
@@ -104,11 +98,7 @@ function BrandToggle() {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
-          <SidebarMenuButton
-            tooltip="Expand menu"
-            onClick={toggleSidebar}
-            className={cn("group/brand", railButton)}
-          >
+          <SidebarMenuButton tooltip="Expand menu" onClick={toggleSidebar} className={cn("group/brand", railButton)}>
             <AppLogo className="group-hover/brand:hidden group-focus-visible/brand:hidden" />
             <ChevronRightIcon className="hidden size-[1.125rem]! group-hover/brand:block group-focus-visible/brand:block" />
             <span className="sr-only">Expand menu</span>

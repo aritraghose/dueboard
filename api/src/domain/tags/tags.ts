@@ -1,26 +1,19 @@
 import { and, asc, count, eq } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Tags, Tasks, UserSettings, type TagRow } from "../../schema.ts";
-import {
-  Database,
-  isUniqueViolation,
-  newId,
-  orDieOnDbError,
-  transaction,
-  type Executor,
-} from "../core/database.ts";
+import { type TagRow, Tags, Tasks, UserSettings } from "../../schema.ts";
+import { Database, type Executor, isUniqueViolation, newId, orDieOnDbError, transaction } from "../core/database.ts";
 import { decodeInput } from "../core/model.ts";
 import {
   CreateTagInput,
   MAX_TAGS_PER_USER,
+  type SystemTagKind,
   SystemTagLocked,
   Tag,
+  type TagColor,
   TagLimitReached,
   TagNameTaken,
   TagNotFound,
   UpdateTagInput,
-  type SystemTagKind,
-  type TagColor,
 } from "./model.ts";
 
 export const SYSTEM_TAGS: ReadonlyArray<{
@@ -42,8 +35,7 @@ export const toTag = (row: TagRow): Tag =>
     createdAt: row.createdAt,
   });
 
-const nameTaken = (name: string) =>
-  new TagNameTaken({ message: `You already have a tag named "${name}".`, name });
+const nameTaken = (name: string) => new TagNameTaken({ message: `You already have a tag named "${name}".`, name });
 
 export const findTag = (tx: Executor, userId: string, id: string) =>
   Effect.gen(function* () {
@@ -66,11 +58,7 @@ export const findDefaultTag = (tx: Executor, userId: string) =>
   });
 
 const lockUser = (tx: Executor, userId: string) =>
-  tx
-    .select({ userId: UserSettings.userId })
-    .from(UserSettings)
-    .where(eq(UserSettings.userId, userId))
-    .for("update");
+  tx.select({ userId: UserSettings.userId }).from(UserSettings).where(eq(UserSettings.userId, userId)).for("update");
 
 export const listTags = Effect.fn("listTags")(function* (userId: string) {
   const db = yield* Database;
@@ -89,10 +77,7 @@ export const createTag = Effect.fn("createTag")(function* (userId: string, input
   return yield* transaction(db, (tx) =>
     Effect.gen(function* () {
       yield* lockUser(tx, userId);
-      const [{ total } = { total: 0 }] = yield* tx
-        .select({ total: count() })
-        .from(Tags)
-        .where(eq(Tags.userId, userId));
+      const [{ total } = { total: 0 }] = yield* tx.select({ total: count() }).from(Tags).where(eq(Tags.userId, userId));
       if (total >= MAX_TAGS_PER_USER) {
         return yield* new TagLimitReached({
           message: `You can have up to ${MAX_TAGS_PER_USER} tags. Delete one to add another.`,
@@ -129,9 +114,7 @@ export const updateTag = Effect.fn("updateTag")(function* (userId: string, input
         .set({ ...(rename && { name }), ...(color && { color }) })
         .where(and(eq(Tags.id, id), eq(Tags.userId, userId)))
         .returning()
-        .pipe(
-          Effect.catchIf(isUniqueViolation, () => Effect.fail(nameTaken(name ?? tag.name))),
-        );
+        .pipe(Effect.catchIf(isUniqueViolation, () => Effect.fail(nameTaken(name ?? tag.name))));
       return toTag(row!);
     }),
   );

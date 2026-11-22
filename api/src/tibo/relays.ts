@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import type { RelayJson } from "../domain-client.ts";
 import { RELAY_TTL_MS } from "../domain/relays/relay-constants.ts";
+import type { RelayJson } from "../domain-client.ts";
 import type { ContextSection } from "./context.ts";
 import type { TiboRelayCard, TiboRelayStatus } from "./protocol.ts";
 
@@ -76,11 +76,13 @@ export class RelayCards {
   }
 }
 
-export const escapeRelayed = (text: string) =>
-  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export const escapeRelayed = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export const safeName = (name: string) => {
-  const clean = name.replace(/[<>"“”]/g, "").replace(/\s+/g, " ").trim();
+  const clean = name
+    .replace(/[<>"“”]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return clean.length > 60 ? `${clean.slice(0, 59)}…` : clean;
 };
 
@@ -221,7 +223,12 @@ const GLUE = new Set(
 );
 
 export const contentWords = (text: string): string[] =>
-  (text.toLowerCase().normalize("NFC").match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?/gu) ?? [])
+  (
+    text
+      .toLowerCase()
+      .normalize("NFC")
+      .match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?/gu) ?? []
+  )
     .map((word) => word.replace(/['’]s$/, ""))
     .filter((word) => word.length > 1 && !GLUE.has(word));
 
@@ -231,7 +238,9 @@ export const ownWords = (text: string, source: string): { ok: boolean; foreign: 
   const words = contentWords(text);
   if (words.length === 0) return { ok: true, foreign: [] };
   const theirs = new Set(contentWords(source));
-  const foreign = words.filter((word) => !theirs.has(word) && !theirs.has(word.replace(/s$/, "")) && !theirs.has(`${word}s`));
+  const foreign = words.filter(
+    (word) => !theirs.has(word) && !theirs.has(word.replace(/s$/, "")) && !theirs.has(`${word}s`),
+  );
   return { ok: foreign.length <= words.length * (1 - OWN_WORDS_SHARE), foreign: [...new Set(foreign)] };
 };
 
@@ -256,8 +265,7 @@ export const relayListView = (relays: readonly RelayJson[]) => ({
     sent: relay.createdAt.slice(0, 10),
     ...(relay.answer !== null
       ? {
-          answer:
-            relay.direction === "out" ? relayedBlock(relay.person.username, relay.answer) : relay.answer,
+          answer: relay.direction === "out" ? relayedBlock(relay.person.username, relay.answer) : relay.answer,
         }
       : {}),
   })),

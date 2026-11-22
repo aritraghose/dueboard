@@ -39,15 +39,10 @@ function Tags() {
           ) : own.length > 0 ? (
             <TagList tags={own} onEdit={edit} />
           ) : (
-            <p className="py-3 text-sm text-muted-foreground">
-              No tags of your own yet.
-            </p>
+            <p className="py-3 text-sm text-muted-foreground">No tags of your own yet.</p>
           )}
         </TagSection>
-        <TagSection
-          title="Built-in tags"
-          description="You can recolor these, not rename them."
-        >
+        <TagSection title="Built-in tags" description="You can recolor these, not rename them.">
           {tags ? <TagList tags={system} onEdit={edit} /> : <Skeleton className="h-20 w-full" />}
         </TagSection>
       </div>

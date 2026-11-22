@@ -1,15 +1,19 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppLogo } from "@/components/app-logo";
 import { GitHubMark } from "@/components/github-mark";
 import { FeatureShowcase } from "@/components/landing/feature-showcase";
 import { HeroWorkbench } from "@/components/landing/hero-workbench";
 import { TiboMark } from "@/components/tibo-mark";
 import { Button } from "@/components/ui/button";
-import { GITHUB_URL, SITE_DESCRIPTION, canonical, seo } from "@/lib/seo";
+import { canonical, GITHUB_URL, SITE_DESCRIPTION, seo } from "@/lib/seo";
 
 export const Route = createFileRoute("/_public/")({
   head: () => ({
-    meta: seo({ title: "Dueboard · Productivity. Productivity. Productivity.", description: SITE_DESCRIPTION, path: "/" }),
+    meta: seo({
+      title: "Dueboard · Productivity. Productivity. Productivity.",
+      description: SITE_DESCRIPTION,
+      path: "/",
+    }),
     links: [canonical("/")],
   }),
   component: Landing,

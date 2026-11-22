@@ -15,8 +15,10 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { LocalDate } from "./domain/core/dates.ts";
 import {
   ACTIVITY_KIND,
+  ACTIVITY_SUBJECT,
   AI_USAGE_REASON,
   ASK_ANSWER_MAX_LENGTH,
   ASK_DOCUMENT_MAX_LENGTH,
@@ -26,7 +28,6 @@ import {
   ASK_MONTHLY_ANSWER_CAP_MAX,
   ASK_QUESTION_MAX_LENGTH,
   ASK_SHARED_CONTEXT_MAX_LENGTH,
-  ACTIVITY_SUBJECT,
   CONNECTION_REQUEST_STATUS,
   GOAL_COUNT_MAX,
   GOAL_DESCRIPTION_MAX_LENGTH,
@@ -58,19 +59,18 @@ import {
   TASK_IMPORTANCE_MAX,
   TASK_STATUS,
   TASK_TITLE_MAX_LENGTH,
-  TIBO_EVENING_TIMES,
-  TIBO_EVENING_TIME_DEFAULT,
-  TIBO_EVENT_KIND,
-  TIBO_MORNING_TIMES,
-  TIBO_MORNING_TIME_DEFAULT,
-  USER_COLOR,
   type TagColor,
+  TIBO_EVENING_TIME_DEFAULT,
+  TIBO_EVENING_TIMES,
+  TIBO_EVENT_KIND,
+  TIBO_MORNING_TIME_DEFAULT,
+  TIBO_MORNING_TIMES,
   type TiboEveningTime,
   type TiboEventKind,
   type TiboMorningTime,
+  USER_COLOR,
   type UserColor,
 } from "./domain/model.ts";
-import type { LocalDate } from "./domain/core/dates.ts";
 
 const id = () => text("id").primaryKey();
 const userId = () => text("user_id").notNull();
@@ -91,47 +91,48 @@ export const goalLinkItem = pgEnum("goal_link_item", GOAL_LINK_ITEM);
 export const goalProgressSource = pgEnum("goal_progress_source", GOAL_PROGRESS_SOURCE);
 export const focusSessionStatus = pgEnum("focus_session_status", SESSION_STATUS);
 export const aiUsageReason = pgEnum("ai_usage_reason", AI_USAGE_REASON);
-export const connectionRequestStatus = pgEnum(
-  "connection_request_status",
-  CONNECTION_REQUEST_STATUS,
-);
+export const connectionRequestStatus = pgEnum("connection_request_status", CONNECTION_REQUEST_STATUS);
 
-export const UserSettings = pgTable("user_settings", {
-  userId: text("user_id").primaryKey(),
-  timeZone: text("time_zone").notNull(),
-  color: text("color")
-    .$type<UserColor>()
-    .notNull()
-    .default(
-      sql.raw(
-        `(array[${USER_COLOR.map((c) => `'${c}'`).join(", ")}])[floor(random() * ${USER_COLOR.length})::int + 1]`,
+export const UserSettings = pgTable(
+  "user_settings",
+  {
+    userId: text("user_id").primaryKey(),
+    timeZone: text("time_zone").notNull(),
+    color: text("color")
+      .$type<UserColor>()
+      .notNull()
+      .default(
+        sql.raw(
+          `(array[${USER_COLOR.map((c) => `'${c}'`).join(", ")}])[floor(random() * ${USER_COLOR.length})::int + 1]`,
+        ),
       ),
+    defaultPrivacy: privacy("default_privacy").notNull().default("connections"),
+    defaultShareToLive: boolean("default_share_to_live").notNull().default(true),
+    relayPolicy: relayPolicy("relay_policy").notNull().default("connections"),
+    aiQuotaOverride: integer("ai_quota_override"),
+    tiboProactive: boolean("tibo_proactive").notNull().default(true),
+    tiboMorningPlan: boolean("tibo_morning_plan").notNull().default(true),
+    tiboMorningTime: text("tibo_morning_time").$type<TiboMorningTime>().notNull().default(TIBO_MORNING_TIME_DEFAULT),
+    tiboDeadlineNudges: boolean("tibo_deadline_nudges").notNull().default(true),
+    tiboHabitCheck: boolean("tibo_habit_check").notNull().default(true),
+    tiboEveningTime: text("tibo_evening_time").$type<TiboEveningTime>().notNull().default(TIBO_EVENING_TIME_DEFAULT),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    check(
+      "user_settings_tibo_morning_time",
+      sql`${t.tiboMorningTime} in (${sql.raw(TIBO_MORNING_TIMES.map((time) => `'${time}'`).join(", "))})`,
     ),
-  defaultPrivacy: privacy("default_privacy").notNull().default("connections"),
-  defaultShareToLive: boolean("default_share_to_live").notNull().default(true),
-  relayPolicy: relayPolicy("relay_policy").notNull().default("connections"),
-  aiQuotaOverride: integer("ai_quota_override"),
-  tiboProactive: boolean("tibo_proactive").notNull().default(true),
-  tiboMorningPlan: boolean("tibo_morning_plan").notNull().default(true),
-  tiboMorningTime: text("tibo_morning_time").$type<TiboMorningTime>().notNull().default(TIBO_MORNING_TIME_DEFAULT),
-  tiboDeadlineNudges: boolean("tibo_deadline_nudges").notNull().default(true),
-  tiboHabitCheck: boolean("tibo_habit_check").notNull().default(true),
-  tiboEveningTime: text("tibo_evening_time").$type<TiboEveningTime>().notNull().default(TIBO_EVENING_TIME_DEFAULT),
-  createdAt: createdAt(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-}, (t) => [
-  check(
-    "user_settings_tibo_morning_time",
-    sql`${t.tiboMorningTime} in (${sql.raw(TIBO_MORNING_TIMES.map((time) => `'${time}'`).join(", "))})`,
-  ),
-  check(
-    "user_settings_tibo_evening_time",
-    sql`${t.tiboEveningTime} in (${sql.raw(TIBO_EVENING_TIMES.map((time) => `'${time}'`).join(", "))})`,
-  ),
-]);
+    check(
+      "user_settings_tibo_evening_time",
+      sql`${t.tiboEveningTime} in (${sql.raw(TIBO_EVENING_TIMES.map((time) => `'${time}'`).join(", "))})`,
+    ),
+  ],
+);
 export type UserSettingsRow = typeof UserSettings.$inferSelect;
 
 export const Tags = pgTable(
@@ -146,9 +147,7 @@ export const Tags = pgTable(
   },
   (t) => [
     uniqueIndex("tags_user_name_idx").on(t.userId, sql`lower(${t.name})`),
-    uniqueIndex("tags_user_system_kind_idx")
-      .on(t.userId, t.systemKind)
-      .where(sql`${t.systemKind} is not null`),
+    uniqueIndex("tags_user_system_kind_idx").on(t.userId, t.systemKind).where(sql`${t.systemKind} is not null`),
   ],
 );
 export type TagRow = typeof Tags.$inferSelect;
@@ -186,18 +185,12 @@ export const Tasks = pgTable(
       .on(t.userId, t.status)
       .where(sql`${t.assignedDate} is null and ${t.deadlineDate} is null`),
     index("tasks_tag_idx").on(t.tagId),
-    check(
-      "tasks_title_length",
-      sql`char_length(${t.title}) between 1 and ${sql.raw(String(TASK_TITLE_MAX_LENGTH))}`,
-    ),
+    check("tasks_title_length", sql`char_length(${t.title}) between 1 and ${sql.raw(String(TASK_TITLE_MAX_LENGTH))}`),
     check(
       "tasks_description_length",
       sql`char_length(${t.description}) <= ${sql.raw(String(TASK_DESCRIPTION_MAX_LENGTH))}`,
     ),
-    check(
-      "tasks_importance_range",
-      sql`${t.importance} between 1 and ${sql.raw(String(TASK_IMPORTANCE_MAX))}`,
-    ),
+    check("tasks_importance_range", sql`${t.importance} between 1 and ${sql.raw(String(TASK_IMPORTANCE_MAX))}`),
     check(
       "tasks_expected_minutes_range",
       sql`${t.expectedMinutes} between 1 and ${sql.raw(String(TASK_EXPECTED_MINUTES_MAX))}`,
@@ -206,10 +199,7 @@ export const Tasks = pgTable(
       "tasks_dates_order",
       sql`${t.assignedDate} is null or ${t.deadlineDate} is null or ${t.assignedDate} <= ${t.deadlineDate}`,
     ),
-    check(
-      "tasks_settled_at",
-      sql`(${t.status} = 'settled') = (${t.settledAt} is not null)`,
-    ),
+    check("tasks_settled_at", sql`(${t.status} = 'settled') = (${t.settledAt} is not null)`),
   ],
 );
 export type TaskRow = typeof Tasks.$inferSelect;
@@ -240,18 +230,12 @@ export const Habits = pgTable(
   (t) => [
     index("habits_user_created_idx").on(t.userId, t.createdAt, t.id),
     index("habits_user_status_idx").on(t.userId, t.status),
-    check(
-      "habits_title_length",
-      sql`char_length(${t.title}) between 1 and ${sql.raw(String(HABIT_TITLE_MAX_LENGTH))}`,
-    ),
+    check("habits_title_length", sql`char_length(${t.title}) between 1 and ${sql.raw(String(HABIT_TITLE_MAX_LENGTH))}`),
     check(
       "habits_description_length",
       sql`char_length(${t.description}) <= ${sql.raw(String(HABIT_DESCRIPTION_MAX_LENGTH))}`,
     ),
-    check(
-      "habits_target_range",
-      sql`${t.targetCount} between 1 and ${sql.raw(String(HABIT_TARGET_MAX))}`,
-    ),
+    check("habits_target_range", sql`${t.targetCount} between 1 and ${sql.raw(String(HABIT_TARGET_MAX))}`),
     check(
       "habits_period_length_range",
       sql`${t.periodLength} between 1 and ${sql.raw(String(HABIT_PERIOD_LENGTH_MAX))}`,
@@ -318,9 +302,7 @@ export const Goals = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     progressMode: goalProgressMode("progress_mode").notNull(),
-    progressPercent: numeric("progress_percent", { precision: 5, scale: 2, mode: "number" })
-      .notNull()
-      .default(0),
+    progressPercent: numeric("progress_percent", { precision: 5, scale: 2, mode: "number" }).notNull().default(0),
     targetCount: integer("target_count"),
     currentCount: integer("current_count"),
     targetDate: date("target_date", { mode: "string" }).$type<LocalDate>(),
@@ -337,10 +319,7 @@ export const Goals = pgTable(
   (t) => [
     index("goals_user_status_idx").on(t.userId, t.status),
     index("goals_user_created_idx").on(t.userId, t.createdAt, t.id),
-    check(
-      "goals_name_length",
-      sql`char_length(${t.name}) between 1 and ${sql.raw(String(GOAL_NAME_MAX_LENGTH))}`,
-    ),
+    check("goals_name_length", sql`char_length(${t.name}) between 1 and ${sql.raw(String(GOAL_NAME_MAX_LENGTH))}`),
     check(
       "goals_description_length",
       sql`char_length(${t.description}) <= ${sql.raw(String(GOAL_DESCRIPTION_MAX_LENGTH))}`,
@@ -380,10 +359,7 @@ export const GoalLinks = pgTable(
   (t) => [
     uniqueIndex("goal_links_goal_item_idx").on(t.goalId, t.itemType, t.itemId),
     index("goal_links_user_item_idx").on(t.userId, t.itemType, t.itemId),
-    check(
-      "goal_links_amount_range",
-      sql`${t.amount} between 1 and ${sql.raw(String(GOAL_LINK_AMOUNT_MAX))}`,
-    ),
+    check("goal_links_amount_range", sql`${t.amount} between 1 and ${sql.raw(String(GOAL_LINK_AMOUNT_MAX))}`),
   ],
 );
 export type GoalLinkRow = typeof GoalLinks.$inferSelect;
@@ -408,10 +384,7 @@ export const GoalProgressEvents = pgTable(
     index("goal_progress_events_source_idx").on(t.goalId, t.source, t.sourceId),
     index("goal_progress_events_user_idx").on(t.userId, t.createdAt),
     check("goal_progress_events_delta", sql`${t.delta} <> 0`),
-    check(
-      "goal_progress_events_source_id",
-      sql`(${t.source} = 'manual') = (${t.sourceId} is null)`,
-    ),
+    check("goal_progress_events_source_id", sql`(${t.source} = 'manual') = (${t.sourceId} is null)`),
   ],
 );
 export type GoalProgressEventRow = typeof GoalProgressEvents.$inferSelect;
@@ -433,10 +406,7 @@ export const Notes = pgTable(
   },
   (t) => [
     index("notes_user_local_date_idx").on(t.userId, t.localDate, t.createdAt, t.id),
-    check(
-      "notes_body_length",
-      sql`char_length(${t.body}) between 1 and ${sql.raw(String(NOTE_BODY_MAX_LENGTH))}`,
-    ),
+    check("notes_body_length", sql`char_length(${t.body}) between 1 and ${sql.raw(String(NOTE_BODY_MAX_LENGTH))}`),
   ],
 );
 export type NoteRow = typeof Notes.$inferSelect;
@@ -462,9 +432,7 @@ export const FocusSessions = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
-    uniqueIndex("focus_sessions_one_active_idx")
-      .on(t.userId)
-      .where(sql`${t.status} in ('running', 'paused')`),
+    uniqueIndex("focus_sessions_one_active_idx").on(t.userId).where(sql`${t.status} in ('running', 'paused')`),
     index("focus_sessions_user_local_date_idx").on(t.userId, t.localDate, t.startedAt, t.id),
     index("focus_sessions_expiry_idx").on(t.endsAt).where(sql`${t.status} = 'running'`),
     check(
@@ -476,10 +444,7 @@ export const FocusSessions = pgTable(
       sql`${t.plannedMinutes} between 1 and ${sql.raw(String(SESSION_MINUTES_MAX))}`,
     ),
     check("focus_sessions_ends_at", sql`(${t.status} = 'running') = (${t.endsAt} is not null)`),
-    check(
-      "focus_sessions_ended_at",
-      sql`(${t.status} in ('completed', 'stopped')) = (${t.endedAt} is not null)`,
-    ),
+    check("focus_sessions_ended_at", sql`(${t.status} in ('completed', 'stopped')) = (${t.endedAt} is not null)`),
   ],
 );
 export type FocusSessionRow = typeof FocusSessions.$inferSelect;
@@ -496,13 +461,8 @@ export const FocusSessionSegments = pgTable(
   },
   (t) => [
     index("focus_session_segments_session_idx").on(t.sessionId, t.startedAt),
-    uniqueIndex("focus_session_segments_open_idx")
-      .on(t.sessionId)
-      .where(sql`${t.endedAt} is null`),
-    check(
-      "focus_session_segments_order",
-      sql`${t.endedAt} is null or ${t.endedAt} >= ${t.startedAt}`,
-    ),
+    uniqueIndex("focus_session_segments_open_idx").on(t.sessionId).where(sql`${t.endedAt} is null`),
+    check("focus_session_segments_order", sql`${t.endedAt} is null or ${t.endedAt} >= ${t.startedAt}`),
   ],
 );
 export type FocusSessionSegmentRow = typeof FocusSessionSegments.$inferSelect;
@@ -541,16 +501,11 @@ export const ConnectionRequests = pgTable(
     respondedAt: timestamp("responded_at", { withTimezone: true }),
   },
   (t) => [
-    uniqueIndex("connection_requests_pending_idx")
-      .on(t.fromUserId, t.toUserId)
-      .where(sql`${t.status} = 'pending'`),
+    uniqueIndex("connection_requests_pending_idx").on(t.fromUserId, t.toUserId).where(sql`${t.status} = 'pending'`),
     index("connection_requests_from_idx").on(t.fromUserId, t.createdAt),
     index("connection_requests_to_idx").on(t.toUserId, t.status, t.createdAt),
     check("connection_requests_not_self", sql`${t.fromUserId} <> ${t.toUserId}`),
-    check(
-      "connection_requests_responded_at",
-      sql`(${t.status} = 'pending') = (${t.respondedAt} is null)`,
-    ),
+    check("connection_requests_responded_at", sql`(${t.status} = 'pending') = (${t.respondedAt} is null)`),
   ],
 );
 export type ConnectionRequestRow = typeof ConnectionRequests.$inferSelect;
@@ -621,10 +576,7 @@ export const AiUsageTotals = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (t) => [
-    primaryKey({ columns: [t.userId, t.period] }),
-    check("ai_usage_units", sql`${t.units} >= 0`),
-  ],
+  (t) => [primaryKey({ columns: [t.userId, t.period] }), check("ai_usage_units", sql`${t.units} >= 0`)],
 );
 export type AiUsageTotalRow = typeof AiUsageTotals.$inferSelect;
 
@@ -671,12 +623,8 @@ export const Relays = pgTable(
   (t) => [
     index("relays_from_idx").on(t.fromUserId, t.createdAt),
     index("relays_to_idx").on(t.toUserId, t.status, t.createdAt),
-    index("relays_open_expires_idx")
-      .on(t.expiresAt)
-      .where(sql`${t.status} in ('pending', 'delivered')`),
-    index("relays_unsynced_idx")
-      .on(t.updatedAt)
-      .where(sql`not ${t.senderSynced} or not ${t.recipientSynced}`),
+    index("relays_open_expires_idx").on(t.expiresAt).where(sql`${t.status} in ('pending', 'delivered')`),
+    index("relays_unsynced_idx").on(t.updatedAt).where(sql`not ${t.senderSynced} or not ${t.recipientSynced}`),
     check("relays_not_self", sql`${t.fromUserId} <> ${t.toUserId}`),
     check(
       "relays_message_length",
@@ -730,7 +678,10 @@ export const AskSettingsTable = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
-    check("ask_settings_instructions_length", sql`char_length(${t.instructions}) <= ${sql.raw(String(ASK_INSTRUCTIONS_MAX_LENGTH))}`),
+    check(
+      "ask_settings_instructions_length",
+      sql`char_length(${t.instructions}) <= ${sql.raw(String(ASK_INSTRUCTIONS_MAX_LENGTH))}`,
+    ),
     check(
       "ask_settings_shared_context_length",
       sql`char_length(${t.sharedContext}) <= ${sql.raw(String(ASK_SHARED_CONTEXT_MAX_LENGTH))}`,
@@ -771,7 +722,10 @@ export const AskQuestions = pgTable(
     index("ask_questions_user_created_idx").on(t.userId, t.createdAt.desc()),
     index("ask_questions_created_idx").on(t.createdAt),
     index("ask_questions_asker_idx").on(t.askerId),
-    check("ask_questions_question_length", sql`char_length(${t.question}) between 1 and ${sql.raw(String(ASK_QUESTION_MAX_LENGTH))}`),
+    check(
+      "ask_questions_question_length",
+      sql`char_length(${t.question}) between 1 and ${sql.raw(String(ASK_QUESTION_MAX_LENGTH))}`,
+    ),
     check("ask_questions_answer_length", sql`char_length(${t.answer}) <= ${sql.raw(String(ASK_ANSWER_MAX_LENGTH))}`),
   ],
 );
@@ -788,8 +742,14 @@ export const AskDocuments = pgTable(
   },
   (t) => [
     index("ask_documents_user_created_idx").on(t.userId, t.createdAt),
-    check("ask_documents_name_length", sql`char_length(${t.name}) between 1 and ${sql.raw(String(ASK_DOCUMENT_NAME_MAX_LENGTH))}`),
-    check("ask_documents_text_length", sql`char_length(${t.text}) between 1 and ${sql.raw(String(ASK_DOCUMENT_MAX_LENGTH))}`),
+    check(
+      "ask_documents_name_length",
+      sql`char_length(${t.name}) between 1 and ${sql.raw(String(ASK_DOCUMENT_NAME_MAX_LENGTH))}`,
+    ),
+    check(
+      "ask_documents_text_length",
+      sql`char_length(${t.text}) between 1 and ${sql.raw(String(ASK_DOCUMENT_MAX_LENGTH))}`,
+    ),
   ],
 );
 

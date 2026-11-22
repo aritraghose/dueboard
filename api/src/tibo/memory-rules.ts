@@ -1,4 +1,4 @@
-import { fileLine, type FileLine } from "./attachment-rules.ts";
+import { type FileLine, fileLine } from "./attachment-rules.ts";
 import { addDays } from "./dates.ts";
 
 export const CONTEXT_BUDGET_TOKENS = 12_000;
@@ -84,7 +84,7 @@ export const parentPeriods = (level: SummaryLevel, start: string): { level: Summ
 };
 
 export const childLevel = (level: Exclude<SummaryLevel, "day">): SummaryLevel =>
-  ({ week: "day", month: "day", year: "month" } as const)[level];
+  (({ week: "day", month: "day", year: "month" }) as const)[level];
 
 const formatDay = (day: string, options: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...options }).format(new Date(`${day}T12:00:00Z`));

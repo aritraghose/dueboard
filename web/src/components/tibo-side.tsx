@@ -1,17 +1,14 @@
 import {
-  tiboFileUrl,
   type TiboActivity,
   type TiboActivityKind,
   type TiboActivityThread,
   type TiboSentFile,
+  tiboFileUrl,
 } from "@dueboard/api/tibo";
 import {
   AlarmClockIcon,
   ArrowLeftRightIcon,
   BrainIcon,
-  HistoryIcon,
-  ImagesIcon,
-  LayoutGridIcon,
   CircleCheckIcon,
   CircleIcon,
   CircleSlashIcon,
@@ -19,13 +16,16 @@ import {
   CoffeeIcon,
   EyeIcon,
   FileTextIcon,
+  HistoryIcon,
+  ImagesIcon,
   LayersIcon,
+  LayoutGridIcon,
+  type LucideIcon,
   MessageCircleIcon,
   PenLineIcon,
   SparklesIcon,
   SunriseIcon,
   WrenchIcon,
-  type LucideIcon,
 } from "lucide-react";
 import * as React from "react";
 import { FileCard, PhotoViewer } from "@/components/tibo-attachments";
@@ -52,7 +52,11 @@ export function TiboSide({ className, trailing }: { className?: string; trailing
   const [tab, setTab] = React.useState<TiboSideTab>("overview");
   const index = TABS.findIndex((entry) => entry.value === tab);
   return (
-    <Tabs value={tab} onValueChange={(value) => setTab(value as TiboSideTab)} className={cn("min-h-0 gap-0", className)}>
+    <Tabs
+      value={tab}
+      onValueChange={(value) => setTab(value as TiboSideTab)}
+      className={cn("min-h-0 gap-0", className)}
+    >
       <div className="shrink-0 border-b border-tibo-side-border">
         <TiboProfile trailing={trailing} />
         <div className="px-4 pb-3">
@@ -110,7 +114,10 @@ function TiboProfile({ trailing }: { trailing?: React.ReactNode }) {
         </div>
         <span className="absolute right-0.5 bottom-0.5 grid size-4.5 place-items-center rounded-full bg-bubble-tibo">
           {state === "working" && (
-            <span aria-hidden="true" className="absolute size-3 animate-ping rounded-full bg-tibo-live/60 motion-reduce:hidden" />
+            <span
+              aria-hidden="true"
+              className="absolute size-3 animate-ping rounded-full bg-tibo-live/60 motion-reduce:hidden"
+            />
           )}
           <span
             aria-hidden="true"
@@ -197,12 +204,17 @@ const STATUS_WORD: Record<Exclude<TiboActivity["status"], "running" | "done">, s
 
 function StatusIcon({ activity, className }: { activity: TiboActivity; className?: string }) {
   if (activity.status === "running") return <Spinner className={cn("text-tibo-live", className)} />;
-  const Icon = activity.status === "done" ? CircleCheckIcon : activity.status === "failed" ? CircleXIcon : CircleSlashIcon;
+  const Icon =
+    activity.status === "done" ? CircleCheckIcon : activity.status === "failed" ? CircleXIcon : CircleSlashIcon;
   return (
     <Icon
       aria-label={activity.status === "done" ? "Done" : STATUS_WORD[activity.status]}
       className={cn(
-        activity.status === "done" ? "text-success" : activity.status === "failed" ? "text-destructive" : "text-muted-foreground",
+        activity.status === "done"
+          ? "text-success"
+          : activity.status === "failed"
+            ? "text-destructive"
+            : "text-muted-foreground",
         className,
       )}
     />
@@ -219,7 +231,10 @@ function NowIcon({ current }: { current: TiboActivity | null }) {
       )}
     >
       {current && (
-        <span aria-hidden="true" className="absolute inset-0 animate-pulse rounded-xl ring-2 ring-tibo-live/40 motion-reduce:hidden" />
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 animate-pulse rounded-xl ring-2 ring-tibo-live/40 motion-reduce:hidden"
+        />
       )}
       <Icon aria-hidden="true" className="size-5" />
     </span>
@@ -237,7 +252,10 @@ function Overview({ showActivity }: { showActivity: () => void }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <section aria-label="What Tibo is doing" className="rounded-2xl border border-tibo-side-border bg-tibo-now p-4 shadow-sm">
+      <section
+        aria-label="What Tibo is doing"
+        className="rounded-2xl border border-tibo-side-border bg-tibo-now p-4 shadow-sm"
+      >
         <div className="flex items-start gap-3">
           <NowIcon current={current} />
           <div className="min-w-0 flex-1" aria-live="polite">
@@ -270,7 +288,12 @@ function Overview({ showActivity }: { showActivity: () => void }) {
             {thread.steps.map((step) => (
               <li key={step.id} className="flex items-center gap-2 text-sm">
                 <StatusIcon activity={step} className="size-3.5 shrink-0" />
-                <span className={cn("min-w-0 flex-1 truncate", step.status === "running" ? "font-medium" : "text-muted-foreground")}>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate",
+                    step.status === "running" ? "font-medium" : "text-muted-foreground",
+                  )}
+                >
                   {step.label}
                 </span>
                 <span className="text-xs text-muted-foreground tabular-nums">
@@ -316,7 +339,10 @@ function Overview({ showActivity }: { showActivity: () => void }) {
                     <p className="truncate text-sm">{entry.label}</p>
                     {entry.detail && <p className="truncate text-xs text-muted-foreground">{entry.detail}</p>}
                   </div>
-                  <time dateTime={new Date(entry.startedAt).toISOString()} className="shrink-0 text-xs text-muted-foreground">
+                  <time
+                    dateTime={new Date(entry.startedAt).toISOString()}
+                    className="shrink-0 text-xs text-muted-foreground"
+                  >
                     {ago(entry.startedAt, now)}
                   </time>
                 </li>
@@ -498,7 +524,10 @@ function ActivityThreadView({ thread, now }: { thread: TiboActivityThread; now: 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <p className="min-w-0 flex-1 text-sm font-medium">{thread.label}</p>
-          <time dateTime={new Date(thread.startedAt).toISOString()} className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          <time
+            dateTime={new Date(thread.startedAt).toISOString()}
+            className="shrink-0 text-xs text-muted-foreground tabular-nums"
+          >
             {timeLabel(thread.startedAt)}
           </time>
         </div>

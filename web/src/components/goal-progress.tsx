@@ -1,6 +1,15 @@
 import { type Goal, goalPercent } from "@dueboard/api/rpc";
 import * as Exit from "effect/Exit";
-import { CalendarClockIcon, CheckIcon, MoreHorizontalIcon, PauseIcon, PencilIcon, PlusIcon, RotateCcwIcon, TargetIcon } from "lucide-react";
+import {
+  CalendarClockIcon,
+  CheckIcon,
+  MoreHorizontalIcon,
+  PauseIcon,
+  PencilIcon,
+  PlusIcon,
+  RotateCcwIcon,
+  TargetIcon,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +22,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { type DayGoals, useGoalActions, useGoalColor } from "@/hooks/use-goals";
 import { failureMessage } from "@/hooks/use-tasks";
-import { type LocalDate, formatDay } from "@/lib/dates";
+import { formatDay, type LocalDate } from "@/lib/dates";
 import { progressText, roundPercent, targetDateHint } from "@/lib/goals";
 import { cn } from "@/lib/utils";
 
@@ -94,7 +103,9 @@ export function GoalMeta({ goal, today, className }: { goal: Goal; today: LocalD
           title={`Target ${formatDay(goal.targetDate, today)}`}
         >
           <CalendarClockIcon aria-hidden="true" className="size-3" />
-          {goal.status === "completed" ? `Target ${formatDay(goal.targetDate, today)}` : targetDateHint(goal.targetDate, today)}
+          {goal.status === "completed"
+            ? `Target ${formatDay(goal.targetDate, today)}`
+            : targetDateHint(goal.targetDate, today)}
         </span>
       )}
     </span>
@@ -111,7 +122,10 @@ export function GoalCheck({ celebrate, size = "md" }: { celebrate: boolean; size
     >
       {celebrate && (
         <>
-          <span aria-hidden="true" className="absolute inset-0 animate-habit-burst rounded-full border-2 border-success" />
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 animate-habit-burst rounded-full border-2 border-success"
+          />
           <span
             aria-hidden="true"
             className="absolute inset-0 animate-habit-burst rounded-full border border-success [animation-delay:180ms]"
@@ -125,7 +139,11 @@ export function GoalCheck({ celebrate, size = "md" }: { celebrate: boolean; size
 
 function GoalDoneMark() {
   return (
-    <span aria-label="Completed goal" role="img" className="relative grid size-5 shrink-0 place-items-center rounded-full bg-tag/15 text-tag">
+    <span
+      aria-label="Completed goal"
+      role="img"
+      className="relative grid size-5 shrink-0 place-items-center rounded-full bg-tag/15 text-tag"
+    >
       <TargetIcon aria-hidden="true" className="size-3.5" />
       <span className="absolute -right-1 -bottom-1 grid size-3 place-items-center rounded-full bg-success text-background ring-2 ring-card">
         <CheckIcon aria-hidden="true" className="size-2" strokeWidth={4} />

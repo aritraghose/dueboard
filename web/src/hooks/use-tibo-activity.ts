@@ -1,8 +1,8 @@
 import {
+  currentActivity,
   TIBO_ACTIVITY_PATH,
   TIBO_AGENT,
   TIBO_FILES_PATH,
-  currentActivity,
   type TiboActivity,
   type TiboActivityThread,
   type TiboSentFile,

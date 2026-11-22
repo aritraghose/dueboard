@@ -1,17 +1,17 @@
 import {
   BookOpenIcon,
+  HouseIcon,
   LibraryIcon,
   ListChecksIcon,
+  type LucideIcon,
   MessageCircleIcon,
   NotebookPenIcon,
   RadioIcon,
   RepeatIcon,
   SearchIcon,
   SettingsIcon,
-  HouseIcon,
   TargetIcon,
   TrendingUpIcon,
-  type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = {

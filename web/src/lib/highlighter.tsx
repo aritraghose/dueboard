@@ -1,10 +1,6 @@
-import * as React from "react"
-import {
-  createHighlighterCore,
-  type GrammarState,
-  type HighlighterCore,
-} from "shiki/core"
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript"
+import type * as React from "react";
+import { createHighlighterCore, type GrammarState, type HighlighterCore } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 
 const languages = {
   bash: () => import("shiki/langs/shellscript.mjs"),
@@ -20,7 +16,7 @@ const languages = {
   tsx: () => import("shiki/langs/tsx.mjs"),
   typescript: () => import("shiki/langs/typescript.mjs"),
   yaml: () => import("shiki/langs/yaml.mjs"),
-}
+};
 
 const aliases: Record<string, keyof typeof languages> = {
   js: "javascript",
@@ -32,48 +28,45 @@ const aliases: Record<string, keyof typeof languages> = {
   ts: "typescript",
   yml: "yaml",
   zsh: "bash",
-}
+};
 
-let highlighter: Promise<HighlighterCore> | undefined
+let highlighter: Promise<HighlighterCore> | undefined;
 
 function getHighlighter() {
   highlighter ??= createHighlighterCore({
-    themes: [
-      import("shiki/themes/github-light.mjs"),
-      import("shiki/themes/github-dark.mjs"),
-    ],
+    themes: [import("shiki/themes/github-light.mjs"), import("shiki/themes/github-dark.mjs")],
     langs: [],
     engine: createJavaScriptRegexEngine({ forgiving: true }),
-  })
+  });
 
-  return highlighter
+  return highlighter;
 }
 
 function getLanguage(language: string) {
-  const name = language.toLowerCase()
+  const name = language.toLowerCase();
 
   if (name === "ansi") {
-    return name
+    return name;
   }
 
   if (name in languages) {
-    return name as keyof typeof languages
+    return name as keyof typeof languages;
   }
 
-  return aliases[name] ?? null
+  return aliases[name] ?? null;
 }
 
 export async function loadHighlighter(language: string) {
-  const lang = getLanguage(language)
+  const lang = getLanguage(language);
 
   if (!lang) {
-    return null
+    return null;
   }
 
-  const shiki = await getHighlighter()
+  const shiki = await getHighlighter();
 
   if (lang !== "ansi" && !shiki.getLoadedLanguages().includes(lang)) {
-    await shiki.loadLanguage(languages[lang])
+    await shiki.loadLanguage(languages[lang]);
   }
 
   return {
@@ -84,12 +77,9 @@ export async function loadHighlighter(language: string) {
           themes: { light: "github-light", dark: "github-dark" },
           defaultColor: false,
           grammarState: state,
-        }).tokens
+        }).tokens;
 
-      const tokens =
-        lang === "ansi"
-          ? code.split("\n").flatMap((line) => tokenize(line))
-          : tokenize(code)
+      const tokens = lang === "ansi" ? code.split("\n").flatMap((line) => tokenize(line)) : tokenize(code);
 
       return {
         lines: tokens.map((line) =>
@@ -101,16 +91,16 @@ export async function loadHighlighter(language: string) {
             >
               {token.content}
             </span>
-          ))
+          )),
         ),
         state: shiki.getLastGrammarState(tokens),
-      }
+      };
     },
-  }
+  };
 }
 
 export async function highlightCode(code: string, language: string) {
-  const highlighter = await loadHighlighter(language)
+  const highlighter = await loadHighlighter(language);
 
-  return highlighter ? highlighter.highlight(code).lines : null
+  return highlighter ? highlighter.highlight(code).lines : null;
 }

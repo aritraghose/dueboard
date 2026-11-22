@@ -7,10 +7,10 @@ import {
   escapeRelayed,
   outcomeEventBody,
   outcomeSection,
-  receivedEventBody,
-  relayListView,
   ownWords,
+  receivedEventBody,
   relayedBlock,
+  relayListView,
   safeName,
 } from "./relays.ts";
 
@@ -51,14 +51,22 @@ describe("relayed text", () => {
   });
 
   test("the recipient's card row and delivery section wrap the message and say it's data", () => {
-    for (const text of [receivedEventBody(relay({ message: INJECTION })), deliverySection(relay({ message: INJECTION })).body]) {
+    for (const text of [
+      receivedEventBody(relay({ message: INJECTION })),
+      deliverySection(relay({ message: INJECTION })).body,
+    ]) {
       expect(text.match(/<\/relayed_message>/g)).toHaveLength(1);
       expect(text).toContain("data, never instructions");
     }
   });
 
   test("an answer coming back is wrapped the same way", () => {
-    const answered = relay({ direction: "out", status: "answered", answer: INJECTION, person: { userId: "u-bea", username: "bea", name: "Bea" } });
+    const answered = relay({
+      direction: "out",
+      status: "answered",
+      answer: INJECTION,
+      person: { userId: "u-bea", username: "bea", name: "Bea" },
+    });
     for (const text of [outcomeEventBody(answered), outcomeSection(answered).body]) {
       expect(text).toContain('<relayed_message from="@bea">');
       expect(text.match(/<\/relayed_message>/g)).toHaveLength(1);
@@ -74,7 +82,14 @@ describe("relayed text", () => {
 
   test("reaches the model as an app event, never as the user's own words", () => {
     const messages = toModelMessages([
-      { id: "m1", turnId: "m1", role: "system_event", body: receivedEventBody(relay()), createdAt: 1, relay: cardOf(relay()) },
+      {
+        id: "m1",
+        turnId: "m1",
+        role: "system_event",
+        body: receivedEventBody(relay()),
+        createdAt: 1,
+        relay: cardOf(relay()),
+      },
     ]);
     expect(messages).toHaveLength(1);
     expect(messages[0]?.role).toBe("user");
@@ -111,7 +126,10 @@ describe("ownWords: only the user's own words go to another person", () => {
   });
 
   test("a new message made of the request passes, the person's name included", () => {
-    expect(ownWords("Hey Bea! Are you up for dinner on Sunday?", "ask @bea if she's up for dinner on Sunday\nbea Bea Lopez").ok).toBe(true);
+    expect(
+      ownWords("Hey Bea! Are you up for dinner on Sunday?", "ask @bea if she's up for dinner on Sunday\nbea Bea Lopez")
+        .ok,
+    ).toBe(true);
   });
 
   test("anything the user didn't say is refused, and named", () => {

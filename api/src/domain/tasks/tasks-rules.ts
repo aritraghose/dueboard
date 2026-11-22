@@ -11,10 +11,7 @@ export const taskDatesError = ({ assignedDate, deadlineDate }: TaskDates): strin
     ? "The assigned date can't be after the deadline."
     : null;
 
-export const dateRoleOn = (
-  { assignedDate, deadlineDate }: TaskDates,
-  day: LocalDate,
-): TaskDateRole | null => {
+export const dateRoleOn = ({ assignedDate, deadlineDate }: TaskDates, day: LocalDate): TaskDateRole | null => {
   const assigned = assignedDate === day;
   const deadline = deadlineDate === day;
   if (assigned && deadline) return "both";
@@ -25,10 +22,7 @@ export const dateRoleOn = (
 
 export type DayBucket = "open" | "settled";
 
-export const dayBucketOn = (
-  task: TaskDates & { readonly status: TaskStatus },
-  day: LocalDate,
-): DayBucket | null =>
+export const dayBucketOn = (task: TaskDates & { readonly status: TaskStatus }, day: LocalDate): DayBucket | null =>
   dateRoleOn(task, day) === null ? null : task.status === "settled" ? "settled" : "open";
 
 export const isUnscheduled = ({ assignedDate, deadlineDate }: TaskDates): boolean =>
@@ -57,8 +51,7 @@ export interface TaskCursor {
   readonly id: string;
 }
 
-export const encodeTaskCursor = ({ createdAt, id }: TaskCursor): string =>
-  `${createdAt.toISOString()}|${id}`;
+export const encodeTaskCursor = ({ createdAt, id }: TaskCursor): string => `${createdAt.toISOString()}|${id}`;
 
 export const decodeTaskCursor = (cursor: string): TaskCursor | null => {
   const at = cursor.indexOf("|");

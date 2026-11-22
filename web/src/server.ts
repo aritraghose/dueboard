@@ -1,5 +1,3 @@
-import { MAX_REQUEST_BODY_BYTES } from "@dueboard/api/limits";
-import { ASK_DOCUMENT_MAX_BYTES, ASK_DOCUMENT_MAX_LENGTH, ASK_DOCUMENT_NAME_MAX_LENGTH, documentText } from "@dueboard/api/rpc";
 import {
   ASK_AGENT,
   ASK_DOCUMENT_CONVERT_PATH,
@@ -7,13 +5,20 @@ import {
   ASK_THREAD_PATH,
   ASK_VISITOR_COOKIE,
   ASK_VISITOR_COOKIE_MAX_AGE_S,
+  type AskConversion,
+  type AskVisitor,
   askInstanceName,
   askUsername,
   parseVisitorCookie,
-  type AskConversion,
-  type AskVisitor,
 } from "@dueboard/api/ask";
-import { TIBO_AGENT, TIBO_FILES_PATH, TIBO_FILE_MAX_BYTES } from "@dueboard/api/tibo";
+import { MAX_REQUEST_BODY_BYTES } from "@dueboard/api/limits";
+import {
+  ASK_DOCUMENT_MAX_BYTES,
+  ASK_DOCUMENT_MAX_LENGTH,
+  ASK_DOCUMENT_NAME_MAX_LENGTH,
+  documentText,
+} from "@dueboard/api/rpc";
+import { TIBO_AGENT, TIBO_FILE_MAX_BYTES, TIBO_FILES_PATH } from "@dueboard/api/tibo";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import { env } from "./env.ts";
 
@@ -133,13 +138,13 @@ async function proxyAsk(request: Request, url: URL, segment: string, rest: strin
   if (request.headers.get("upgrade") !== null) return notFound();
   const route = rest.join("/");
   const allowed =
-    (route === ASK_THREAD_PATH && request.method === "GET") || (route === ASK_QUESTION_PATH && request.method === "POST");
+    (route === ASK_THREAD_PATH && request.method === "GET") ||
+    (route === ASK_QUESTION_PATH && request.method === "POST");
   if (!allowed) return notFound();
   let username: string | null = null;
   try {
     username = askUsername(decodeURIComponent(segment));
-  } catch {
-  }
+  } catch {}
   if (!username) return notFound();
 
   const limited = await limitBody(request);
@@ -208,9 +213,12 @@ function fileName(header: string | null): string {
   let name = "";
   try {
     name = decodeURIComponent(header ?? "");
-  } catch {
-  }
-  name = name.replace(/[\u0000-\u001F\u007F/\\]/g, "").trim().slice(0, ASK_DOCUMENT_NAME_MAX_LENGTH).trim();
+  } catch {}
+  name = name
+    .replace(/[\u0000-\u001F\u007F/\\]/g, "")
+    .trim()
+    .slice(0, ASK_DOCUMENT_NAME_MAX_LENGTH)
+    .trim();
   return name || "Document.pdf";
 }
 

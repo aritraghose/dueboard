@@ -1,7 +1,7 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { useTheme, type Theme } from "@/components/theme-provider";
+import { type Theme, useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 const themes = [
@@ -21,12 +21,7 @@ export function ThemeSwitcher({ className }: Readonly<{ className?: string }>) {
   if (!mounted) return null;
 
   return (
-    <div
-      className={cn(
-        "relative isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border",
-        className,
-      )}
-    >
+    <div className={cn("relative isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border", className)}>
       {themes.map(({ key, icon: Icon, label }) => {
         const isActive = theme === key;
         return (

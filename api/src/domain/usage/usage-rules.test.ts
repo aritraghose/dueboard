@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { startOfDayInstant, type LocalDate } from "../core/dates.ts";
+import { type LocalDate, startOfDayInstant } from "../core/dates.ts";
 import { fits, limitFor, nextResetAt, periodOf, remainingUnits, toAiUsage } from "./usage-rules.ts";
 
 const d = (value: string) => value as LocalDate;
@@ -7,21 +7,13 @@ const d = (value: string) => value as LocalDate;
 describe("startOfDayInstant", () => {
   test("is local midnight", () => {
     expect(startOfDayInstant(d("2026-12-01"), "UTC").toISOString()).toBe("2026-12-01T00:00:00.000Z");
-    expect(startOfDayInstant(d("2026-12-01"), "Asia/Kolkata").toISOString()).toBe(
-      "2026-11-30T18:30:00.000Z",
-    );
-    expect(startOfDayInstant(d("2026-12-01"), "America/New_York").toISOString()).toBe(
-      "2026-12-01T05:00:00.000Z",
-    );
+    expect(startOfDayInstant(d("2026-12-01"), "Asia/Kolkata").toISOString()).toBe("2026-11-30T18:30:00.000Z");
+    expect(startOfDayInstant(d("2026-12-01"), "America/New_York").toISOString()).toBe("2026-12-01T05:00:00.000Z");
   });
 
   test("follows the offset on DST days", () => {
-    expect(startOfDayInstant(d("2026-03-08"), "America/New_York").toISOString()).toBe(
-      "2026-03-08T05:00:00.000Z",
-    );
-    expect(startOfDayInstant(d("2026-03-09"), "America/New_York").toISOString()).toBe(
-      "2026-03-09T04:00:00.000Z",
-    );
+    expect(startOfDayInstant(d("2026-03-08"), "America/New_York").toISOString()).toBe("2026-03-08T05:00:00.000Z");
+    expect(startOfDayInstant(d("2026-03-09"), "America/New_York").toISOString()).toBe("2026-03-09T04:00:00.000Z");
   });
 
   test("skips to the first instant when midnight doesn't exist", () => {
@@ -41,9 +33,7 @@ describe("periodOf / nextResetAt", () => {
   test("reset at local midnight on the 1st", () => {
     expect(nextResetAt(now, "UTC").toISOString()).toBe("2026-12-01T00:00:00.000Z");
     expect(nextResetAt(now, "Asia/Kolkata").toISOString()).toBe("2026-12-31T18:30:00.000Z");
-    expect(nextResetAt(new Date("2026-12-15T00:00:00Z"), "UTC").toISOString()).toBe(
-      "2027-01-01T00:00:00.000Z",
-    );
+    expect(nextResetAt(new Date("2026-12-15T00:00:00Z"), "UTC").toISOString()).toBe("2027-01-01T00:00:00.000Z");
   });
 });
 

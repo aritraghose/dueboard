@@ -1,13 +1,13 @@
 import { and, eq, ne } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import { Tags, UserSettings, type UserSettingsRow } from "../../schema.ts";
-import { FALLBACK_TIME_ZONE, isValidTimeZone } from "../core/dates.ts";
 import { Database, newId, orDieOnDbError, transaction } from "../core/database.ts";
+import { FALLBACK_TIME_ZONE, isValidTimeZone } from "../core/dates.ts";
 import { decodeInput } from "../core/model.ts";
 import { USER_COLOR, type UserColor } from "../tags/model.ts";
-import { Settings, SettingsPatch, TIBO_PROACTIVE_KEYS } from "./model.ts";
-import { SYSTEM_TAGS, listTags } from "../tags/tags.ts";
+import { listTags, SYSTEM_TAGS } from "../tags/tags.ts";
 import { queueTiboEvent } from "../tibo/tibo.ts";
+import { Settings, SettingsPatch, TIBO_PROACTIVE_KEYS } from "./model.ts";
 
 const toSettings = (row: UserSettingsRow): Settings =>
   new Settings({
@@ -30,10 +30,7 @@ const missingSettings = (userId: string) =>
 export const randomUserColor = (): UserColor =>
   USER_COLOR[crypto.getRandomValues(new Uint32Array(1))[0]! % USER_COLOR.length]!;
 
-export const ensureUserSetup = Effect.fn("ensureUserSetup")(function* (
-  userId: string,
-  timeZone: string,
-) {
+export const ensureUserSetup = Effect.fn("ensureUserSetup")(function* (userId: string, timeZone: string) {
   const db = yield* Database;
   yield* transaction(db, (tx) =>
     Effect.gen(function* () {
@@ -63,30 +60,19 @@ export const ensureUserSetup = Effect.fn("ensureUserSetup")(function* (
 
 export const getSettings = Effect.fn("getSettings")(function* (userId: string) {
   const db = yield* Database;
-  const [row] = yield* db
-    .select()
-    .from(UserSettings)
-    .where(eq(UserSettings.userId, userId))
-    .pipe(orDieOnDbError);
+  const [row] = yield* db.select().from(UserSettings).where(eq(UserSettings.userId, userId)).pipe(orDieOnDbError);
   if (!row) return yield* missingSettings(userId);
   return toSettings(row);
 });
 
-export const updateSettings = Effect.fn("updateSettings")(function* (
-  userId: string,
-  patch: SettingsPatch,
-) {
+export const updateSettings = Effect.fn("updateSettings")(function* (userId: string, patch: SettingsPatch) {
   const values = yield* decodeInput(SettingsPatch)(patch);
   if (Object.keys(values).length === 0) return yield* getSettings(userId);
   const db = yield* Database;
   const touchesTibo = TIBO_PROACTIVE_KEYS.some((key) => key in values);
   const row = yield* transaction(db, (tx) =>
     Effect.gen(function* () {
-      const [updated] = yield* tx
-        .update(UserSettings)
-        .set(values)
-        .where(eq(UserSettings.userId, userId))
-        .returning();
+      const [updated] = yield* tx.update(UserSettings).set(values).where(eq(UserSettings.userId, userId)).returning();
       if (updated && touchesTibo) yield* queueTiboEvent(tx, userId, "settings_changed");
       return updated;
     }),

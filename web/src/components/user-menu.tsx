@@ -1,16 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import {
   LogOutIcon,
+  type LucideIcon,
   MonitorIcon,
   MoonIcon,
   SettingsIcon,
   SunIcon,
   UserRoundIcon,
   UsersIcon,
-  type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useTheme, type Theme } from "@/components/theme-provider";
+import { type Theme, useTheme } from "@/components/theme-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenuContent,

@@ -4,9 +4,9 @@ import {
   GOAL_NAME_MAX_LENGTH,
   type Goal,
   type GoalProgressMode,
+  goalValue,
   PRIVACY,
   type Privacy,
-  goalValue,
 } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
 import * as Exit from "effect/Exit";
@@ -75,7 +75,9 @@ export function GoalDialog({
         {target?.mode === "edit" && (
           <EditGoal key={version} goal={target.goal} today={today} onClose={() => onOpenChange(false)} />
         )}
-        {target?.mode === "create" && <GoalForm key={version} goal={null} savedLinks={[]} today={today} onClose={() => onOpenChange(false)} />}
+        {target?.mode === "create" && (
+          <GoalForm key={version} goal={null} savedLinks={[]} today={today} onClose={() => onOpenChange(false)} />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -170,7 +172,8 @@ function GoalForm({
 
   const name = values.name.trim();
   const targetCount = Number(values.target);
-  const targetValid = values.mode === "slider" || (Number.isInteger(targetCount) && targetCount >= 1 && targetCount <= GOAL_COUNT_MAX);
+  const targetValid =
+    values.mode === "slider" || (Number.isInteger(targetCount) && targetCount >= 1 && targetCount <= GOAL_COUNT_MAX);
   const progress = Number(values.progress);
   const progressValid =
     values.mode === "slider"
@@ -182,7 +185,11 @@ function GoalForm({
   const switchMode = (mode: GoalProgressMode) => {
     if (mode === values.mode) return;
     const percent =
-      values.mode === "slider" ? progress : targetValid && targetCount > 0 ? Math.min(100, Math.floor((progress * 100) / targetCount)) : 0;
+      values.mode === "slider"
+        ? progress
+        : targetValid && targetCount > 0
+          ? Math.min(100, Math.floor((progress * 100) / targetCount))
+          : 0;
     const carried = mode === "slider" ? percent : targetValid ? Math.floor((percent * targetCount) / 100) : 0;
     change({ mode, progress: String(Number.isFinite(carried) ? carried : 0) });
   };
@@ -271,7 +278,9 @@ function GoalForm({
       }}
     >
       <header className="flex flex-col gap-2 border-b p-4 pr-12">
-        <DialogTitle className="text-sm font-medium text-muted-foreground">{goal ? "Edit goal" : "New goal"}</DialogTitle>
+        <DialogTitle className="text-sm font-medium text-muted-foreground">
+          {goal ? "Edit goal" : "New goal"}
+        </DialogTitle>
         <DialogDescription className="sr-only">
           Name the goal and choose how its progress is measured; everything else is optional.
         </DialogDescription>
@@ -299,7 +308,9 @@ function GoalForm({
             label="Measured by"
             value={values.mode}
             options={(["count", "slider"] as const).map((value) => ({ value, label: MODE_LABEL[value] }))}
-            onChange={(mode) => (mode === "slider" && hasLinks ? setError("Remove its links to switch to a slider.") : switchMode(mode))}
+            onChange={(mode) =>
+              mode === "slider" && hasLinks ? setError("Remove its links to switch to a slider.") : switchMode(mode)
+            }
           />
           <p className="text-xs text-muted-foreground">
             {values.mode === "count"
@@ -458,8 +469,7 @@ export function DeleteGoalDialog({
       <AlertDialogHeader>
         <AlertDialogTitle>Delete this goal?</AlertDialogTitle>
         <AlertDialogDescription>
-          “{goal.name}” and its progress history will be removed. Linked habits and tasks stay. This
-          can't be undone.
+          “{goal.name}” and its progress history will be removed. Linked habits and tasks stay. This can't be undone.
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>

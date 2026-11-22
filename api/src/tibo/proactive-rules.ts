@@ -1,5 +1,5 @@
-import type { TiboProactiveSettings } from "../domain-client.ts";
 import { TIBO_DEADLINE_NUDGE_TIME } from "../domain/tibo/tibo-constants.ts";
+import type { TiboProactiveSettings } from "../domain-client.ts";
 import type { ContextSection } from "./context.ts";
 import { addDays, dayIn, instantIn } from "./dates.ts";
 import type { DayJson } from "./views.ts";
@@ -14,16 +14,7 @@ export const STALE_MS = 30 * 60_000;
 export const PLAN_GRACE_MS = 2 * 60_000;
 export const DORMANT_MS = 7 * 24 * 60 * 60_000;
 
-export type SkipReason =
-  | "off"
-  | "kind_off"
-  | "stale"
-  | "dormant"
-  | "busy"
-  | "quiet"
-  | "nothing"
-  | "quota"
-  | "failed";
+export type SkipReason = "off" | "kind_off" | "stale" | "dormant" | "busy" | "quiet" | "nothing" | "quota" | "failed";
 
 export const slotTime = (kind: ScheduledKind, settings: TiboProactiveSettings): string | null => {
   if (!settings.enabled) return null;

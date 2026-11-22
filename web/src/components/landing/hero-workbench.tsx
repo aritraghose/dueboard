@@ -224,9 +224,7 @@ export function HeroWorkbench() {
   const goalDone = goalUnits >= goalTotal;
 
   const toggleTask = (id: string) => {
-    setTasks((current) =>
-      current.map((task) => (task.id === id ? { ...task, settled: !task.settled } : task)),
-    );
+    setTasks((current) => current.map((task) => (task.id === id ? { ...task, settled: !task.settled } : task)));
   };
 
   const tapHabit = () => {
@@ -454,8 +452,7 @@ export function HeroWorkbench() {
                   <span className="flex flex-wrap items-center gap-x-2.5 text-xs text-muted-foreground">
                     <span>{habitDone} of 3 this week</span>
                     <span className="inline-flex items-center gap-1 font-medium text-tag-ink">
-                      <FlameIcon aria-hidden="true" className="size-3" />
-                      8 in a row
+                      <FlameIcon aria-hidden="true" className="size-3" />8 in a row
                     </span>
                   </span>
                 </span>
@@ -477,7 +474,9 @@ export function HeroWorkbench() {
                 >
                   <div className="flex items-start gap-2">
                     <span className="min-w-0 flex-1 text-sm leading-5 font-medium">Ship v2 release</span>
-                    <span className={cn("text-sm font-semibold tabular-nums", goalDone ? "text-success" : "text-tag-ink")}>
+                    <span
+                      className={cn("text-sm font-semibold tabular-nums", goalDone ? "text-success" : "text-tag-ink")}
+                    >
                       {goalPercent}%
                     </span>
                   </div>
@@ -814,7 +813,10 @@ export function HeroWorkbench() {
                   className="inline-flex h-8 items-center gap-2 rounded-full bg-session-pill px-3 text-sm font-medium text-session-pill-foreground tabular-nums ring-1 ring-session-pill-foreground/15 transition-colors hover:bg-session-pill/80"
                 >
                   {sessionRunning ? (
-                    <span aria-hidden="true" className="size-2 animate-focus-breathe rounded-full bg-session-pill-dot" />
+                    <span
+                      aria-hidden="true"
+                      className="size-2 animate-focus-breathe rounded-full bg-session-pill-dot"
+                    />
                   ) : (
                     <PauseIcon aria-hidden="true" className="size-3.5" />
                   )}
@@ -880,10 +882,7 @@ export function HeroWorkbench() {
               >
                 <span
                   aria-hidden="true"
-                  className={cn(
-                    "size-1.5 rounded-full bg-session-pill-dot",
-                    sessionRunning && "animate-focus-breathe",
-                  )}
+                  className={cn("size-1.5 rounded-full bg-session-pill-dot", sessionRunning && "animate-focus-breathe")}
                 />
                 {formatClock(sessionSeconds)}
               </button>
@@ -917,7 +916,11 @@ export function HeroWorkbench() {
         </div>
 
         <div className="flex flex-col gap-2 px-2 pt-2 pb-28">
-          <div role="tablist" aria-label="Now view" className="grid w-full grid-cols-2 rounded-lg bg-muted p-0.5 text-xs">
+          <div
+            role="tablist"
+            aria-label="Now view"
+            className="grid w-full grid-cols-2 rounded-lg bg-muted p-0.5 text-xs"
+          >
             <button
               type="button"
               role="tab"
@@ -937,7 +940,9 @@ export function HeroWorkbench() {
               onClick={() => setMobileTab("live")}
               className={cn(
                 "h-8 rounded-md font-medium transition-colors",
-                mobileTab === "live" ? "bg-background text-foreground shadow-xs dark:bg-input" : "text-muted-foreground",
+                mobileTab === "live"
+                  ? "bg-background text-foreground shadow-xs dark:bg-input"
+                  : "text-muted-foreground",
               )}
             >
               Live
@@ -993,8 +998,10 @@ export function HeroWorkbench() {
                       {mobileLiveTab !== "mine" && (
                         <div className="flex items-baseline justify-between gap-2 py-1">
                           <p className="text-muted-foreground">
-                            <span data-tag="indigo" className="font-semibold text-tag-ink">samdev</span> finished 45m of focus:{" "}
-                            <span className="text-foreground">Postgres query tuning</span>
+                            <span data-tag="indigo" className="font-semibold text-tag-ink">
+                              samdev
+                            </span>{" "}
+                            finished 45m of focus: <span className="text-foreground">Postgres query tuning</span>
                           </p>
                           <span className="text-xs text-muted-foreground tabular-nums">1h</span>
                         </div>
@@ -1002,8 +1009,10 @@ export function HeroWorkbench() {
                       {mobileLiveTab !== "mine" && (
                         <div className="flex items-baseline justify-between gap-2 py-1">
                           <p className="text-muted-foreground">
-                            <span data-tag="orange" className="font-semibold text-tag-ink">hannah</span> completed a habit:{" "}
-                            <span className="text-foreground">Morning yoga</span>
+                            <span data-tag="orange" className="font-semibold text-tag-ink">
+                              hannah
+                            </span>{" "}
+                            completed a habit: <span className="text-foreground">Morning yoga</span>
                           </p>
                           <span className="text-xs text-muted-foreground tabular-nums">18m</span>
                         </div>
@@ -1011,8 +1020,10 @@ export function HeroWorkbench() {
                       {mobileLiveTab !== "mine" && (
                         <div className="flex items-baseline justify-between gap-2 py-1">
                           <p className="text-muted-foreground">
-                            <span data-tag="violet" className="font-semibold text-tag-ink">maya</span> moved a goal:{" "}
-                            <span className="text-foreground">Bake 12 sourdough loaves (75%)</span>
+                            <span data-tag="violet" className="font-semibold text-tag-ink">
+                              maya
+                            </span>{" "}
+                            moved a goal: <span className="text-foreground">Bake 12 sourdough loaves (75%)</span>
                           </p>
                           <span className="text-xs text-muted-foreground tabular-nums">6m</span>
                         </div>
@@ -1020,8 +1031,10 @@ export function HeroWorkbench() {
                       {mobileLiveTab !== "connections" && (
                         <div className="flex items-baseline justify-between gap-2 py-1">
                           <p className="text-muted-foreground">
-                            <span data-tag="teal" className="font-semibold text-tag-ink">rhys</span> settled a task:{" "}
-                            <span className="text-foreground">Pick up cupcakes for Maya</span>
+                            <span data-tag="teal" className="font-semibold text-tag-ink">
+                              rhys
+                            </span>{" "}
+                            settled a task: <span className="text-foreground">Pick up cupcakes for Maya</span>
                           </p>
                           <span className="text-xs text-muted-foreground tabular-nums">now</span>
                         </div>

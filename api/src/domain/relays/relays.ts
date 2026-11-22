@@ -1,9 +1,12 @@
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Blocks, Connections, Relays, UserSettings, type RelayRow } from "../../schema.ts";
+import { Blocks, Connections, type RelayRow, Relays, UserSettings } from "../../schema.ts";
 import { AuthUsers } from "../core/auth-users.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
-import { Id, UserNotFound, decodeInput } from "../core/model.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
+import { decodeInput, Id, UserNotFound } from "../core/model.ts";
+import { RateLimiter } from "../core/rate-limiter.ts";
+import { normalizeUsername } from "../social/social-rules.ts";
+import { canSpend } from "../usage/usage.ts";
 import {
   RELAY_OPEN_STATUS,
   RELAY_UNITS_PER_SIDE,
@@ -13,21 +16,11 @@ import {
   RelayNotFound,
   RelayRecipient,
   RelayRecipientUnclear,
+  type RelayStatus,
   RelayText,
   SendRelayInput,
-  type RelayStatus,
 } from "./model.ts";
-import { RateLimiter } from "../core/rate-limiter.ts";
-import {
-  expiresAtFor,
-  isOpen,
-  refusalMessage,
-  relayCapMessage,
-  relayDecision,
-  syncAfter,
-} from "./relay-rules.ts";
-import { normalizeUsername } from "../social/social-rules.ts";
-import { canSpend } from "../usage/usage.ts";
+import { expiresAtFor, isOpen, refusalMessage, relayCapMessage, relayDecision, syncAfter } from "./relay-rules.ts";
 
 const DAY_MS = 24 * 60 * 60_000;
 const HOLD_RETRY_MS = 30 * 60_000;
@@ -196,7 +189,10 @@ const vet = (tx: Executor, fromUserId: string, target: PersonRow & { username: s
       });
     }
     if (!(yield* canSpend(target.id, RELAY_UNITS_PER_SIDE))) {
-      return yield* new RelayNotAllowed({ message: refusalMessage("unavailable", target.username), reason: "unavailable" });
+      return yield* new RelayNotAllowed({
+        message: refusalMessage("unavailable", target.username),
+        reason: "unavailable",
+      });
     }
   });
 
@@ -293,7 +289,12 @@ export const markRelayDelivered = Effect.fn("markRelayDelivered")(function* (act
       } else if (row.status === "pending" || (row.status === "delivered" && !row.recipientSynced)) {
         [next] = yield* tx
           .update(Relays)
-          .set({ status: "delivered", deliveredAt: row.deliveredAt ?? now, retryAt: null, ...syncAfter("pending", "delivered") })
+          .set({
+            status: "delivered",
+            deliveredAt: row.deliveredAt ?? now,
+            retryAt: null,
+            ...syncAfter("pending", "delivered"),
+          })
           .where(eq(Relays.id, id))
           .returning();
       }
@@ -440,7 +441,12 @@ export const sweepRelays = Effect.fn("sweepRelays")(function* () {
   const rows = yield* db
     .update(Relays)
     .set({ retryAt: new Date(now.getTime() + SWEEP_RETRY_MS), updatedAt: sql`${Relays.updatedAt}` })
-    .where(inArray(Relays.id, due.map((row) => row.id)))
+    .where(
+      inArray(
+        Relays.id,
+        due.map((row) => row.id),
+      ),
+    )
     .returning({
       id: Relays.id,
       fromUserId: Relays.fromUserId,

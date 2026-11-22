@@ -3,12 +3,12 @@ import type { Privacy } from "../core/model.ts";
 import {
   canSeeItem,
   canSeeOnLive,
-  liveDisplay,
-  relationOf,
-  visiblePrivacies,
   type LiveDisplay,
+  liveDisplay,
   type Relationship,
+  relationOf,
   type ViewerRelation,
+  visiblePrivacies,
 } from "./visibility-rules.ts";
 
 const OWNER = "owner";

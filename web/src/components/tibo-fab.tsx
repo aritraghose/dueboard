@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { type PointerEvent, useEffect, useRef, useState } from "react";
 import { TiboMark } from "@/components/tibo-mark";
 import { UnreadDot } from "@/components/tibo-panel";
 import { useTopBarSlots } from "@/components/top-bar";
@@ -72,8 +72,7 @@ export function TiboFab({ className }: { className?: string }) {
       if (settled) {
         try {
           localStorage.setItem(POSITION_KEY, JSON.stringify(settled));
-        } catch {
-        }
+        } catch {}
       }
       return settled;
     });

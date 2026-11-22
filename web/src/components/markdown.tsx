@@ -1,6 +1,5 @@
-import * as React from "react";
+import type * as React from "react";
 import { type ExtraProps, Streamdown, useIsCodeFenceIncomplete } from "streamdown";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import {
   CodeBlock,
   CodeBlockActions,
@@ -10,14 +9,9 @@ import {
   CodeBlockLine,
   CodeBlockTitle,
 } from "@/components/ui/code-block";
+import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 
-export function Markdown({
-  children,
-  streaming = false,
-}: {
-  children: string;
-  streaming?: boolean;
-}) {
+export function Markdown({ children, streaming = false }: { children: string; streaming?: boolean }) {
   return (
     <Streamdown
       mode={streaming ? "streaming" : "static"}
@@ -51,12 +45,7 @@ function MarkdownCodeBlock({ code, language }: { code: string; language: string 
   );
 }
 
-function MarkdownCode({
-  node: _node,
-  className,
-  children,
-  ...props
-}: React.ComponentProps<"code"> & ExtraProps) {
+function MarkdownCode({ node: _node, className, children, ...props }: React.ComponentProps<"code"> & ExtraProps) {
   if (!("data-block" in props)) {
     return (
       <code className="rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.9em]" {...props}>

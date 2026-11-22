@@ -98,10 +98,7 @@ export class ReminderStore {
   }
 
   pending(): Reminder[] {
-    return this.sql
-      .exec<Row>(`SELECT * FROM reminders WHERE status = 'pending' ORDER BY at`)
-      .toArray()
-      .map(toReminder);
+    return this.sql.exec<Row>(`SELECT * FROM reminders WHERE status = 'pending' ORDER BY at`).toArray().map(toReminder);
   }
 
   countPending(): number {

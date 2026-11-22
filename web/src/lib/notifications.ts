@@ -17,5 +17,4 @@ export const notificationTime = (instant: Date, now: Date): string => {
   return (instant.getFullYear() === now.getFullYear() ? thisYear : otherYear).format(instant);
 };
 
-export const unseenLabel = (count: number): string =>
-  `${count} new ${count === 1 ? "notification" : "notifications"}`;
+export const unseenLabel = (count: number): string => `${count} new ${count === 1 ? "notification" : "notifications"}`;

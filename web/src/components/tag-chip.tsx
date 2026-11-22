@@ -1,15 +1,7 @@
 import type { TagColor } from "@dueboard/api/rpc";
 import { cn } from "@/lib/utils";
 
-export function TagChip({
-  name,
-  color,
-  className,
-}: {
-  name: string;
-  color: TagColor;
-  className?: string;
-}) {
+export function TagChip({ name, color, className }: { name: string; color: TagColor; className?: string }) {
   return (
     <span
       data-tag={color}

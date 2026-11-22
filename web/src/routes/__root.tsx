@@ -1,11 +1,5 @@
 import { RegistryProvider } from "@effect/atom-react";
-import {
-  HeadContent,
-  Outlet,
-  ScriptOnce,
-  Scripts,
-  createRootRoute,
-} from "@tanstack/react-router";
+import { createRootRoute, HeadContent, Outlet, ScriptOnce, Scripts } from "@tanstack/react-router";
 import { MotionConfig } from "motion/react";
 import type { ReactNode } from "react";
 import { DefaultCatchBoundary } from "../components/default-catch-boundary.tsx";

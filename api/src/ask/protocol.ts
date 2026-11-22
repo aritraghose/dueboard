@@ -42,7 +42,9 @@ export type AskResponse =
       readonly needsVerification: boolean;
     };
 
-export type AskVisitor = { readonly kind: "user"; readonly id: string } | { readonly kind: "anon"; readonly id: string };
+export type AskVisitor =
+  | { readonly kind: "user"; readonly id: string }
+  | { readonly kind: "anon"; readonly id: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const USER_ID = /^[A-Za-z0-9_-]{1,64}$/;

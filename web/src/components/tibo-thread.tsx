@@ -1,8 +1,8 @@
 import { MAX_CHAT_MESSAGE_LENGTH } from "@dueboard/api/limits";
 import {
+  heldItem,
   TIBO_LOW_USAGE,
   TIBO_QUICK_REACTIONS,
-  heldItem,
   type TiboAttachment,
   type TiboConfirm,
   type TiboHeldItem,
@@ -17,6 +17,7 @@ import {
   CircleXIcon,
   ClockIcon,
   HandIcon,
+  type LucideIcon,
   NotebookPenIcon,
   PencilIcon,
   ReplyIcon,
@@ -26,27 +27,24 @@ import {
   TimerIcon,
   Trash2Icon,
   XIcon,
-  type LucideIcon,
 } from "lucide-react";
 import * as React from "react";
 import { Markdown } from "@/components/markdown";
+import {
+  AttachButton,
+  type DraftFiles,
+  DraftTray,
+  DropOverlay,
+  MessageAttachments,
+  useDraftFiles,
+  useFileDrop,
+} from "@/components/tibo-attachments";
+import { shownReceipts, TiboItemsProvider, TiboReceipts } from "@/components/tibo-items";
 import { TiboMark } from "@/components/tibo-mark";
 import { Bubble, BubbleContent, BubbleReactions } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@/components/ui/input-group";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "@/components/ui/input-group";
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message";
 import {
   MessageScroller,
@@ -57,16 +55,6 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  AttachButton,
-  DraftTray,
-  DropOverlay,
-  MessageAttachments,
-  useDraftFiles,
-  useFileDrop,
-  type DraftFiles,
-} from "@/components/tibo-attachments";
-import { TiboItemsProvider, TiboReceipts, shownReceipts } from "@/components/tibo-items";
 import { useTibo, useTiboThread } from "@/hooks/use-tibo";
 import { fileNames } from "@/lib/tibo-files";
 import type { TiboThreadState } from "@/lib/tibo-store";
@@ -225,9 +213,7 @@ function ThreadEmpty({ canSend, send }: { canSend: boolean; send: (text: string)
           <TiboMark className="size-12" />
         </EmptyMedia>
         <EmptyTitle>Hey, I'm Tibo</EmptyTitle>
-        <EmptyDescription>
-          Tell me what's due and I'll tell you what to do first. Loudly, if needed.
-        </EmptyDescription>
+        <EmptyDescription>Tell me what's due and I'll tell you what to do first. Loudly, if needed.</EmptyDescription>
       </EmptyHeader>
       {canSend && (
         <EmptyContent className="items-stretch">
@@ -288,7 +274,15 @@ function groupEntries(thread: TiboThreadState): Group[] {
           ...(message.attachments ? { attachments: message.attachments } : {}),
         },
         ...(message.confirm && message.confirm.status !== "pending"
-          ? [{ kind: "notice", key: `${message.id}:confirm`, side: "center", at: message.createdAt, confirm: message.confirm } as const]
+          ? [
+              {
+                kind: "notice",
+                key: `${message.id}:confirm`,
+                side: "center",
+                at: message.createdAt,
+                confirm: message.confirm,
+              } as const,
+            ]
           : []),
       ]),
     ...thread.pending.map(
@@ -405,17 +399,15 @@ function ThreadMessages({
       >
         <MessageScrollerContent aria-busy={thread.typing} className="gap-4 pt-24 pb-5 pr-3 pl-1 md:px-4">
           {groups.map((group, index) => (
-            <MessageScrollerItem
-              key={group.key}
-              messageId={group.key}
-              className="[content-visibility:visible]!"
-            >
+            <MessageScrollerItem key={group.key} messageId={group.key} className="[content-visibility:visible]!">
               {index === 0 && !thread.hasMore && (
                 <p className="mb-4 text-center text-xs text-muted-foreground">This is where it all began.</p>
               )}
               {group.day && <DaySeparator at={group.entries[0]?.at ?? Date.now()} />}
               {group.side === "center" ? (
-                group.entries.map((entry) => entry.kind === "notice" && <ConfirmNotice key={entry.key} confirm={entry.confirm} />)
+                group.entries.map(
+                  (entry) => entry.kind === "notice" && <ConfirmNotice key={entry.key} confirm={entry.confirm} />,
+                )
               ) : (
                 <GroupView
                   group={group}
@@ -479,8 +471,7 @@ function dayLabel(at: number) {
   });
 }
 
-const timeLabel = (at: number) =>
-  new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const timeLabel = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
 function cornerClass(side: "user" | "tibo", index: number, count: number) {
   if (count === 1) return "rounded-2xl";
@@ -514,17 +505,19 @@ function GroupView({
         </MessageAvatar>
       )}
       <MessageContent className={cn("gap-0.5", tibo ? "pr-8" : "pl-10")}>
-        {group.entries.filter((entry): entry is BubbleEntry => entry.kind !== "notice").map((entry, index) => (
-          <EntryView
-            key={entry.key}
-            entry={entry}
-            corners={cornerClass(side, index, group.entries.length)}
-            latest={entry.key === latestKey}
-            selected={selected === entry.key}
-            select={() => select(entry.key)}
-            {...actions}
-          />
-        ))}
+        {group.entries
+          .filter((entry): entry is BubbleEntry => entry.kind !== "notice")
+          .map((entry, index) => (
+            <EntryView
+              key={entry.key}
+              entry={entry}
+              corners={cornerClass(side, index, group.entries.length)}
+              latest={entry.key === latestKey}
+              selected={selected === entry.key}
+              select={() => select(entry.key)}
+              {...actions}
+            />
+          ))}
       </MessageContent>
     </Message>
   );
@@ -653,9 +646,13 @@ function EntryView({
               hasFiles ? "p-1!" : "px-3.5 py-2",
               tibo
                 ? "border-bubble-tibo-border! bg-bubble-tibo! text-bubble-tibo-foreground!"
-                :
-                  cn("relative border-transparent! bg-bubble-me! whitespace-pre-wrap text-bubble-me-foreground!", !hasFiles && (tail ? "pr-9!" : "pr-3.5!")),
-              photosOnly && !(entry.kind === "message" && entry.replyTo) && "bg-transparent! p-0! shadow-sm ring-1 ring-foreground/10",
+                : cn(
+                    "relative border-transparent! bg-bubble-me! whitespace-pre-wrap text-bubble-me-foreground!",
+                    !hasFiles && (tail ? "pr-9!" : "pr-3.5!"),
+                  ),
+              photosOnly &&
+                !(entry.kind === "message" && entry.replyTo) &&
+                "bg-transparent! p-0! shadow-sm ring-1 ring-foreground/10",
               corners,
             )}
           >
@@ -733,13 +730,7 @@ function EntryView({
   );
 }
 
-function TurnActions({
-  message,
-  onConfirm,
-}: {
-  message: TiboMessage;
-  onConfirm: EntryActions["onConfirm"];
-}) {
+function TurnActions({ message, onConfirm }: { message: TiboMessage; onConfirm: EntryActions["onConfirm"] }) {
   const { confirm } = message;
   const receipts = shownReceipts(message.receipts ?? []);
   if (receipts.length === 0 && confirm?.status !== "pending") return null;
@@ -753,7 +744,9 @@ function TurnActions({
 
 const splitHeld = (text: string) => {
   const colon = text.indexOf(": ");
-  return colon === -1 ? { action: text, target: null } : { action: text.slice(0, colon), target: text.slice(colon + 2) };
+  return colon === -1
+    ? { action: text, target: null }
+    : { action: text.slice(0, colon), target: text.slice(colon + 2) };
 };
 
 const KIND_ICON: Record<string, LucideIcon> = {
@@ -766,7 +759,13 @@ const KIND_ICON: Record<string, LucideIcon> = {
 };
 
 const heldIcon = ({ text, item }: TiboHeldItem): LucideIcon =>
-  text.startsWith("Delete") ? Trash2Icon : text.startsWith("Stop") ? SquareIcon : item ? (KIND_ICON[item.kind] ?? PencilIcon) : PencilIcon;
+  text.startsWith("Delete")
+    ? Trash2Icon
+    : text.startsWith("Stop")
+      ? SquareIcon
+      : item
+        ? (KIND_ICON[item.kind] ?? PencilIcon)
+        : PencilIcon;
 
 function ConfirmCard({ confirm, onConfirm }: { confirm: TiboConfirm; onConfirm: EntryActions["onConfirm"] }) {
   const [answer, setAnswer] = React.useState<boolean | null>(null);
@@ -877,9 +876,7 @@ function QuoteView({ quote, mine }: { quote: TiboQuote; mine: boolean }) {
       type="button"
       onClick={(event) => {
         event.stopPropagation();
-        document
-          .getElementById(`tibo-message-${quote.id}`)
-          ?.scrollIntoView({ block: "center", behavior: "smooth" });
+        document.getElementById(`tibo-message-${quote.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
       }}
       className={cn(
         "mb-1.5 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs whitespace-normal",
@@ -942,10 +939,13 @@ function Composer({
   const [draft, setDraft] = React.useState("");
   const formRef = React.useRef<HTMLFormElement>(null);
   const textarea = React.useRef<HTMLTextAreaElement>(null);
-  const canSend =
-    (draft.trim().length > 0 || drafts.ready.length > 0) && !drafts.uploading && thread.connected;
+  const canSend = (draft.trim().length > 0 || drafts.ready.length > 0) && !drafts.uploading && thread.connected;
   const low = thread.usage && thread.usage.remaining < TIBO_LOW_USAGE ? thread.usage.remaining : null;
-  const hint = !thread.connected ? "Reconnecting…" : low !== null ? `${low} ${low === 1 ? "message" : "messages"} left this month` : null;
+  const hint = !thread.connected
+    ? "Reconnecting…"
+    : low !== null
+      ? `${low} ${low === 1 ? "message" : "messages"} left this month`
+      : null;
 
   React.useEffect(() => {
     if (replyTo) textarea.current?.focus();

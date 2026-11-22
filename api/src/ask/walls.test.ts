@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { askEnv } from "../ask-env.ts";
 import type { AgentEnv } from "../AgentWorker.ts";
+import { askEnv } from "../ask-env.ts";
 
 const here = import.meta.dirname;
 const sources = readdirSync(here)
@@ -15,9 +15,14 @@ describe("Ask agent walls", () => {
     for (const { file, text } of sources) {
       const imports = [...text.matchAll(/from\s+"([^"]+)"/g)].map((match) => match[1]!);
       for (const path of imports) {
-        expect({ file, path, tibo: path.includes("/tibo/") || path.includes("tibo") }).toEqual({ file, path, tibo: false });
+        expect({ file, path, tibo: path.includes("/tibo/") || path.includes("tibo") }).toEqual({
+          file,
+          path,
+          tibo: false,
+        });
         expect({ file, path, global: path === "cloudflare:workers" }).toEqual({ file, path, global: false });
-        if (path.startsWith("../domain/")) expect({ file, path }).toEqual({ file, path: "../domain/ask/ask-constants.ts" });
+        if (path.startsWith("../domain/"))
+          expect({ file, path }).toEqual({ file, path: "../domain/ask/ask-constants.ts" });
       }
     }
   });
@@ -53,7 +58,15 @@ describe("Ask agent walls", () => {
       TURNSTILE_HOSTNAMES: "a.example, b.example",
     } as unknown as AgentEnv);
     expect(Object.keys(env).sort()).toEqual(
-      ["AI", "AI_GATEWAY_ID", "ASK", "ASK_RATE_LIMIT", "TURNSTILE_HOSTNAMES", "TURNSTILE_SECRET", "TURNSTILE_SITE_KEY"].sort(),
+      [
+        "AI",
+        "AI_GATEWAY_ID",
+        "ASK",
+        "ASK_RATE_LIMIT",
+        "TURNSTILE_HOSTNAMES",
+        "TURNSTILE_SECRET",
+        "TURNSTILE_SITE_KEY",
+      ].sort(),
     );
     expect(Object.keys(env.ASK).sort()).toEqual(["prepare", "record"]);
     expect(env.TURNSTILE_HOSTNAMES).toEqual(["a.example", "b.example"]);

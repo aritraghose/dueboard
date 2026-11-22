@@ -44,16 +44,22 @@ describe("sniff", () => {
   });
 
   test("binary is other, served as a download", () => {
-    expect(sniff(bytes([0x4d, 0x5a, 0x90, 0x00]), "setup.exe")).toEqual({ kind: "other", mediaType: "application/octet-stream" });
+    expect(sniff(bytes([0x4d, 0x5a, 0x90, 0x00]), "setup.exe")).toEqual({
+      kind: "other",
+      mediaType: "application/octet-stream",
+    });
     expect(sniff(bytes([0xc3, 0x28]), "bad.txt").kind).toBe("other");
   });
 });
 
 describe("imageSize", () => {
   test("PNG", () => expect(imageSize(png(640, 480), "image/png")).toEqual({ width: 640, height: 480 }));
-  test("GIF", () => expect(imageSize(bytes("GIF89a", [0x20, 0x03, 0x58, 0x02]), "image/gif")).toEqual({ width: 800, height: 600 }));
+  test("GIF", () =>
+    expect(imageSize(bytes("GIF89a", [0x20, 0x03, 0x58, 0x02]), "image/gif")).toEqual({ width: 800, height: 600 }));
   test("JPEG past an APP0 segment", () => {
-    const jpeg = bytes([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0, 0, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xe0, 0x02, 0x80, 3]);
+    const jpeg = bytes([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0, 0, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xe0, 0x02, 0x80, 3,
+    ]);
     expect(imageSize(jpeg, "image/jpeg")).toEqual({ width: 640, height: 480 });
   });
   test("garbage gives null", () => expect(imageSize(bytes([0xff, 0xd8, 0x00]), "image/jpeg")).toBeNull());
@@ -126,9 +132,9 @@ describe("files in memory transcripts", () => {
   test("a noted file reads with its note; an unjudged or unmemorable one by name only", async () => {
     const { transcriptLine } = await import("./memory-rules.ts");
     const { fileLine } = await import("./attachment-rules.ts");
-    expect(fileLine({ name: "timetable.png", kind: "image", size: 2048, note: "Mon 9am Physics,\n Tue 11am Maths." })).toBe(
-      '[Sent image "timetable.png": Mon 9am Physics, Tue 11am Maths.]',
-    );
+    expect(
+      fileLine({ name: "timetable.png", kind: "image", size: 2048, note: "Mon 9am Physics,\n Tue 11am Maths." }),
+    ).toBe('[Sent image "timetable.png": Mon 9am Physics, Tue 11am Maths.]');
     expect(
       transcriptLine({ role: "user", body: "", files: [{ name: "meme.jpg", kind: "image", size: 1024, note: null }] }),
     ).toBe('User: [Attached image: "meme.jpg", 1 KB]');

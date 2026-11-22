@@ -1,5 +1,5 @@
-import { ASK_QUESTION_MAX_LENGTH, type AskPage, type Person } from "@dueboard/api/rpc";
 import type { AskExchange } from "@dueboard/api/ask";
+import { ASK_QUESTION_MAX_LENGTH, type AskPage, type Person } from "@dueboard/api/rpc";
 import { Link } from "@tanstack/react-router";
 import { SendIcon, UserRoundIcon } from "lucide-react";
 import * as React from "react";
@@ -19,7 +19,7 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
-import { useAskThread, type AskError } from "@/hooks/use-ask";
+import { type AskError, useAskThread } from "@/hooks/use-ask";
 import { loadTurnstile, type TurnstileApi } from "@/lib/turnstile";
 import { cn } from "@/lib/utils";
 
@@ -207,10 +207,7 @@ function AskEmpty({ person }: { person: Person }) {
 function AskMessages({ exchanges, pending }: { exchanges: readonly AskExchange[]; pending: string | null }) {
   return (
     <MessageScroller className="h-full">
-      <MessageScrollerViewport
-        aria-label="Questions and answers"
-        className="scroll-fade [--scroll-fade-t-size:6rem]"
-      >
+      <MessageScrollerViewport aria-label="Questions and answers" className="scroll-fade [--scroll-fade-t-size:6rem]">
         <MessageScrollerContent aria-busy={pending !== null} className="gap-4 pt-24 pb-5 pr-3 pl-1 md:px-4">
           {exchanges.map((exchange) => (
             <MessageScrollerItem key={exchange.id} messageId={exchange.id} className="flex flex-col gap-4">
@@ -320,7 +317,10 @@ function AskComposer({
             }
           }}
         />
-        <InputGroupAddon align="block-end" className={cn("pt-0 pb-1.5", !near && "absolute right-0 bottom-0 w-auto p-2")}>
+        <InputGroupAddon
+          align="block-end"
+          className={cn("pt-0 pb-1.5", !near && "absolute right-0 bottom-0 w-auto p-2")}
+        >
           {near && (
             <span className={cn("text-xs text-muted-foreground tabular-nums", over && "text-destructive")}>
               {draft.length}/{ASK_QUESTION_MAX_LENGTH}

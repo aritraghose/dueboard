@@ -1,4 +1,4 @@
-import { type Goal, type GoalStatus, type GoalSummary } from "@dueboard/api/rpc";
+import type { Goal, GoalStatus, GoalSummary } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
@@ -38,7 +38,7 @@ import { goalListAtom, useGoalActions, useGoalColor, useGoalProgress, useJustCom
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
 import { useToday } from "@/hooks/use-now";
 import { failureMessage } from "@/hooks/use-tasks";
-import { type LocalDate, formatDay, localDateOf } from "@/lib/dates";
+import { formatDay, type LocalDate, localDateOf } from "@/lib/dates";
 import { amountHint, roundPercent } from "@/lib/goals";
 import { cn } from "@/lib/utils";
 
@@ -110,7 +110,11 @@ function Goals() {
       </Tabs>
 
       {AsyncResult.isFailure(result) ? (
-        <PageEmpty icon={TargetIcon} title="Couldn't load your goals" description="Check your connection, then try again.">
+        <PageEmpty
+          icon={TargetIcon}
+          title="Couldn't load your goals"
+          description="Check your connection, then try again."
+        >
           <Button variant="outline" onClick={() => void reload()}>
             Try again
           </Button>
@@ -159,8 +163,7 @@ function Goals() {
 const EMPTY: Record<GoalStatus, { title: string; description: string }> = {
   active: {
     title: "No goals yet",
-    description:
-      "Add one with New goal.",
+    description: "Add one with New goal.",
   },
   paused: {
     title: "Nothing paused",
@@ -209,15 +212,31 @@ function GoalRow({
 
         <div className="flex items-center gap-3">
           {live && goal.progressMode === "slider" ? (
-            <GoalSlider value={goal.progressPercent} label={`${goal.name} progress`} onChange={onSlide} className="flex-1" />
+            <GoalSlider
+              value={goal.progressPercent}
+              label={`${goal.name} progress`}
+              onChange={onSlide}
+              className="flex-1"
+            />
           ) : (
-            <GoalBar goal={goal} celebrate={celebrate} className={cn("flex-1", goal.status === "paused" && "opacity-60")} />
+            <GoalBar
+              goal={goal}
+              celebrate={celebrate}
+              className={cn("flex-1", goal.status === "paused" && "opacity-60")}
+            />
           )}
-          <span className={cn("w-10 text-right text-sm font-semibold tabular-nums", done ? "text-success" : "text-tag-ink")}>
+          <span
+            className={cn("w-10 text-right text-sm font-semibold tabular-nums", done ? "text-success" : "text-tag-ink")}
+          >
             {roundPercent(goal)}%
           </span>
           {live && goal.progressMode === "count" && (
-            <Button size="xs" className="-my-1 bg-goal-move! text-goal-move-foreground! hover:bg-goal-move/85!" aria-label={`Move "${goal.name}" forward by one`} onClick={onIncrement}>
+            <Button
+              size="xs"
+              className="-my-1 bg-goal-move! text-goal-move-foreground! hover:bg-goal-move/85!"
+              aria-label={`Move "${goal.name}" forward by one`}
+              onClick={onIncrement}
+            >
               <PlusIcon />
               Move Goal
             </Button>
@@ -280,9 +299,7 @@ function ProgressLine({ summary, today, timeZone }: { summary: GoalSummary; toda
   const end = Math.max(Date.now(), points[points.length - 1]!.t + 1);
   const t0 = points[0]!.t;
   const top =
-    goal.progressMode === "count"
-      ? Math.max(goal.targetCount ?? 1, ...points.map((point) => point.v), 1)
-      : 100;
+    goal.progressMode === "count" ? Math.max(goal.targetCount ?? 1, ...points.map((point) => point.v), 1) : 100;
   const pad = 3;
   const x = (t: number) => ((t - t0) / (end - t0)) * LINE_WIDTH;
   const y = (v: number) => LINE_HEIGHT - pad - (Math.max(0, v) / top) * (LINE_HEIGHT - pad * 2);
@@ -348,7 +365,12 @@ function GoalActions({ goal, onEdit }: { goal: Goal; onEdit: () => void }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`More for "${goal.name}"`}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label={`More for "${goal.name}"`}
+          >
             <MoreHorizontalIcon />
           </Button>
         </DropdownMenuTrigger>
@@ -359,7 +381,9 @@ function GoalActions({ goal, onEdit }: { goal: Goal; onEdit: () => void }) {
           </DropdownMenuItem>
           {goal.status === "active" && (
             <DropdownMenuItem
-              onSelect={() => void act(() => actions.pause(goal.id), `Paused "${goal.name}"`, "Couldn't pause the goal.")}
+              onSelect={() =>
+                void act(() => actions.pause(goal.id), `Paused "${goal.name}"`, "Couldn't pause the goal.")
+              }
             >
               <PauseIcon />
               Pause
@@ -367,7 +391,9 @@ function GoalActions({ goal, onEdit }: { goal: Goal; onEdit: () => void }) {
           )}
           {goal.status === "paused" && (
             <DropdownMenuItem
-              onSelect={() => void act(() => actions.resume(goal.id), `Resumed "${goal.name}"`, "Couldn't resume the goal.")}
+              onSelect={() =>
+                void act(() => actions.resume(goal.id), `Resumed "${goal.name}"`, "Couldn't resume the goal.")
+              }
             >
               <PlayIcon />
               Resume
@@ -375,7 +401,9 @@ function GoalActions({ goal, onEdit }: { goal: Goal; onEdit: () => void }) {
           )}
           {goal.status === "completed" && (
             <DropdownMenuItem
-              onSelect={() => void act(() => actions.reopen(goal.id), `Reopened "${goal.name}"`, "Couldn't reopen the goal.")}
+              onSelect={() =>
+                void act(() => actions.reopen(goal.id), `Reopened "${goal.name}"`, "Couldn't reopen the goal.")
+              }
             >
               <RotateCcwIcon />
               Reopen

@@ -1,20 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import {
-  BubbleSplitter,
-  TYPING_MAX_MS,
-  joinBubbles,
-  reactionOf,
-  splitBubbles,
-  typingDelayMs,
-} from "./bubbles.ts";
+import { BubbleSplitter, joinBubbles, reactionOf, splitBubbles, TYPING_MAX_MS, typingDelayMs } from "./bubbles.ts";
 
 describe("splitBubbles", () => {
   test("splits on delimiter lines", () => {
-    expect(splitBubbles("Hi!\n---\nHow's it going?\n---\nTell me.", 5)).toEqual([
-      "Hi!",
-      "How's it going?",
-      "Tell me.",
-    ]);
+    expect(splitBubbles("Hi!\n---\nHow's it going?\n---\nTell me.", 5)).toEqual(["Hi!", "How's it going?", "Tell me."]);
   });
 
   test("a reply without delimiters is one bubble", () => {

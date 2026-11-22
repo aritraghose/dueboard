@@ -14,17 +14,11 @@ export const elapsed = (segments: ReadonlyArray<Segment>, now: Date): number =>
     return total + Math.max(0, end - startedAt.getTime());
   }, 0);
 
-export const remaining = (
-  plannedMinutes: number,
-  segments: ReadonlyArray<Segment>,
-  now: Date,
-): number => Math.max(0, plannedMinutes * MINUTE_MS - elapsed(segments, now));
+export const remaining = (plannedMinutes: number, segments: ReadonlyArray<Segment>, now: Date): number =>
+  Math.max(0, plannedMinutes * MINUTE_MS - elapsed(segments, now));
 
-export const computeEndsAt = (
-  plannedMinutes: number,
-  segments: ReadonlyArray<Segment>,
-  now: Date,
-): Date => new Date(now.getTime() + remaining(plannedMinutes, segments, now));
+export const computeEndsAt = (plannedMinutes: number, segments: ReadonlyArray<Segment>, now: Date): Date =>
+  new Date(now.getTime() + remaining(plannedMinutes, segments, now));
 
 export const isExpired = (
   session: { readonly status: SessionStatus; readonly endsAt: Date | null },
@@ -50,9 +44,7 @@ export const transitionError = (status: SessionStatus, action: SessionAction): s
 };
 
 export const extendError = (plannedMinutes: number, minutes: number): string | null =>
-  plannedMinutes + minutes > SESSION_MINUTES_MAX
-    ? `A session can last at most ${SESSION_MINUTES_MAX} minutes.`
-    : null;
+  plannedMinutes + minutes > SESSION_MINUTES_MAX ? `A session can last at most ${SESSION_MINUTES_MAX} minutes.` : null;
 
 export const focusedMinutes = (ms: number): number => Math.floor(ms / MINUTE_MS);
 

@@ -1,7 +1,7 @@
 import type { ContributionGraph as Graph, LocalDate, UserColor } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { type KeyboardEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { contributionGraphAtom } from "@/hooks/use-diary";
 import { addDays, daysBetween, formatDay } from "@/lib/dates";
@@ -70,7 +70,9 @@ export function ContributionGraph({
       {graph ? (
         <GraphBody graph={graph} selected={selected} onSelectDay={onSelectDay} />
       ) : AsyncResult.isFailure(result) ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">The activity graph didn't load. Reload the page to try again.</p>
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          The activity graph didn't load. Reload the page to try again.
+        </p>
       ) : (
         <>
           <Skeleton className="h-5 w-56" />
@@ -141,11 +143,7 @@ function GraphBody({
         <Legend />
       </div>
       <div ref={frame} className="relative">
-        <div
-          ref={scroller}
-          className="overflow-x-auto pb-1"
-          onScroll={() => tip && showTip(tip.index)}
-        >
+        <div ref={scroller} className="overflow-x-auto pb-1" onScroll={() => tip && showTip(tip.index)}>
           <div
             role="group"
             aria-label="Days of the last year. Use the arrow keys to move between days and Enter to open one in the diary."

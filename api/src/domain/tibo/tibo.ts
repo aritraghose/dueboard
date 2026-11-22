@@ -2,13 +2,13 @@ import { asc, eq, inArray, lt } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import { TiboEvents, TiboWipes, UserSettings } from "../../schema.ts";
 import { AuthUsers } from "../core/auth-users.ts";
-import { Database, newId, orDieOnDbError, type Executor } from "../core/database.ts";
+import { Database, type Executor, newId, orDieOnDbError } from "../core/database.ts";
 import { FALLBACK_TIME_ZONE } from "../core/dates.ts";
 import {
   TIBO_EVENING_TIME_DEFAULT,
   TIBO_MORNING_TIME_DEFAULT,
-  type TiboEventKind,
   type TiboEveningTime,
+  type TiboEventKind,
   type TiboMorningTime,
 } from "./tibo-constants.ts";
 
@@ -17,8 +17,7 @@ export interface TiboProfile {
   readonly timeZone: string;
 }
 
-export const firstNameOf = (name: string | null | undefined) =>
-  name?.trim().split(/\s+/)[0] || "there";
+export const firstNameOf = (name: string | null | undefined) => name?.trim().split(/\s+/)[0] || "there";
 
 export const getTiboProfile = Effect.fn("getTiboProfile")(function* (userId: string) {
   const db = yield* Database;
@@ -51,7 +50,10 @@ export const pendingTiboWipes = Effect.fn("pendingTiboWipes")(function* (limit: 
 export const clearTiboWipes = Effect.fn("clearTiboWipes")(function* (userIds: readonly string[]) {
   if (userIds.length === 0) return;
   const db = yield* Database;
-  yield* db.delete(TiboWipes).where(inArray(TiboWipes.userId, [...userIds])).pipe(orDieOnDbError);
+  yield* db
+    .delete(TiboWipes)
+    .where(inArray(TiboWipes.userId, [...userIds]))
+    .pipe(orDieOnDbError);
 });
 
 export interface TiboProactiveSettings {
@@ -113,12 +115,7 @@ export const pendingTiboEvents = Effect.fn("pendingTiboEvents")(function* (limit
     .delete(TiboEvents)
     .where(lt(TiboEvents.createdAt, new Date(Date.now() - TIBO_EVENT_MAX_AGE_MS)))
     .pipe(orDieOnDbError);
-  const rows = yield* db
-    .select()
-    .from(TiboEvents)
-    .orderBy(asc(TiboEvents.createdAt))
-    .limit(limit)
-    .pipe(orDieOnDbError);
+  const rows = yield* db.select().from(TiboEvents).orderBy(asc(TiboEvents.createdAt)).limit(limit).pipe(orDieOnDbError);
   return rows.map(
     (row): TiboEventJson => ({
       id: row.id,
@@ -133,5 +130,8 @@ export const pendingTiboEvents = Effect.fn("pendingTiboEvents")(function* (limit
 export const clearTiboEvents = Effect.fn("clearTiboEvents")(function* (ids: readonly string[]) {
   if (ids.length === 0) return;
   const db = yield* Database;
-  yield* db.delete(TiboEvents).where(inArray(TiboEvents.id, [...ids])).pipe(orDieOnDbError);
+  yield* db
+    .delete(TiboEvents)
+    .where(inArray(TiboEvents.id, [...ids]))
+    .pipe(orDieOnDbError);
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { askGate, askRetentionCutoff, cleanAskText, documentText, type AskGateInput } from "./ask-rules.ts";
+import { type AskGateInput, askGate, askRetentionCutoff, cleanAskText, documentText } from "./ask-rules.ts";
 
 const open: AskGateInput = {
   found: true,

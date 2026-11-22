@@ -1,8 +1,8 @@
 import type { FocusSession } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { TimerIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -26,7 +26,7 @@ import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
 import { sessionListAtom, useIsSessionRemoved, useSessionActions } from "@/hooks/use-sessions";
 import { failureMessage } from "@/hooks/use-tasks";
-import { type LocalDate, formatDay, formatDayLong, relativeDay } from "@/lib/dates";
+import { formatDay, formatDayLong, type LocalDate, relativeDay } from "@/lib/dates";
 import { formatFocused, formatMinutes, sessionName } from "@/lib/sessions";
 
 type SessionsSearch = {
@@ -83,7 +83,10 @@ function History({ status, today }: { status: SessionsSearch["status"]; today: L
   const isRemoved = useIsSessionRemoved();
   const [deleting, setDeleting] = useState<FocusSession | null>(null);
 
-  const last = useRef<{ days: { date: LocalDate; focusedMinutes: number; sessions: FocusSession[] }[]; nextCursor: string | null } | undefined>(undefined);
+  const last = useRef<
+    | { days: { date: LocalDate; focusedMinutes: number; sessions: FocusSession[] }[]; nextCursor: string | null }
+    | undefined
+  >(undefined);
   if (AsyncResult.isSuccess(result)) last.current = result.value;
   const data = last.current;
   const loadingMore = !AsyncResult.isSuccess(result) && data !== undefined;

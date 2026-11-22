@@ -1,11 +1,11 @@
 import {
+  describeSchedule,
   HABIT_CHECKIN_DAYS_BACK,
   type Habit,
   type HabitPeriodUnit,
   type HabitSchedule,
-  describeSchedule,
 } from "@dueboard/api/rpc";
-import { type LocalDate, addDays, daysBetween, formatDay } from "@/lib/dates";
+import { addDays, daysBetween, formatDay, type LocalDate } from "@/lib/dates";
 
 export { describeSchedule };
 

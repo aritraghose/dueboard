@@ -11,8 +11,8 @@ import {
   focusedMinutes,
   isExpired,
   remaining,
-  transitionError,
   type Segment,
+  transitionError,
 } from "./session-rules.ts";
 
 const at = (time: string) => new Date(`2026-11-03T${time}Z`);
@@ -26,9 +26,7 @@ describe("elapsed", () => {
   test("sums closed segments and the open one up to now", () => {
     expect(elapsed([], at("10:00:00"))).toBe(0);
     expect(elapsed([seg("10:00:00", "10:10:00")], at("11:00:00"))).toBe(10 * MIN);
-    expect(
-      elapsed([seg("10:00:00", "10:10:00"), seg("10:20:00", null)], at("10:25:00")),
-    ).toBe(15 * MIN);
+    expect(elapsed([seg("10:00:00", "10:10:00"), seg("10:20:00", null)], at("10:25:00"))).toBe(15 * MIN);
   });
 
   test("never counts an open segment that starts after now", () => {

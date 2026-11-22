@@ -1,102 +1,101 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { Agent, getAgentByName, type Connection, type ConnectionContext, type WSMessage } from "agents";
+import { Agent, type Connection, type ConnectionContext, getAgentByName, type WSMessage } from "agents";
 import { asSchema, generateText, isStepCount, streamText, type ToolSet } from "ai";
 import type { AgentEnv } from "../AgentWorker.ts";
 import { RELAY_UNITS_PER_SIDE } from "../domain/relays/relay-constants.ts";
 import { AI_UNITS_PER_MESSAGE } from "../domain/usage/usage-constants.ts";
 import {
-  relayClient,
-  tiboClient,
-  usageClient,
   type RelayJson,
+  relayClient,
   type TiboEventJson,
   type TiboProactiveContext,
+  tiboClient,
+  usageClient,
 } from "../domain-client.ts";
 import { MAX_CHAT_MESSAGE_LENGTH } from "../limits.ts";
-import { MAX_TOOL_STEPS, PendingActions, TurnLedger, receiptFor, type PendingAction } from "./actions.ts";
-import { Activity, ActivityLog } from "./activity.ts";
+import { logMuseUsage, MODEL, museOptions, museSpark } from "../muse.ts";
+import { IMAGE_SHAPES, type ImageReference, type ImageShape, museImage } from "../muse-image.ts";
+import { MAX_TOOL_STEPS, type PendingAction, PendingActions, receiptFor, TurnLedger } from "./actions.ts";
+import { type Activity, ActivityLog } from "./activity.ts";
 import { memoryRunDetail, thinkingDetail, toolLabel } from "./activity-rules.ts";
 import {
+  cleanFileName,
+  serveHeaders,
   TIBO_STORAGE_MAX_BYTES,
   TIBO_UPLOADS_PER_DAY,
   TURN_FILE_MAX_BYTES,
   TURN_FILE_TEXT_MAX_LENGTH,
-  cleanFileName,
-  serveHeaders,
 } from "./attachment-rules.ts";
 import { AttachmentStore, fileContent } from "./attachments.ts";
 import { BUBBLE_DELIMITER, BubbleSplitter, reactionLine, reactionOf, typingDelayMs } from "./bubbles.ts";
-import { RECENT_WINDOW, buildTurnContext, withFiles, type ContextSection, type TurnContext } from "./context.ts";
+import { buildTurnContext, type ContextSection, RECENT_WINDOW, type TurnContext, withFiles } from "./context.ts";
 import { addDays, dayIn, instantIn, startOfDayIn } from "./dates.ts";
 import { devSeedThread } from "./dev-seed.ts";
-import { MemoryJobs, type JobContext } from "./memory-jobs.ts";
+import {
+  IMAGE_REFUSAL_TEXT,
+  IMAGE_UNITS,
+  imageFileName,
+  imageRef,
+  imageRefusal,
+  parseImageRef,
+} from "./image-rules.ts";
 import { MemoryStore } from "./memory.ts";
-import { DAILY_JOB_CAP, DEV_DAILY_JOB_CAP, SETTLE_MS, estimateTokens } from "./memory-rules.ts";
-import { IMAGE_SHAPES, museImage, type ImageReference, type ImageShape } from "../muse-image.ts";
-import { IMAGE_REFUSAL_TEXT, IMAGE_UNITS, imageFileName, imageRef, imageRefusal, parseImageRef } from "./image-rules.ts";
-import { MODEL, logMuseUsage, museOptions, museSpark } from "../muse.ts";
+import { type JobContext, MemoryJobs } from "./memory-jobs.ts";
+import { DAILY_JOB_CAP, DEV_DAILY_JOB_CAP, estimateTokens, SETTLE_MS } from "./memory-rules.ts";
 import { PERSONA } from "./persona.ts";
-import { ProactiveStore, type CheckInOutcome } from "./proactive.ts";
+import { type CheckInOutcome, ProactiveStore } from "./proactive.ts";
 import {
-  MAX_PENDING_REMINDERS,
-  REMINDER_LATE_MS,
-  ReminderStore,
-  reminderInstant,
-  reminderWhen,
-} from "./reminders.ts";
-import {
-  PLAN_GRACE_MS,
-  PROACTIVE_KINDS,
-  SCHEDULED_KINDS,
+  type CheckInFocus,
   checkInFocus,
   checkInSection,
+  type GateInput,
   gate,
   nextSlot,
+  PLAN_GRACE_MS,
+  PROACTIVE_KINDS,
+  type ProactiveKind,
+  type ProactiveSlot,
   planFingerprint,
+  SCHEDULED_KINDS,
+  type SkipReason,
   slotStillPlanned,
   slotTime,
   triggerLine,
-  type CheckInFocus,
-  type GateInput,
-  type ProactiveKind,
-  type ProactiveSlot,
-  type SkipReason,
 } from "./proactive-rules.ts";
-import {
-  MemoryRefs,
-  deleteMemories,
-  forget,
-  memoriesSection,
-  recallMemories,
-  remember,
-  searchConversation,
-  storySection,
-  type RecallContext,
-} from "./recall.ts";
 import {
   TIBO_ACTIVITY_PAGE,
   TIBO_ACTIVITY_PATH,
   TIBO_FILE_MAX_BYTES,
   TIBO_FILES_PATH,
-  TIBO_MEDIA_LIMIT,
   TIBO_HISTORY_PAGE,
   TIBO_MAX_ATTACHMENTS,
   TIBO_MAX_BUBBLES,
+  TIBO_MEDIA_LIMIT,
   TIBO_MEMORIES_LIMIT,
   TIBO_MEMORIES_PATH,
   TIBO_OLDER_PAGE,
-  type TiboMemory,
   type TiboAttachment,
   type TiboClientFrame,
   type TiboConfirm,
+  type TiboMemory,
   type TiboMessage,
   type TiboReceipt,
   type TiboServerFrame,
   type TiboUpload,
 } from "./protocol.ts";
 import {
-  RelayCards,
+  deleteMemories,
+  forget,
+  MemoryRefs,
+  memoriesSection,
+  type RecallContext,
+  recallMemories,
+  remember,
+  searchConversation,
+  storySection,
+} from "./recall.ts";
+import {
   cardOf,
   deliveryFallback,
   deliverySection,
@@ -105,13 +104,15 @@ import {
   outcomeFallback,
   outcomeSection,
   ownWords,
+  RelayCards,
   receivedEventBody,
   relayListView,
   sentEventBody,
 } from "./relays.ts";
+import { MAX_PENDING_REMINDERS, REMINDER_LATE_MS, ReminderStore, reminderInstant, reminderWhen } from "./reminders.ts";
 import { todaySnapshot } from "./snapshot.ts";
-import { Thread, type MessageMeta } from "./thread.ts";
-import { tiboTools, type RelayTools } from "./tools.ts";
+import { type MessageMeta, Thread } from "./thread.ts";
+import { type RelayTools, tiboTools } from "./tools.ts";
 import type { DayJson, SessionJson } from "./views.ts";
 
 const ERROR_BUBBLES = {
@@ -223,7 +224,9 @@ export class TiboAgent extends Agent<AgentEnv> {
 
   private get activity() {
     if (!this.activityStore) {
-      this.activityStore = new ActivityLog(this.ctx.storage.sql, (activity) => this.send({ type: "activity", activity }));
+      this.activityStore = new ActivityLog(this.ctx.storage.sql, (activity) =>
+        this.send({ type: "activity", activity }),
+      );
       this.activityStore.migrate();
     }
     return this.activityStore;
@@ -243,7 +246,9 @@ export class TiboAgent extends Agent<AgentEnv> {
     this.activity.interruptRunning();
     this.activity.prune(Date.now());
     this.proactive.prune(Date.now());
-    void this.files.pruneOrphans(Date.now()).catch((error: unknown) => console.error("Pruning unsent files failed", error));
+    void this.files
+      .pruneOrphans(Date.now())
+      .catch((error: unknown) => console.error("Pruning unsent files failed", error));
   }
 
   validateStateChange(_next: unknown, source: Connection | "server") {
@@ -314,7 +319,13 @@ export class TiboAgent extends Agent<AgentEnv> {
     }
     const replyTo = frame.replyTo ? this.thread.quote(frame.replyTo) : null;
     const messageId = crypto.randomUUID();
-    const attachments: TiboAttachment[] = unsent.length > 0 ? this.files.claim(unsent.map((file) => file.id), messageId) : [];
+    const attachments: TiboAttachment[] =
+      unsent.length > 0
+        ? this.files.claim(
+            unsent.map((file) => file.id),
+            messageId,
+          )
+        : [];
     const message = this.thread.add({
       id: messageId,
       role: "user",
@@ -364,9 +375,9 @@ export class TiboAgent extends Agent<AgentEnv> {
     const route = rest.map(decodeURIComponent);
 
     if (route[0] === TIBO_MEMORIES_PATH && route.length === 1 && request.method === "GET") {
-      const memories: TiboMemory[] = this.memory.listActive(TIBO_MEMORIES_LIMIT).map(
-        ({ id, text, kind, createdAt, updatedAt }) => ({ id, text, kind, createdAt, updatedAt }),
-      );
+      const memories: TiboMemory[] = this.memory
+        .listActive(TIBO_MEMORIES_LIMIT)
+        .map(({ id, text, kind, createdAt, updatedAt }) => ({ id, text, kind, createdAt, updatedAt }));
       return Response.json({ memories });
     }
     if (route[0] === TIBO_MEMORIES_PATH && route.length === 2 && request.method === "DELETE") {
@@ -401,10 +412,13 @@ export class TiboAgent extends Agent<AgentEnv> {
     await this.files.pruneOrphans(now).catch((error: unknown) => console.error("Pruning unsent files failed", error));
     const usage = this.files.usage(now - 24 * 60 * 60 * 1000);
     if (usage.uploads >= TIBO_UPLOADS_PER_DAY) return answer({ ok: false, error: "daily_limit" }, 429);
-    if (usage.bytes + bytes.byteLength > TIBO_STORAGE_MAX_BYTES) return answer({ ok: false, error: "storage_full" }, 507);
+    if (usage.bytes + bytes.byteLength > TIBO_STORAGE_MAX_BYTES)
+      return answer({ ok: false, error: "storage_full" }, 507);
     try {
-      const attachment = await this.files.create(cleanFileName(request.headers.get("x-file-name")), bytes, (name, file) =>
-        this.readDocument(name, file),
+      const attachment = await this.files.create(
+        cleanFileName(request.headers.get("x-file-name")),
+        bytes,
+        (name, file) => this.readDocument(name, file),
       );
       return answer({ ok: true, attachment });
     } catch (error) {
@@ -498,7 +512,9 @@ export class TiboAgent extends Agent<AgentEnv> {
   private async devMuseProbe(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const effort = url.searchParams.get("effort") ?? "default";
-    const question = url.searchParams.get("q") ?? "what should I focus on this afternoon? I have a report due friday and haven't gone to the gym in a week";
+    const question =
+      url.searchParams.get("q") ??
+      "what should I focus on this afternoon? I have a report due friday and haven't gone to the gym in a week";
     const started = Date.now();
     const result = await generateText({
       model: museSpark(this.env, this.name),
@@ -537,7 +553,8 @@ export class TiboAgent extends Agent<AgentEnv> {
 
   private async devImage(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const prompt = url.searchParams.get("prompt") ?? "a small orange cat napping in a sunbeam on a wooden desk, soft watercolor";
+    const prompt =
+      url.searchParams.get("prompt") ?? "a small orange cat napping in a sunbeam on a wooden desk, soft watercolor";
     const shape = (url.searchParams.get("shape") ?? "square") as ImageShape;
     const from = url.searchParams.get("from");
     const stored = from ? this.files.get(from) : null;
@@ -558,15 +575,13 @@ export class TiboAgent extends Agent<AgentEnv> {
     if (!kind || !PROACTIVE_KINDS.includes(kind)) {
       return Response.json({ error: `kind is one of ${PROACTIVE_KINDS.join(", ")}` }, { status: 400 });
     }
-    const bypass = new Set((url.searchParams.get("bypass") ?? "").split(",").filter(Boolean)) as Set<SkipReason | "all">;
+    const bypass = new Set((url.searchParams.get("bypass") ?? "").split(",").filter(Boolean)) as Set<
+      SkipReason | "all"
+    >;
     const context = await tiboClient(this.env.DOMAIN).proactive(this.name);
     const now = Date.now();
     const day = dayIn(context.timeZone, new Date(now));
-    const outcome = await this.checkIn(
-      { id: `dev:${kind}:${now}`, kind, day, at: now },
-      context,
-      bypass,
-    );
+    const outcome = await this.checkIn({ id: `dev:${kind}:${now}`, kind, day, at: now }, context, bypass);
     return Response.json({ outcome, sentToday: this.proactive.sentOn(day) });
   }
 
@@ -587,7 +602,8 @@ export class TiboAgent extends Agent<AgentEnv> {
   private async devPeer(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const userId = url.searchParams.get("user") ?? "";
-    if (!userId || userId === this.name) return Response.json({ error: "user is another account's id" }, { status: 400 });
+    if (!userId || userId === this.name)
+      return Response.json({ error: "user is another account's id" }, { status: 400 });
     const peer = await getAgentByName(this.env.TiboAgent as unknown as DurableObjectNamespace<TiboAgent>, userId);
     if (request.method === "GET") return Response.json(await peer.devThread());
     const what = url.searchParams.get("do");
@@ -599,7 +615,9 @@ export class TiboAgent extends Agent<AgentEnv> {
   async devThread() {
     if (!this.dev) throw new Error("Development only");
     return {
-      messages: this.thread.latest(20).messages.map(({ role, body, relay, confirm }) => ({ role, body, relay, confirm })),
+      messages: this.thread
+        .latest(20)
+        .messages.map(({ role, body, relay, confirm }) => ({ role, body, relay, confirm })),
       pending: this.actions.current(Date.now()),
       usage: await usageClient(this.env.DOMAIN)
         .get(this.name)
@@ -609,7 +627,11 @@ export class TiboAgent extends Agent<AgentEnv> {
 
   async devSay(text: string) {
     if (!this.dev) throw new Error("Development only");
-    const message = this.thread.add({ role: "user", body: text.slice(0, MAX_CHAT_MESSAGE_LENGTH), meta: { clientId: crypto.randomUUID() } });
+    const message = this.thread.add({
+      role: "user",
+      body: text.slice(0, MAX_CHAT_MESSAGE_LENGTH),
+      meta: { clientId: crypto.randomUUID() },
+    });
     this.send({ type: "bubble", message });
     this.requestTurn();
     return { ok: true };
@@ -642,7 +664,12 @@ export class TiboAgent extends Agent<AgentEnv> {
 
   private async scheduleMemoryJobs(delaySeconds: number, reason: string) {
     const at = Date.now() + delaySeconds * 1000;
-    await this.schedule(new Date(at), "runMemoryJobs", { reason, minute: Math.floor(at / 60_000) }, { idempotent: true });
+    await this.schedule(
+      new Date(at),
+      "runMemoryJobs",
+      { reason, minute: Math.floor(at / 60_000) },
+      { idempotent: true },
+    );
   }
 
   async runMemoryJobs(_payload?: { reason: string; minute: number }) {
@@ -741,8 +768,7 @@ export class TiboAgent extends Agent<AgentEnv> {
       await this.armSlot(
         firing?.slot.kind === kind
           ? nextSlot(kind, context.timeZone, time, Math.max(now, firing.slot.at))
-          :
-            nextSlot(kind, context.timeZone, time, now, PLAN_GRACE_MS),
+          : nextSlot(kind, context.timeZone, time, now, PLAN_GRACE_MS),
       );
     }
     this.proactive.set("proactive_plan", planFingerprint(context.proactive, context.timeZone));
@@ -756,12 +782,17 @@ export class TiboAgent extends Agent<AgentEnv> {
   private async armedSlots() {
     return (await this.listSchedules())
       .filter((schedule) => schedule.callback === "proactiveFire")
-      .map((schedule) => ({ ...(schedule.payload as ProactiveSlot), firesAt: new Date(schedule.time * 1000).toISOString() }));
+      .map((schedule) => ({
+        ...(schedule.payload as ProactiveSlot),
+        firesAt: new Date(schedule.time * 1000).toISOString(),
+      }));
   }
 
   async proactiveFire(slot: ProactiveSlot, schedule?: { id: string }) {
     void this.keepAliveWhile(() =>
-      this.runSlot(slot, schedule?.id ?? "").catch((error: unknown) => console.error("Tibo check-in alarm failed", slot, error)),
+      this.runSlot(slot, schedule?.id ?? "").catch((error: unknown) =>
+        console.error("Tibo check-in alarm failed", slot, error),
+      ),
     );
   }
 
@@ -956,7 +987,11 @@ export class TiboAgent extends Agent<AgentEnv> {
       turnId,
       meta: { reminder: reminder.id },
     });
-    const act = this.activity.start({ kind: "reminder", label: "Sending a reminder you asked for", detail: reminder.about });
+    const act = this.activity.start({
+      kind: "reminder",
+      label: "Sending a reminder you asked for",
+      detail: reminder.about,
+    });
     this.send({ type: "typing", on: true });
     await sleep(typingDelayMs(reminder.message));
     const message = this.thread.add({ role: "tibo", body: reminder.message, turnId, meta: { reminder: reminder.id } });
@@ -1065,7 +1100,12 @@ export class TiboAgent extends Agent<AgentEnv> {
         this.snapshot(today, profile.timeZone),
         recallMemories(recall, unansweredText(recent)),
       ]);
-      gathering.end("done", memories.length > 0 ? `Recalled ${memories.length} ${memories.length === 1 ? "memory" : "memories"}` : undefined);
+      gathering.end(
+        "done",
+        memories.length > 0
+          ? `Recalled ${memories.length} ${memories.length === 1 ? "memory" : "memories"}`
+          : undefined,
+      );
       const story = storySection(this.memory, today);
       const remembered = memoriesSection(memories, refs, profile.timeZone);
       const built = buildTurnContext({
@@ -1103,12 +1143,10 @@ export class TiboAgent extends Agent<AgentEnv> {
       const answered = await this.reply(turnId, context, latestUserMessage?.id ?? null, tools, ledger, act);
 
       if (answered) {
-        const after = await usage
-          .record(userId, AI_UNITS_PER_MESSAGE, "tibo_reply", turnId)
-          .catch((error: unknown) => {
-            console.error("Recording AI usage failed", error);
-            return null;
-          });
+        const after = await usage.record(userId, AI_UNITS_PER_MESSAGE, "tibo_reply", turnId).catch((error: unknown) => {
+          console.error("Recording AI usage failed", error);
+          return null;
+        });
         if (after) this.send({ type: "usage", remaining: after.remaining, limit: after.limit });
       }
       act.end("done", turnDetail(ledger));
@@ -1333,7 +1371,10 @@ export class TiboAgent extends Agent<AgentEnv> {
       attachments.length === 1 ? `Opening ${attachments[0]!.name}` : `Opening your ${attachments.length} files`,
     );
     try {
-      const parts = await fileContent(this.files, attachments, { bytes: TURN_FILE_MAX_BYTES, text: TURN_FILE_TEXT_MAX_LENGTH });
+      const parts = await fileContent(this.files, attachments, {
+        bytes: TURN_FILE_MAX_BYTES,
+        text: TURN_FILE_TEXT_MAX_LENGTH,
+      });
       step?.end();
       return parts;
     } catch (error) {
@@ -1441,7 +1482,9 @@ export class TiboAgent extends Agent<AgentEnv> {
       actionId: action.id,
       items: action.calls.map((call) => ({
         text: call.summary,
-        ...(call.item?.id ? { item: { kind: call.item.kind, id: call.item.id, ...(call.item.title ? { title: call.item.title } : {}) } } : {}),
+        ...(call.item?.id
+          ? { item: { kind: call.item.kind, id: call.item.id, ...(call.item.title ? { title: call.item.title } : {}) } }
+          : {}),
       })),
       status,
     };
@@ -1474,7 +1517,9 @@ export class TiboAgent extends Agent<AgentEnv> {
         return { error: "No message from someone else has that id. Use list_relays to find it." } as const;
       }
       if (card.status !== "delivered") {
-        return { error: `That message from @${shown.person.username} isn't waiting for an answer any more (${card.status}).` } as const;
+        return {
+          error: `That message from @${shown.person.username} isn't waiting for an answer any more (${card.status}).`,
+        } as const;
       }
       const since = this.thread
         .after(card.cardSeq, 200)
@@ -1550,7 +1595,13 @@ export class TiboAgent extends Agent<AgentEnv> {
       meta: { relay: cardOf(relay, "delivered") },
     });
     this.cards.add(
-      { relayId: relay.id, direction: "in", messageId: message.id, cardSeq: this.thread.lastSeq(), status: "delivered" },
+      {
+        relayId: relay.id,
+        direction: "in",
+        messageId: message.id,
+        cardSeq: this.thread.lastSeq(),
+        status: "delivered",
+      },
       Date.now(),
     );
     this.send({ type: "bubble", message });
@@ -1663,8 +1714,7 @@ export class TiboAgent extends Agent<AgentEnv> {
     const relay = got.value;
     const due =
       kind === "deliver"
-        ?
-          relay.direction === "in" && (relay.status === "delivered" || relay.status === "pending")
+        ? relay.direction === "in" && (relay.status === "delivered" || relay.status === "pending")
         : kind === "outcome"
           ? relay.direction === "out" && (relay.status === "answered" || relay.status === "declined")
           : relay.direction === "out" && relay.status === "expired";
@@ -1713,7 +1763,8 @@ export class TiboAgent extends Agent<AgentEnv> {
         return sinceSeq;
       }
       if (answered) {
-        const [from, to] = relay.direction === "out" ? [this.name, relay.person.userId] : [relay.person.userId, this.name];
+        const [from, to] =
+          relay.direction === "out" ? [this.name, relay.person.userId] : [relay.person.userId, this.name];
         await usage
           .chargeSplit(from, to, RELAY_UNITS_PER_SIDE, "relay", relayId)
           .catch((error: unknown) => console.error("Charging a relay turn failed", relayId, error));

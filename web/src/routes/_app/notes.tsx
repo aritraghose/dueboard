@@ -19,7 +19,6 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { NoteComposer, NoteCountdown, type PendingNote } from "@/components/note-composer";
 import { Page, PageEmpty, PageHeader } from "@/components/page";
-import { type MenuUser, UserAvatar } from "@/components/user-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,12 +44,13 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { type MenuUser, UserAvatar } from "@/components/user-menu";
 import { useTimeZone } from "@/hooks/use-bootstrap";
-import { useToday } from "@/hooks/use-now";
 import { noteListAtom, useIsRemoved, useNoteActions, useOptimisticNotes } from "@/hooks/use-notes";
+import { useToday } from "@/hooks/use-now";
 import { failureMessage } from "@/hooks/use-tasks";
-import { type LocalDate, formatDay, formatDayLong, formatTime, relativeDay } from "@/lib/dates";
-import { NOTE_BODY_MAX_LENGTH, PRIVACY_ICON, cleanNoteBody, noteCount } from "@/lib/notes";
+import { formatDay, formatDayLong, formatTime, type LocalDate, relativeDay } from "@/lib/dates";
+import { cleanNoteBody, NOTE_BODY_MAX_LENGTH, noteCount, PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_LABEL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
@@ -86,7 +86,9 @@ function Notes() {
           onPending={(note) => setPending((list) => [...list, note])}
           onSettled={(key, id) =>
             setPending((list) =>
-              id ? list.map((note) => (note.key === key ? { ...note, id } : note)) : list.filter((note) => note.key !== key),
+              id
+                ? list.map((note) => (note.key === key ? { ...note, id } : note))
+                : list.filter((note) => note.key !== key),
             )
           }
         />
@@ -173,10 +175,7 @@ function Results({
   const data = last.current;
   const loadingMore = !AsyncResult.isSuccess(result) && data !== undefined;
 
-  const listedIds = useMemo(
-    () => new Set(data?.days.flatMap((day) => day.notes.map((note) => note.id)) ?? []),
-    [data],
-  );
+  const listedIds = useMemo(() => new Set(data?.days.flatMap((day) => day.notes.map((note) => note.id)) ?? []), [data]);
   useEffect(() => {
     if (pending.some((note) => note.id && listedIds.has(note.id))) onListed(listedIds);
   }, [pending, listedIds, onListed]);
@@ -208,12 +207,7 @@ function Results({
         </Button>
       </PageEmpty>
     ) : (
-      <PageEmpty
-        icon={NotebookPenIcon}
-        title="No notes yet"
-        description="Write one above."
-        className="min-h-60"
-      />
+      <PageEmpty icon={NotebookPenIcon} title="No notes yet" description="Write one above." className="min-h-60" />
     );
   }
 
@@ -221,7 +215,12 @@ function Results({
     <div className="flex flex-col gap-6">
       {AsyncResult.isFailure(result) && <LoadFailed onRetry={() => void reload()} />}
       {days.map((day) => (
-        <DaySection key={day.date} date={day.date} today={today} count={day.notes.length + (day.date === today ? waiting.length : 0)}>
+        <DaySection
+          key={day.date}
+          date={day.date}
+          today={today}
+          count={day.notes.length + (day.date === today ? waiting.length : 0)}
+        >
           {day.date === today && waiting.map((note) => <PendingCard key={note.key} note={note} user={user} />)}
           {day.notes.map((note) => (
             <NoteCard key={note.id} note={note} user={user} query={query} onChange={change} />
@@ -369,7 +368,10 @@ function Highlighted({ body, query }: { body: string; query: string | undefined 
   return <>{parts}</>;
 }
 
-type NoteChange = (note: Note, patch: { body?: string; privacy?: Privacy; shareToLive?: boolean }) => Promise<Exit.Exit<unknown, unknown>>;
+type NoteChange = (
+  note: Note,
+  patch: { body?: string; privacy?: Privacy; shareToLive?: boolean },
+) => Promise<Exit.Exit<unknown, unknown>>;
 
 function NoteCard({
   note,

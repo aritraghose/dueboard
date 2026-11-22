@@ -4,8 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { TagChip } from "@/components/tag-chip";
 import { Checkbox } from "@/components/ui/checkbox";
-import { type LocalDate, formatDay } from "@/lib/dates";
-import { IMPORTANCE_LABEL, deadlineLabel, formatMinutes, isOverdue } from "@/lib/tasks";
+import { formatDay, type LocalDate } from "@/lib/dates";
+import { deadlineLabel, formatMinutes, IMPORTANCE_LABEL, isOverdue } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 const SETTLE_LINGER_MS = 320;
@@ -135,15 +135,7 @@ export function TaskMeta({
 }) {
   const working = status === "working";
   const assigned = showAssigned ? task.assignedDate : null;
-  if (
-    !tag &&
-    !task.importance &&
-    !task.expectedMinutes &&
-    !task.deadlineDate &&
-    !working &&
-    !assigned
-  )
-    return null;
+  if (!tag && !task.importance && !task.expectedMinutes && !task.deadlineDate && !working && !assigned) return null;
 
   return (
     <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">

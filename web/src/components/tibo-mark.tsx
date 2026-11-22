@@ -6,15 +6,7 @@ const RINGS = [
   { r: 8.8, width: 3, color: "var(--tibo-ring-inner)", spin: "animate-tibo-spin-reverse" },
 ] as const;
 
-export function TiboMark({
-  className,
-  spin = 0,
-  idle = true,
-}: {
-  className?: string;
-  spin?: number;
-  idle?: boolean;
-}) {
+export function TiboMark({ className, spin = 0, idle = true }: { className?: string; spin?: number; idle?: boolean }) {
   const id = useId();
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className={cn("size-5 shrink-0", className)}>

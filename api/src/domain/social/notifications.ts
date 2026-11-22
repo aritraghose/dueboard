@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, not, or } from "drizzle-orm"
 import * as Effect from "effect/Effect";
 import { ConnectionRequests, Notifications } from "../../schema.ts";
 import { AuthUsers } from "../core/auth-users.ts";
-import { Database, newId, orDieOnDbError, type Executor } from "../core/database.ts";
+import { Database, type Executor, newId, orDieOnDbError } from "../core/database.ts";
 import {
   NOTIFICATIONS_LIST_LIMIT,
   NOTIFICATIONS_UNSEEN_CAP,
@@ -10,7 +10,7 @@ import {
   NotificationsUnseen,
   Person,
 } from "./model.ts";
-import { HIDDEN_REQUEST_STATUSES, notificationState, type NotificationDraft } from "./notification-rules.ts";
+import { HIDDEN_REQUEST_STATUSES, type NotificationDraft, notificationState } from "./notification-rules.ts";
 import { notBlockedSql } from "./visibility.ts";
 
 export const recordNotifications = (tx: Executor, drafts: readonly NotificationDraft[]) => {

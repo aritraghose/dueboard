@@ -29,11 +29,7 @@ export function useUpdateAskSettings() {
   const run = useRun();
   return useCallback(
     (patch: AskSettingsPatch) =>
-      run(
-        ApiClient.use((client) => client("UpdateAskSettings", patch)).pipe(
-          Reactivity.mutation([...ASK, "social"]),
-        ),
-      ),
+      run(ApiClient.use((client) => client("UpdateAskSettings", patch)).pipe(Reactivity.mutation([...ASK, "social"]))),
     [run],
   );
 }
@@ -69,15 +65,13 @@ export function useAskDocuments() {
     [run],
   );
   const remove = useCallback(
-    (id: string) =>
-      run(ApiClient.use((client) => client("DeleteAskDocument", { id })).pipe(Reactivity.mutation(ASK))),
+    (id: string) => run(ApiClient.use((client) => client("DeleteAskDocument", { id })).pipe(Reactivity.mutation(ASK))),
     [run],
   );
   return { convert, add, remove };
 }
 
-const askUrl = (username: string, path: string) =>
-  `/agents/${ASK_AGENT}/${encodeURIComponent(username)}/${path}`;
+const askUrl = (username: string, path: string) => `/agents/${ASK_AGENT}/${encodeURIComponent(username)}/${path}`;
 
 export type AskThreadState =
   | { readonly status: "loading" }
@@ -152,4 +146,3 @@ export function useAskThread(username: string, enabled: boolean) {
 
   return { state, pending, ask };
 }
-

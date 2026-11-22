@@ -1,36 +1,36 @@
-import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import {
   Activity,
+  type GoalLinkRow,
   GoalLinks,
+  type GoalProgressEventRow,
   GoalProgressEvents,
+  type GoalRow,
   Goals,
   Habits,
   Tasks,
   UserSettings,
-  type GoalLinkRow,
-  type GoalProgressEventRow,
-  type GoalRow,
 } from "../../schema.ts";
 import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
 import { LocalDate, localDateOf } from "../core/dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { decodeInput, Id, InvalidInput } from "../core/model.ts";
+import { HabitNotFound } from "../habits/model.ts";
+import { TaskNotFound } from "../tasks/model.ts";
 import {
   completionChange,
   convertProgress,
   dayProgressAction,
   deltaError,
+  type GoalProgress,
   goalPercent,
   goalValue,
   isReached,
   linkedDelta,
   valueError,
   withValue,
-  type GoalProgress,
 } from "./goal-rules.ts";
-import { Id, InvalidInput, decodeInput } from "../core/model.ts";
-import { HabitNotFound } from "../habits/model.ts";
-import { TaskNotFound } from "../tasks/model.ts";
 import {
   AdjustGoalProgressInput,
   CreateGoalInput,
@@ -40,8 +40,10 @@ import {
   Goal,
   GoalItemRef,
   GoalLink,
+  type GoalLinkItem,
   GoalNotFound,
   GoalProgressEvent,
+  type GoalProgressSource,
   GoalSummary,
   GoalsForDay,
   ItemGoal,
@@ -50,8 +52,6 @@ import {
   SetGoalProgressInput,
   UnlinkGoalItemInput,
   UpdateGoalInput,
-  type GoalLinkItem,
-  type GoalProgressSource,
 } from "./model.ts";
 
 export const toGoal = (row: GoalRow): Goal =>
@@ -262,7 +262,15 @@ const applyLinked = (
     const goals = yield* tx
       .select()
       .from(Goals)
-      .where(and(eq(Goals.userId, userId), inArray(Goals.id, links.map((l) => l.goalId))))
+      .where(
+        and(
+          eq(Goals.userId, userId),
+          inArray(
+            Goals.id,
+            links.map((l) => l.goalId),
+          ),
+        ),
+      )
       .orderBy(asc(Goals.id))
       .for("update");
     const { timeZone } = yield* userSettings(tx, userId);
@@ -391,11 +399,7 @@ export const updateGoal = Effect.fn("updateGoal")(function* (userId: string, inp
         return yield* invalid("Switching to a count needs a target.");
       }
       if (switching) {
-        const [link] = yield* tx
-          .select({ id: GoalLinks.id })
-          .from(GoalLinks)
-          .where(eq(GoalLinks.goalId, id))
-          .limit(1);
+        const [link] = yield* tx.select({ id: GoalLinks.id }).from(GoalLinks).where(eq(GoalLinks.goalId, id)).limit(1);
         if (link) return yield* invalid("Unlink this goal's habits and tasks before switching its progress type.");
       }
       if (!switching && targetCount === undefined) {
@@ -439,9 +443,7 @@ export const adjustProgress = Effect.fn("adjustGoalProgress")(function* (
       const error = deltaError(goal.progressMode, delta);
       if (error) return yield* invalid(error);
       const { timeZone } = yield* userSettings(tx, userId);
-      return toGoal(
-        yield* changeProgress(tx, userId, timeZone, goal, goalValue(goal) + delta, manual, new Date()),
-      );
+      return toGoal(yield* changeProgress(tx, userId, timeZone, goal, goalValue(goal) + delta, manual, new Date()));
     }),
   );
 });
@@ -653,7 +655,8 @@ export const listGoalsForDay = Effect.fn("listGoalsForDay")(function* (userId: s
   const db = yield* Database;
   return yield* Effect.gen(function* () {
     const { timeZone } = yield* userSettings(db, userId);
-    const localDay = (column: typeof Goals.createdAt | typeof Goals.completedAt) => sql`(${column} at time zone ${timeZone})::date`;
+    const localDay = (column: typeof Goals.createdAt | typeof Goals.completedAt) =>
+      sql`(${column} at time zone ${timeZone})::date`;
     const rows = yield* db
       .select()
       .from(Goals)
@@ -715,9 +718,7 @@ export const listItemGoals = Effect.fn("listItemGoals")(function* (userId: strin
       .select({ goal: Goals, link: GoalLinks })
       .from(GoalLinks)
       .innerJoin(Goals, eq(Goals.id, GoalLinks.goalId))
-      .where(
-        and(eq(GoalLinks.userId, userId), eq(GoalLinks.itemType, itemType), eq(GoalLinks.itemId, itemId)),
-      )
+      .where(and(eq(GoalLinks.userId, userId), eq(GoalLinks.itemType, itemType), eq(GoalLinks.itemId, itemId)))
       .orderBy(asc(GoalLinks.createdAt), asc(GoalLinks.id));
     if (rows.length === 0) return [];
     const title = yield* findItemTitle(db, userId, itemType, itemId).pipe(Effect.orElseSucceed(() => ""));

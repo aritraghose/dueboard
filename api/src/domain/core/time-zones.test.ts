@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { dayIn, instantIn, startOfDayIn } from "../../tibo/dates.ts";
-import { addDays, isValidTimeZone, localDateOf, startOfDayInstant, startOfWeek, todayIn, type LocalDate } from "./dates.ts";
 import { nextResetAt, periodOf } from "../usage/usage-rules.ts";
+import {
+  addDays,
+  isValidTimeZone,
+  type LocalDate,
+  localDateOf,
+  startOfDayInstant,
+  startOfWeek,
+  todayIn,
+} from "./dates.ts";
 
 const AHEAD = "Pacific/Kiritimati";
 const BEHIND = "Pacific/Pago_Pago";

@@ -42,7 +42,8 @@ export const IMAGE_REFUSAL_TEXT: Record<ImageRefusal | "no_quota" | "blocked" | 
   daily_limit: `They've had ${IMAGES_PER_DAY} images in the last 24 hours, the most for a day. Tell them, kindly, and that more come tomorrow.`,
   storage_full: "Their storage for chat files is full. They can free some by deleting files they've sent.",
   no_quota: "An image costs one more message and they don't have enough left this month. Tell them.",
-  blocked: "Meta's content rules refused this picture. Say you can't make that one, without lecturing, and offer something close that's fine.",
+  blocked:
+    "Meta's content rules refused this picture. Say you can't make that one, without lecturing, and offer something close that's fine.",
   failed: "The image didn't come out (a problem on the image service's side). Say so and offer to try again.",
   unknown_image: "No picture in this chat has that ref. Use the ref shown next to a picture, like `3f2a9c1b`.",
 };

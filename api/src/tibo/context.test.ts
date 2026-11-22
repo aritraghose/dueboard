@@ -74,8 +74,7 @@ describe("actions in the replay", () => {
       { role: "assistant", content: "Done!" },
       {
         role: "user",
-        content:
-          "[App event, not written by the user] Your actions: Created task: Call mom · Tomorrow.\n\nthanks",
+        content: "[App event, not written by the user] Your actions: Created task: Call mom · Tomorrow.\n\nthanks",
       },
     ]);
   });
@@ -89,7 +88,9 @@ describe("actions in the replay", () => {
       "Your actions: Deleted task: Gym.\nThe user confirmed: Delete task: Gym.",
     );
     expect(actionNote([], { actionId: "a", items, status: "cancelled" })).toContain("didn't happen");
-    expect(actionNote([{ text: "Stop it: no session", failed: true }])).toBe("Your actions: Stop it: no session (failed).");
+    expect(actionNote([{ text: "Stop it: no session", failed: true }])).toBe(
+      "Your actions: Stop it: no session (failed).",
+    );
     expect(actionNote()).toBeNull();
   });
 });
@@ -128,14 +129,26 @@ describe("buildTurnContext's budget", () => {
 });
 
 describe("pictures in the context", () => {
-  const picture = (id: string) => ({ id, name: "tibo-a-red-fox.jpg", mediaType: "image/jpeg", kind: "image" as const, size: 2048 });
+  const picture = (id: string) => ({
+    id,
+    name: "tibo-a-red-fox.jpg",
+    mediaType: "image/jpeg",
+    kind: "image" as const,
+    size: 2048,
+  });
 
   test("a picture Tibo made is an app note after its words, with its ref and prompt", () => {
     const messages = toModelMessages(
       [
         message({ id: "u1", role: "user", body: "draw me a fox" }),
         message({ id: "t1", turnId: "turn", role: "tibo", body: "Fox incoming!" }),
-        message({ id: "t2", turnId: "turn", role: "tibo", body: "", attachments: [picture("3f2a9c1b-7d4e-4b1a-9c2d-0e1f2a3b4c5d")] }),
+        message({
+          id: "t2",
+          turnId: "turn",
+          role: "tibo",
+          body: "",
+          attachments: [picture("3f2a9c1b-7d4e-4b1a-9c2d-0e1f2a3b4c5d")],
+        }),
         message({ id: "u2", role: "user", body: "make it blue" }),
       ],
       () => "a red fox in snow",
@@ -153,8 +166,16 @@ describe("pictures in the context", () => {
 
   test("a photo the user sent is named with its ref", () => {
     const [sent] = toModelMessages([
-      message({ id: "u1", role: "user", body: "make this a painting", attachments: [{ ...picture("ab12cd34-0000-4000-8000-000000000000"), name: "me.jpg" }] }),
+      message({
+        id: "u1",
+        role: "user",
+        body: "make this a painting",
+        attachments: [{ ...picture("ab12cd34-0000-4000-8000-000000000000"), name: "me.jpg" }],
+      }),
     ]);
-    expect(sent).toEqual({ role: "user", content: 'make this a painting\n[Attached image: "me.jpg", 2 KB, ref ab12cd34]' });
+    expect(sent).toEqual({
+      role: "user",
+      content: 'make this a painting\n[Attached image: "me.jpg", 2 KB, ref ab12cd34]',
+    });
   });
 });

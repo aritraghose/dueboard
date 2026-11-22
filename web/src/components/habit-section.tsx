@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { type DayHabits, type ShownHabit, useHabitActions, useHabitColor } from "@/hooks/use-habits";
 import { failureMessage } from "@/hooks/use-tasks";
-import { type LocalDate, formatDay } from "@/lib/dates";
+import { formatDay, type LocalDate } from "@/lib/dates";
 import { checkInWindow, oldestCheckInDay, progressHint } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 
@@ -196,7 +196,12 @@ function HabitMenu({ habit, onEdit }: { habit: Habit; onEdit: (habit: Habit) => 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label={`More for "${habit.title}"`}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground"
+          aria-label={`More for "${habit.title}"`}
+        >
           <MoreHorizontalIcon />
         </Button>
       </DropdownMenuTrigger>
@@ -227,7 +232,10 @@ function AllChecked({ count, celebrate, onDay }: { count: number; celebrate: boo
       <span className="relative grid size-12 place-items-center rounded-full bg-tag text-background">
         {celebrate && !reduced && (
           <>
-            <span aria-hidden="true" className="absolute inset-0 animate-habit-burst rounded-full border-2 border-tag" />
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 animate-habit-burst rounded-full border-2 border-tag"
+            />
             <span
               aria-hidden="true"
               className="absolute inset-0 animate-habit-burst rounded-full border border-tag [animation-delay:160ms]"

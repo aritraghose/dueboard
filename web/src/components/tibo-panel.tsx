@@ -1,8 +1,8 @@
 import { ClientOnly } from "@tanstack/react-router";
 import { useAgent } from "agents/react";
 import * as Reactivity from "effect/reactivity/Reactivity";
-import { XIcon, type LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { type LucideIcon, XIcon } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { TiboMark } from "@/components/tibo-mark";
 import { TiboThread } from "@/components/tibo-thread";
 import { Button } from "@/components/ui/button";
@@ -59,10 +59,7 @@ function TiboConnection({ userId, store }: { userId: string; store: TiboStore })
 
 function UnreadDot({ className }: { className?: string }) {
   return (
-    <span
-      aria-hidden="true"
-      className={cn("size-2.5 rounded-full bg-tibo-unread ring-2 ring-background", className)}
-    />
+    <span aria-hidden="true" className={cn("size-2.5 rounded-full bg-tibo-unread ring-2 ring-background", className)} />
   );
 }
 

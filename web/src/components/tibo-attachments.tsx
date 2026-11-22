@@ -1,9 +1,4 @@
-import {
-  TIBO_FILE_MAX_BYTES,
-  TIBO_MAX_ATTACHMENTS,
-  tiboFileUrl,
-  type TiboAttachment,
-} from "@dueboard/api/tibo";
+import { TIBO_FILE_MAX_BYTES, TIBO_MAX_ATTACHMENTS, type TiboAttachment, tiboFileUrl } from "@dueboard/api/tibo";
 import {
   AlertCircleIcon,
   DownloadIcon,
@@ -11,9 +6,9 @@ import {
   FileSpreadsheetIcon,
   FileTextIcon,
   ImageIcon,
+  type LucideIcon,
   PlusIcon,
   XIcon,
-  type LucideIcon,
 } from "lucide-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
@@ -81,7 +76,9 @@ export function useDraftFiles() {
 
   const clear = React.useCallback(() => {
     const previews = current.current.flatMap((file) => (file.preview ? [file.preview] : []));
-    setTimeout(() => previews.forEach((url) => URL.revokeObjectURL(url)), 60_000);
+    setTimeout(() => {
+      for (const url of previews) URL.revokeObjectURL(url);
+    }, 60_000);
     setFiles([]);
     setNotice(null);
   }, []);
@@ -112,7 +109,15 @@ const KIND_ICON: Record<TiboAttachment["kind"], LucideIcon> = {
 const iconFor = (attachment: Pick<TiboAttachment, "kind" | "name">): LucideIcon =>
   fileKindLabel(attachment) === "Spreadsheet" ? FileSpreadsheetIcon : KIND_ICON[attachment.kind];
 
-export function AttachButton({ drafts, disabled, className }: { drafts: DraftFiles; disabled: boolean; className?: string }) {
+export function AttachButton({
+  drafts,
+  disabled,
+  className,
+}: {
+  drafts: DraftFiles;
+  disabled: boolean;
+  className?: string;
+}) {
   const input = React.useRef<HTMLInputElement>(null);
   const off = disabled || drafts.full;
   return (
@@ -180,10 +185,17 @@ function DraftTile({ file, onRemove }: { file: DraftFile; onRemove: () => void }
       title={failed ? file.error : file.name}
     >
       {file.preview ? (
-        <img src={file.preview} alt={file.name} className={cn("size-full object-cover", (uploading || failed) && "opacity-50")} />
+        <img
+          src={file.preview}
+          alt={file.name}
+          className={cn("size-full object-cover", (uploading || failed) && "opacity-50")}
+        />
       ) : (
         <>
-          <span data-tag={FILE_KIND_TAG[kind]} className="grid size-10 shrink-0 place-items-center rounded-lg bg-tag-soft text-tag-ink">
+          <span
+            data-tag={FILE_KIND_TAG[kind]}
+            className="grid size-10 shrink-0 place-items-center rounded-lg bg-tag-soft text-tag-ink"
+          >
             <Icon aria-hidden="true" className="size-5" />
           </span>
           <span className="flex min-w-0 flex-col text-xs leading-tight">
@@ -203,7 +215,9 @@ function DraftTile({ file, onRemove }: { file: DraftFile; onRemove: () => void }
           )}
         </span>
       )}
-      <span className="sr-only">{failed ? `${file.name}: ${file.error}` : uploading ? `${file.name}, uploading` : file.name}</span>
+      <span className="sr-only">
+        {failed ? `${file.name}: ${file.error}` : uploading ? `${file.name}, uploading` : file.name}
+      </span>
       <button
         type="button"
         aria-label={`Remove ${file.name}`}
@@ -307,7 +321,8 @@ function PhotoGrid({
     >
       {photos.map((photo, index) => {
         const wide = photos.length === 3 && index === 0;
-        const ratio = single && photo.width && photo.height ? Math.min(Math.max(photo.width / photo.height, 0.5), 2) : null;
+        const ratio =
+          single && photo.width && photo.height ? Math.min(Math.max(photo.width / photo.height, 0.5), 2) : null;
         return (
           <button
             key={photo.id}
@@ -351,7 +366,10 @@ export function FileCard({ file, mine }: { file: TiboAttachment; mine: boolean }
         mine ? "bg-bubble-me-foreground/12 hover:bg-bubble-me-foreground/18" : "bg-muted hover:bg-muted/70",
       )}
     >
-      <span data-tag={FILE_KIND_TAG[file.kind]} className="grid size-10 shrink-0 place-items-center rounded-lg bg-tag-soft text-tag-ink">
+      <span
+        data-tag={FILE_KIND_TAG[file.kind]}
+        className="grid size-10 shrink-0 place-items-center rounded-lg bg-tag-soft text-tag-ink"
+      >
         <Icon aria-hidden="true" className="size-5" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col text-left leading-tight">
@@ -360,7 +378,10 @@ export function FileCard({ file, mine }: { file: TiboAttachment; mine: boolean }
           {fileKindLabel(file)}, {formatBytes(file.size)}
         </span>
       </span>
-      <DownloadIcon aria-hidden="true" className={cn("size-4 shrink-0", mine ? "text-bubble-me-foreground/75" : "text-muted-foreground")} />
+      <DownloadIcon
+        aria-hidden="true"
+        className={cn("size-4 shrink-0", mine ? "text-bubble-me-foreground/75" : "text-muted-foreground")}
+      />
       <span className="sr-only">{opens ? "Open" : "Save"}</span>
     </a>
   );

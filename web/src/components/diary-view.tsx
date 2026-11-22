@@ -4,12 +4,13 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import {
   BookOpenIcon,
   ListChecksIcon,
+  type LucideIcon,
   NotebookPenIcon,
   RepeatIcon,
   TargetIcon,
   TimerIcon,
-  type LucideIcon,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { PageEmpty } from "@/components/page";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,9 @@ export function DiaryView({
   const pages = paging.from === from ? paging.pages : 1;
   const result = useAtomValue(diaryAtom({ username, from, pages }));
   const { reload } = useSocialActions();
-  const last = useRef<{ from: LocalDate | null; days: readonly DiaryDay[]; nextCursor: LocalDate | null } | undefined>(undefined);
+  const last = useRef<{ from: LocalDate | null; days: readonly DiaryDay[]; nextCursor: LocalDate | null } | undefined>(
+    undefined,
+  );
   if (AsyncResult.isSuccess(result)) last.current = { from, ...result.value };
   const data = last.current?.from === from ? last.current : undefined;
   const loading = !AsyncResult.isSuccess(result);
@@ -100,9 +103,12 @@ export function DiaryView({
   useEffect(() => {
     const node = end.current;
     if (!node || !canLoadMore) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) loadMore();
-    }, { rootMargin: "400px 0px" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: "400px 0px" },
+    );
     observer.observe(node);
     return () => observer.disconnect();
   });
@@ -120,10 +126,15 @@ export function DiaryView({
     </div>
   );
 
-  let body;
+  let body: ReactNode;
   if (!data) {
     body = AsyncResult.isFailure(result) ? (
-      <PageEmpty icon={BookOpenIcon} title="Couldn't load the diary" description="Check your connection, then try again." className="min-h-48 flex-none rounded-xl border">
+      <PageEmpty
+        icon={BookOpenIcon}
+        title="Couldn't load the diary"
+        description="Check your connection, then try again."
+        className="min-h-48 flex-none rounded-xl border"
+      >
         <Button variant="outline" onClick={() => void reload()}>
           Try again
         </Button>
@@ -136,11 +147,7 @@ export function DiaryView({
       <PageEmpty
         icon={BookOpenIcon}
         title={from ? "Nothing on or before this day" : self ? "Your diary is empty" : "Nothing to show yet"}
-        description={
-          self
-            ? "What you get done collects here, one day at a time."
-            : "Their days show here."
-        }
+        description={self ? "What you get done collects here, one day at a time." : "Their days show here."}
         className="min-h-48 flex-none rounded-xl border border-dashed"
       />
     );

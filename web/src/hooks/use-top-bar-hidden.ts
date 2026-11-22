@@ -22,8 +22,7 @@ export function setTopBarHidden(next: boolean) {
   hidden = next;
   try {
     localStorage.setItem(KEY, String(next));
-  } catch {
-  }
+  } catch {}
   for (const listener of listeners) listener();
 }
 

@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  connectionState,
-  normalizeUsername,
-  orderedPair,
-  searchPatterns,
-  type PairFacts,
-} from "./social-rules.ts";
+import { connectionState, normalizeUsername, orderedPair, type PairFacts, searchPatterns } from "./social-rules.ts";
 
 const none: PairFacts = {
   self: false,
@@ -76,9 +70,7 @@ describe("connectionState", () => {
   });
 
   test("a block by the viewer wins over a connection and requests", () => {
-    expect(
-      connectionState({ ...none, viewerBlocked: true, connected: true, pendingIn: true }),
-    ).toBe("blocked");
+    expect(connectionState({ ...none, viewerBlocked: true, connected: true, pendingIn: true })).toBe("blocked");
   });
 
   test("connected wins over stray requests", () => {

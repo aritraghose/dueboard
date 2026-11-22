@@ -98,10 +98,7 @@ const DAYS: readonly SeedDay[] = [
   ],
   [
     "2025-12-31",
-    [
-      "New year's resolution: read 20 books in 2026",
-      "Twenty books. Bold. I'll be checking in like a tiny librarian.",
-    ],
+    ["New year's resolution: read 20 books in 2026", "Twenty books. Bold. I'll be checking in like a tiny librarian."],
   ],
   [
     "2026-02-01",
@@ -121,10 +118,7 @@ const DAYS: readonly SeedDay[] = [
   ],
   [
     "2026-05-09",
-    [
-      "It's Mochi's second birthday! She got a tuna cake",
-      "Happy birthday Mochi! | A tuna cake is very fancy.",
-    ],
+    ["It's Mochi's second birthday! She got a tuna cake", "Happy birthday Mochi! | A tuna cake is very fancy."],
   ],
   [
     "2026-08-15",
@@ -142,13 +136,7 @@ const DAYS: readonly SeedDay[] = [
       "A FULL marathon. From happy noodles to legend. | Evening training, as always.",
     ],
   ],
-  [
-    "2026-10-22",
-    [
-      "Book count is at 14 so far this year",
-      "Fourteen! Six to go and two months to do it. Very doable.",
-    ],
-  ],
+  ["2026-10-22", ["Book count is at 14 so far this year", "Fourteen! Six to go and two months to do it. Very doable."]],
 ];
 
 export const devSeedThread = (): SeedMessage[] =>

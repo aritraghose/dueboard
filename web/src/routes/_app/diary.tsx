@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTimeZone } from "@/hooks/use-bootstrap";
 import { useToday } from "@/hooks/use-now";
-import { type LocalDate, WEEK_STARTS_ON, isLocalDate, todayIn } from "@/lib/dates";
+import { isLocalDate, type LocalDate, todayIn, WEEK_STARTS_ON } from "@/lib/dates";
 
 export const Route = createFileRoute("/_app/diary")({
   validateSearch: (search: Record<string, unknown>): { day?: LocalDate | undefined } => ({
@@ -61,7 +61,13 @@ function Diary() {
             </PopoverContent>
           </Popover>
         </PageHeader>
-        <DiaryView username={user.username} self today={today} from={day ?? null} onShowLatest={() => jump(undefined)} />
+        <DiaryView
+          username={user.username}
+          self
+          today={today}
+          from={day ?? null}
+          onShowLatest={() => jump(undefined)}
+        />
       </div>
     </Page>
   );

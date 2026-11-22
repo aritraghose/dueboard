@@ -1,5 +1,6 @@
+import { USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, type UsernameProblem, usernameProblem } from "@dueboard/api/rpc";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { TiboAside, TiboBubble, TiboTyping } from "@/components/tibo-aside";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -7,12 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
-import {
-  USERNAME_MAX_LENGTH,
-  USERNAME_MIN_LENGTH,
-  usernameProblem,
-  type UsernameProblem,
-} from "@dueboard/api/rpc";
 import { initials } from "@/lib/people";
 import { siteOrigin } from "@/lib/seo";
 import { cn } from "@/lib/utils";
@@ -104,8 +99,8 @@ function Onboarding() {
           <p className="text-muted-foreground">Welcome, {firstName}.</p>
           <h1 className="text-headline font-[650] text-balance">Pick your username</h1>
           <p className="text-lede text-pretty text-muted-foreground">
-            It's how friends find you and how you show up on Live. You can't change it later, so pick one you'll
-            like for a while.
+            It's how friends find you and how you show up on Live. You can't change it later, so pick one you'll like
+            for a while.
           </p>
         </div>
         <form className="flex flex-col gap-5" onSubmit={submit}>
@@ -143,12 +138,7 @@ function Onboarding() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-          <Button
-            type="submit"
-            size="lg"
-            disabled={!ready || saving}
-            className="h-13 rounded-full text-base"
-          >
+          <Button type="submit" size="lg" disabled={!ready || saving} className="h-13 rounded-full text-base">
             {saving && <Spinner />}
             <span className="truncate">{ready ? `Claim @${trimmed}` : "Claim username"}</span>
           </Button>

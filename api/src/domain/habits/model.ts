@@ -25,10 +25,7 @@ export const HABIT_PERIOD_LENGTH_MAX = 365;
 export const HABIT_CHECKIN_DAYS_BACK = 30;
 export const HABIT_HISTORY_WEEKS = 12;
 
-export const HabitTitle = Schema.String.check(
-  Schema.isTrimmed(),
-  Schema.isBetweenLength(1, HABIT_TITLE_MAX_LENGTH),
-);
+export const HabitTitle = Schema.String.check(Schema.isTrimmed(), Schema.isBetweenLength(1, HABIT_TITLE_MAX_LENGTH));
 export const HabitDescription = Schema.String.check(Schema.isMaxLength(HABIT_DESCRIPTION_MAX_LENGTH));
 
 export const HabitSchedule = Schema.Struct({
@@ -40,16 +37,12 @@ export const HabitSchedule = Schema.Struct({
   ),
   weekdays: Schema.optionalKey(
     Schema.NullOr(
-      Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 6 }))).check(
-        Schema.isMaxLength(7),
-      ),
+      Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 6 }))).check(Schema.isMaxLength(7)),
     ),
   ),
   monthDays: Schema.optionalKey(
     Schema.NullOr(
-      Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 31 }))).check(
-        Schema.isMaxLength(31),
-      ),
+      Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 31 }))).check(Schema.isMaxLength(31)),
     ),
   ),
 });

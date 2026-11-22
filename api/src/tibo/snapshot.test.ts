@@ -90,8 +90,15 @@ describe("todaySnapshot", () => {
   });
 
   test("long lists are cut, and an empty day stays short", () => {
-    const open = Array.from({ length: 14 }, (_, i) => ({ task: task(`t${i}`, `Task ${i}`), role: "assigned" as const }));
-    const { body } = todaySnapshot({ timeZone: "UTC", activeSession: null, day: day({ tasks: { open, settled: [] } }) });
+    const open = Array.from({ length: 14 }, (_, i) => ({
+      task: task(`t${i}`, `Task ${i}`),
+      role: "assigned" as const,
+    }));
+    const { body } = todaySnapshot({
+      timeZone: "UTC",
+      activeSession: null,
+      day: day({ tasks: { open, settled: [] } }),
+    });
     expect(body).toContain("- +4 more");
     expect(body).not.toContain("Task 12");
     const empty = todaySnapshot({ timeZone: "UTC", activeSession: null, day: day() }).body;

@@ -6,14 +6,7 @@ import { NOTIFICATION_KIND } from "./notification-constants.ts";
 export const CONNECTION_REQUEST_STATUS = ["pending", "accepted", "declined", "cancelled"] as const;
 export type ConnectionRequestStatus = (typeof CONNECTION_REQUEST_STATUS)[number];
 
-export const CONNECTION_STATE = [
-  "self",
-  "none",
-  "pending_out",
-  "pending_in",
-  "connected",
-  "blocked",
-] as const;
+export const CONNECTION_STATE = ["self", "none", "pending_out", "pending_in", "connected", "blocked"] as const;
 export const ConnectionState = Schema.Literals(CONNECTION_STATE);
 export type ConnectionState = typeof ConnectionState.Type;
 
@@ -125,12 +118,11 @@ export class ConnectionRequestNotFound extends Schema.TaggedError<ConnectionRequ
 export const CONNECTION_REFUSAL = ["self", "already_connected", "blocked"] as const;
 export type ConnectionRefusal = (typeof CONNECTION_REFUSAL)[number];
 
-export class ConnectionNotAllowed extends Schema.TaggedError<ConnectionNotAllowed>()(
-  "ConnectionNotAllowed",
-  { message: Schema.String, reason: Schema.Literals(CONNECTION_REFUSAL) },
-) {}
+export class ConnectionNotAllowed extends Schema.TaggedError<ConnectionNotAllowed>()("ConnectionNotAllowed", {
+  message: Schema.String,
+  reason: Schema.Literals(CONNECTION_REFUSAL),
+}) {}
 
-export class SocialLimitReached extends Schema.TaggedError<SocialLimitReached>()(
-  "SocialLimitReached",
-  { message: Schema.String },
-) {}
+export class SocialLimitReached extends Schema.TaggedError<SocialLimitReached>()("SocialLimitReached", {
+  message: Schema.String,
+}) {}

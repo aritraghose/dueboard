@@ -18,8 +18,7 @@ const headAtom = (days: number, scope: LiveScope) =>
 const pathAtom = ApiClient.query("GetPath", undefined, { reactivityKeys: LIVE_KEYS, timeToLive: TTL });
 
 const newer = (a: LiveEvent, b: LiveEvent) =>
-  a.occurredAt.getTime() > b.occurredAt.getTime() ||
-  (a.occurredAt.getTime() === b.occurredAt.getTime() && a.id > b.id);
+  a.occurredAt.getTime() > b.occurredAt.getTime() || (a.occurredAt.getTime() === b.occurredAt.getTime() && a.id > b.id);
 
 interface Older {
   readonly events: readonly LiveEvent[];
@@ -137,5 +136,4 @@ export function useLivePolling() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [reload]);
-
 }

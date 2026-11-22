@@ -5,15 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDayArrowKeys } from "@/hooks/use-day-arrow-keys";
 import { useNow } from "@/hooks/use-now";
-import {
-  type LocalDate,
-  addDays,
-  daysBetween,
-  formatClock,
-  formatDay,
-  formatDayLong,
-  relativeDay,
-} from "@/lib/dates";
+import { addDays, daysBetween, formatClock, formatDay, formatDayLong, type LocalDate, relativeDay } from "@/lib/dates";
 
 export function NowClock({ today, timeZone }: { today: LocalDate | null; timeZone: string }) {
   const now = useNow(1000);
@@ -69,9 +61,7 @@ export function DayStepper({
           <ChevronRightIcon />
         </StepButton>
       </div>
-      {near && date !== today && (
-        <p className="text-sm text-muted-foreground">{formatDay(date, today)}</p>
-      )}
+      {near && date !== today && <p className="text-sm text-muted-foreground">{formatDay(date, today)}</p>}
     </div>
   );
 }

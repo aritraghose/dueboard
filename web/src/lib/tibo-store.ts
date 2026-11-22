@@ -79,7 +79,9 @@ export function createTiboStore() {
           ),
           unread: viewers === 0 && (frame.unread || state.unread),
           activities: {
-            ...Object.fromEntries(Object.entries(state.activities).filter(([, activity]) => activity.status !== "running")),
+            ...Object.fromEntries(
+              Object.entries(state.activities).filter(([, activity]) => activity.status !== "running"),
+            ),
             ...Object.fromEntries((frame.activity ?? []).map((activity) => [activity.id, activity])),
           },
         });
@@ -144,7 +146,9 @@ export function createTiboStore() {
         return;
       case "seen": {
         const ids = new Set(frame.messageIds);
-        set({ messages: state.messages.map((message) => (ids.has(message.id) ? { ...message, seen: true } : message)) });
+        set({
+          messages: state.messages.map((message) => (ids.has(message.id) ? { ...message, seen: true } : message)),
+        });
         return;
       }
       case "turnDone":
@@ -190,8 +194,7 @@ export function createTiboStore() {
       try {
         const frame = JSON.parse(data) as TiboServerFrame;
         if (frame && typeof frame.type === "string") receive(frame);
-      } catch {
-      }
+      } catch {}
     },
 
     send(text: string, replyTo?: TiboMessage, attachments: readonly TiboAttachment[] = []): boolean {

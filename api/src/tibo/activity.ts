@@ -1,12 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { ACTIVITY_KEEP_DAYS, ACTIVITY_KEEP_THREADS } from "./activity-rules.ts";
-import type {
-  TiboActivity,
-  TiboActivityKind,
-  TiboActivityStatus,
-  TiboActivityThread,
-} from "./protocol.ts";
+import type { TiboActivity, TiboActivityKind, TiboActivityStatus, TiboActivityThread } from "./protocol.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS activity_log (

@@ -1,5 +1,5 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
-import { AgentWorker, ApiWorker, DEV_PORTS, LIMITS, bindingProps } from "@dueboard/api";
+import { AgentWorker, ApiWorker, bindingProps, DEV_PORTS, LIMITS } from "@dueboard/api";
 import * as Alchemy from "alchemy";
 import * as Effect from "effect/Effect";
 

@@ -1,5 +1,5 @@
-import { BUBBLE_DELIMITER, reactionLine } from "./bubbles.ts";
 import { BULK_LIMIT } from "./actions.ts";
+import { BUBBLE_DELIMITER, reactionLine } from "./bubbles.ts";
 import { IMAGES_PER_DAY } from "./image-rules.ts";
 import { TIBO_MAX_BUBBLES } from "./protocol.ts";
 

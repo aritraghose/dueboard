@@ -2,10 +2,17 @@ import { and, asc, count, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-o
 import * as Effect from "effect/Effect";
 import { Activity, FocusSessions, Goals, Habits, Notes, Tasks, UserSettings } from "../../schema.ts";
 import { Database, orDieOnDbError } from "../core/database.ts";
-import { FALLBACK_TIME_ZONE, todayIn, type LocalDate } from "../core/dates.ts";
+import { FALLBACK_TIME_ZONE, type LocalDate, todayIn } from "../core/dates.ts";
+import { decodeInput, InvalidInput } from "../core/model.ts";
+import {
+  activitySubjectExists,
+  activitySubjectJoin,
+  activitySubjectPrivacy,
+  activitySubjectTitle,
+  privacyVisibleSql,
+} from "../social/visibility.ts";
 import { DIARY_KINDS, DIARY_PAGE_DAYS, GRAPH_KINDS, graphRange, pickDiaryDays } from "./diary-rules.ts";
 import { eventMeta, focusedMinutes } from "./live.ts";
-import { InvalidInput, decodeInput } from "../core/model.ts";
 import {
   ContributionDay,
   ContributionGraph,
@@ -16,13 +23,6 @@ import {
   GetDiaryInput,
 } from "./model.ts";
 import { profileOwner } from "./profile-items.ts";
-import {
-  activitySubjectExists,
-  activitySubjectJoin,
-  activitySubjectPrivacy,
-  activitySubjectTitle,
-  privacyVisibleSql,
-} from "../social/visibility.ts";
 
 const notCoveredMove = sql`(${Activity.kind} <> 'goal_progressed' or not exists (
   select 1 from ${Activity} c

@@ -151,40 +151,40 @@
   --check-in-mark: var(--usage);
 
   --tag-gray: oklch(0.62 0.012 260);
-  --tag-gray-soft: oklch(0.95 0.010 260);
-  --tag-gray-ink: oklch(0.43 0.010 260);
-  --tag-red: oklch(0.62 0.150 25);
-  --tag-red-soft: oklch(0.95 0.040 25);
+  --tag-gray-soft: oklch(0.95 0.01 260);
+  --tag-gray-ink: oklch(0.43 0.01 260);
+  --tag-red: oklch(0.62 0.15 25);
+  --tag-red-soft: oklch(0.95 0.04 25);
   --tag-red-ink: oklch(0.43 0.128 25);
-  --tag-orange: oklch(0.62 0.140 50);
-  --tag-orange-soft: oklch(0.95 0.040 50);
+  --tag-orange: oklch(0.62 0.14 50);
+  --tag-orange-soft: oklch(0.95 0.04 50);
   --tag-orange-ink: oklch(0.43 0.119 50);
-  --tag-amber: oklch(0.62 0.130 80);
-  --tag-amber-soft: oklch(0.95 0.040 80);
+  --tag-amber: oklch(0.62 0.13 80);
+  --tag-amber-soft: oklch(0.95 0.04 80);
   --tag-amber-ink: oklch(0.43 0.111 80);
-  --tag-green: oklch(0.62 0.120 150);
-  --tag-green-soft: oklch(0.95 0.040 150);
+  --tag-green: oklch(0.62 0.12 150);
+  --tag-green-soft: oklch(0.95 0.04 150);
   --tag-green-ink: oklch(0.43 0.102 150);
-  --tag-teal: oklch(0.62 0.100 190);
-  --tag-teal-soft: oklch(0.95 0.040 190);
+  --tag-teal: oklch(0.62 0.1 190);
+  --tag-teal-soft: oklch(0.95 0.04 190);
   --tag-teal-ink: oklch(0.43 0.085 190);
-  --tag-blue: oklch(0.62 0.130 250);
-  --tag-blue-soft: oklch(0.95 0.040 250);
+  --tag-blue: oklch(0.62 0.13 250);
+  --tag-blue-soft: oklch(0.95 0.04 250);
   --tag-blue-ink: oklch(0.43 0.111 250);
-  --tag-indigo: oklch(0.62 0.140 275);
-  --tag-indigo-soft: oklch(0.95 0.040 275);
+  --tag-indigo: oklch(0.62 0.14 275);
+  --tag-indigo-soft: oklch(0.95 0.04 275);
   --tag-indigo-ink: oklch(0.43 0.119 275);
-  --tag-violet: oklch(0.62 0.140 300);
-  --tag-violet-soft: oklch(0.95 0.040 300);
+  --tag-violet: oklch(0.62 0.14 300);
+  --tag-violet-soft: oklch(0.95 0.04 300);
   --tag-violet-ink: oklch(0.43 0.119 300);
-  --tag-pink: oklch(0.62 0.140 350);
-  --tag-pink-soft: oklch(0.95 0.040 350);
+  --tag-pink: oklch(0.62 0.14 350);
+  --tag-pink-soft: oklch(0.95 0.04 350);
   --tag-pink-ink: oklch(0.43 0.119 350);
 }
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: "Geist Variable", sans-serif;
   --text-title: 1.625rem;
   --text-title--line-height: 1.15;
   --text-title--letter-spacing: -0.03em;
@@ -280,7 +280,8 @@
   }
   --animate-focus-breathe: focus-breathe 2.4s ease-in-out infinite;
   @keyframes focus-breathe {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 1;
       transform: scale(1);
     }
@@ -452,7 +453,7 @@
   --tag-green: oklch(0.74 0.108 150);
   --tag-green-soft: oklch(0.29 0.048 150);
   --tag-green-ink: oklch(0.87 0.066 150);
-  --tag-teal: oklch(0.74 0.090 190);
+  --tag-teal: oklch(0.74 0.09 190);
   --tag-teal-soft: oklch(0.29 0.048 190);
   --tag-teal-ink: oklch(0.87 0.055 190);
   --tag-blue: oklch(0.74 0.117 250);
@@ -492,23 +493,32 @@
   }
 
   :is(
-      a[href],
-      button,
-      summary,
-      select,
-      label[for],
-      input:is([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="submit"], [type="button"], [type="reset"]),
-      [role="button"],
-      [role="link"],
-      [role="tab"],
-      [role="menuitem"],
-      [role="menuitemcheckbox"],
-      [role="menuitemradio"],
-      [role="option"],
-      [role="switch"],
-      [role="checkbox"],
-      [role="radio"]
-    ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
+    a[href],
+    button,
+    summary,
+    select,
+    label[for],
+    input:is(
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="file"],
+      [type="color"],
+      [type="submit"],
+      [type="button"],
+      [type="reset"]
+    ),
+    [role="button"],
+    [role="link"],
+    [role="tab"],
+    [role="menuitem"],
+    [role="menuitemcheckbox"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"]
+  ):not(:disabled, [aria-disabled="true"], [data-disabled]) {
     cursor: pointer;
   }
 
@@ -575,7 +585,18 @@
   }
 }
 
-:is(button, a[href], summary, [role="button"], [role="tab"], [role="checkbox"], [role="switch"], [role="radio"], [role="slider"], [role="tabpanel"]):focus-visible {
+:is(
+  button,
+  a[href],
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="checkbox"],
+  [role="switch"],
+  [role="radio"],
+  [role="slider"],
+  [role="tabpanel"]
+):focus-visible {
   outline: 1px solid var(--ring);
   outline-offset: 0;
 }
@@ -605,11 +626,7 @@
 
 .profile-band {
   background:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 9px,
-      color-mix(in oklch, var(--tag-solid) 22%, transparent) 9px 10px
-    ),
+    repeating-linear-gradient(90deg, transparent 0 9px, color-mix(in oklch, var(--tag-solid) 22%, transparent) 9px 10px),
     linear-gradient(to top, color-mix(in oklch, var(--tag-solid) 30%, var(--tag-soft)), var(--tag-soft));
 }
 

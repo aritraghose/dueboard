@@ -20,10 +20,7 @@ export const TASK_PAGE_SIZE_DEFAULT = 50;
 export const TASK_PAGE_SIZE_MAX = 100;
 export const TASK_CURSOR_MAX_LENGTH = 128;
 
-export const TaskTitle = Schema.String.check(
-  Schema.isTrimmed(),
-  Schema.isBetweenLength(1, TASK_TITLE_MAX_LENGTH),
-);
+export const TaskTitle = Schema.String.check(Schema.isTrimmed(), Schema.isBetweenLength(1, TASK_TITLE_MAX_LENGTH));
 export const TaskDescription = Schema.String.check(Schema.isMaxLength(TASK_DESCRIPTION_MAX_LENGTH));
 export const TaskImportance = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: TASK_IMPORTANCE_MAX }));
 export const TaskExpectedMinutes = Schema.Int.check(
@@ -66,9 +63,7 @@ export const ListUnscheduledTasksInput = Schema.Struct({
 export type ListUnscheduledTasksInput = typeof ListUnscheduledTasksInput.Type;
 
 export const ListTasksInput = Schema.Struct({
-  status: Schema.optionalKey(
-    Schema.Array(TaskStatus).check(Schema.isMaxLength(TASK_STATUS.length)),
-  ),
+  status: Schema.optionalKey(Schema.Array(TaskStatus).check(Schema.isMaxLength(TASK_STATUS.length))),
   tagIds: Schema.optionalKey(Schema.Array(Id).check(Schema.isMaxLength(MAX_TAGS_PER_USER))),
   from: Schema.optionalKey(LocalDate),
   to: Schema.optionalKey(LocalDate),

@@ -29,7 +29,9 @@ export const receiptFor = (call: DomainCall, value: unknown, text: string = call
   return {
     text,
     verb: call.verb,
-    ...(call.item && id ? { item: { kind: call.item.kind, id, ...(call.item.title ? { title: call.item.title } : {}) } } : {}),
+    ...(call.item && id
+      ? { item: { kind: call.item.kind, id, ...(call.item.title ? { title: call.item.title } : {}) } }
+      : {}),
   };
 };
 
@@ -131,11 +133,7 @@ export class PendingActions {
 
   settle(id: string, status: Exclude<TiboConfirmStatus, "pending">): PendingAction | null {
     const row = this.sql
-      .exec<Row>(
-        `UPDATE pending_actions SET status = ? WHERE id = ? AND status = 'pending' RETURNING *`,
-        status,
-        id,
-      )
+      .exec<Row>(`UPDATE pending_actions SET status = ? WHERE id = ? AND status = 'pending' RETURNING *`, status, id)
       .toArray()[0];
     return row ? toAction(row) : null;
   }

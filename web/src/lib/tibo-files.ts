@@ -1,7 +1,7 @@
 import {
   TIBO_AGENT,
-  TIBO_FILES_PATH,
   TIBO_FILE_MAX_BYTES,
+  TIBO_FILES_PATH,
   type TiboAttachment,
   type TiboAttachmentKind,
   type TiboUpload,

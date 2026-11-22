@@ -2,14 +2,12 @@ import { and, eq, sql } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { AiUsageEvents, AiUsageTotals, UserSettings } from "../../schema.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
 import { FALLBACK_TIME_ZONE, isValidTimeZone } from "../core/dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
 import { AI_UNITS_PER_CHARGE_MAX, type AiUsageReason } from "./model.ts";
 import { fits, limitFor, periodOf, toAiUsage } from "./usage-rules.ts";
 
-export class AiQuota extends Context.Service<AiQuota, { readonly monthlyMessages: number }>()(
-  "api/AiQuota",
-) {}
+export class AiQuota extends Context.Service<AiQuota, { readonly monthlyMessages: number }>()("api/AiQuota") {}
 
 const accountOf = Effect.fn("usage.accountOf")(function* (db: Executor, userId: string) {
   const [row] = yield* db
@@ -24,11 +22,7 @@ const accountOf = Effect.fn("usage.accountOf")(function* (db: Executor, userId: 
   };
 });
 
-const usedUnits = Effect.fn("usage.usedUnits")(function* (
-  db: Executor,
-  userId: string,
-  period: string,
-) {
+const usedUnits = Effect.fn("usage.usedUnits")(function* (db: Executor, userId: string, period: string) {
   const [row] = yield* db
     .select({ units: AiUsageTotals.units })
     .from(AiUsageTotals)

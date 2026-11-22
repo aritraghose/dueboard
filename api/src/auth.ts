@@ -3,13 +3,13 @@ import { CloudflareHyperdrive } from "@alchemy.run/better-auth/CloudflareHyperdr
 import { ALCHEMY_DEV } from "alchemy";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { username } from "better-auth/plugins";
-import type {} from "zod/v4/core";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
+import type {} from "zod/v4/core";
 import { Hyperdrive, NeonDatabase } from "./database.ts";
 import { USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH } from "./domain/model.ts";
 import { isValidUsername } from "./domain/social/username-rules.ts";
@@ -19,17 +19,13 @@ const makeAuth = Effect.gen(function* () {
   if (!globalThis.__ALCHEMY_RUNTIME__ && !(yield* ALCHEMY_DEV)) {
     if (Option.isNone(baseURL)) {
       return yield* Effect.die(
-        new Error(
-          "AUTH_BASE_URL is required to deploy: set it in api/.env (or --env-file) to the website's origin.",
-        ),
+        new Error("AUTH_BASE_URL is required to deploy: set it in api/.env (or --env-file) to the website's origin."),
       );
     }
     const url = URL.canParse(baseURL.value) ? new URL(baseURL.value) : undefined;
     if (url?.protocol !== "https:" || url.origin !== baseURL.value) {
       return yield* Effect.die(
-        new Error(
-          `AUTH_BASE_URL must be an https origin without a path or trailing slash, got "${baseURL.value}".`,
-        ),
+        new Error(`AUTH_BASE_URL must be an https origin without a path or trailing slash, got "${baseURL.value}".`),
       );
     }
   }

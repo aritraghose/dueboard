@@ -44,13 +44,11 @@ const formatterFor = (timeZone: string) => {
 
 export const localDateOf = (instant: Date, timeZone: string): LocalDate => {
   const parts = formatterFor(timeZone).formatToParts(instant);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((p) => p.type === type)?.value ?? "";
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
   return `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}` as LocalDate;
 };
 
-export const todayIn = (timeZone: string, now: Date = new Date()): LocalDate =>
-  localDateOf(now, timeZone);
+export const todayIn = (timeZone: string, now: Date = new Date()): LocalDate => localDateOf(now, timeZone);
 
 const toUtc = (date: LocalDate): Date => {
   const [y, m, d] = date.split("-").map(Number) as [number, number, number];
@@ -109,16 +107,8 @@ const clockFormatterFor = (timeZone: string) => {
 
 const offsetAt = (instant: number, timeZone: string): number => {
   const parts = clockFormatterFor(timeZone).formatToParts(new Date(instant));
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const wall = Date.UTC(
-    part("year"),
-    part("month") - 1,
-    part("day"),
-    part("hour"),
-    part("minute"),
-    part("second"),
-  );
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wall = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
   return wall - Math.floor(instant / 1000) * 1000;
 };
 

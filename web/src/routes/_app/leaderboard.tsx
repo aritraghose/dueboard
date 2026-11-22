@@ -6,7 +6,7 @@ import {
   type LeaderboardScope,
 } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { TrophyIcon } from "lucide-react";
 import { Page, PageEmpty, PageHeader } from "@/components/page";
@@ -34,9 +34,7 @@ export const Route = createFileRoute("/_app/leaderboard")({
   validateSearch: (search: Record<string, unknown>): LeaderboardSearch => ({
     scope: search.scope === "public" ? "public" : undefined,
     period:
-      search.period === "all" || search.period === "month" || search.period === "today"
-        ? search.period
-        : undefined,
+      search.period === "all" || search.period === "month" || search.period === "today" ? search.period : undefined,
   }),
   head: () => ({ meta: [{ title: "Leaderboard · Dueboard" }] }),
   component: LeaderboardPage,
@@ -107,7 +105,12 @@ function Board({ scope, period }: { scope: LeaderboardScope; period: Leaderboard
 
   if (AsyncResult.isFailure(result)) {
     return (
-      <PageEmpty icon={TrophyIcon} title="Couldn't load the leaderboard" description="Check your connection, then try again." className="min-h-56 flex-none rounded-xl border">
+      <PageEmpty
+        icon={TrophyIcon}
+        title="Couldn't load the leaderboard"
+        description="Check your connection, then try again."
+        className="min-h-56 flex-none rounded-xl border"
+      >
         <Button variant="outline" onClick={() => void reload()}>
           Try again
         </Button>

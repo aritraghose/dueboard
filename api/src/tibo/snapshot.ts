@@ -1,6 +1,6 @@
 import type { ContextSection } from "./context.ts";
 import { addDays, weekdayOf } from "./dates.ts";
-import { importanceLabel, minutesLabel, sessionView, type DayJson, type SessionJson, type TaskJson } from "./views.ts";
+import { type DayJson, importanceLabel, minutesLabel, type SessionJson, sessionView, type TaskJson } from "./views.ts";
 
 const LIST_MAX = 10;
 

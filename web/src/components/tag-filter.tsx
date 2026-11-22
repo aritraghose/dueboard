@@ -26,14 +26,20 @@ export function TagFilter({
           variant={picked.length > 0 ? "secondary" : "ghost"}
           size="sm"
           data-tag={only?.color}
-          aria-label={picked.length > 0 ? `Filtered by ${picked.map((tag) => tag.name).join(", ")}. Change tags` : "Filter by tag"}
+          aria-label={
+            picked.length > 0 ? `Filtered by ${picked.map((tag) => tag.name).join(", ")}. Change tags` : "Filter by tag"
+          }
         >
           {picked.length === 0 ? (
             <TagIcon />
           ) : (
             <span aria-hidden="true" className="flex -space-x-1">
               {picked.slice(0, 3).map((tag) => (
-                <span key={tag.id} data-tag={tag.color} className="size-2.5 rounded-full bg-tag ring-2 ring-secondary" />
+                <span
+                  key={tag.id}
+                  data-tag={tag.color}
+                  className="size-2.5 rounded-full bg-tag ring-2 ring-secondary"
+                />
               ))}
             </span>
           )}

@@ -1,5 +1,5 @@
 import type { Tag, Task } from "@dueboard/api/rpc";
-import { type LocalDate, daysBetween, formatDay, relativeDay } from "@/lib/dates";
+import { daysBetween, formatDay, type LocalDate, relativeDay } from "@/lib/dates";
 
 export const IMPORTANCE_LABEL = ["Low", "Minor", "Medium", "High", "Critical"] as const;
 
@@ -43,9 +43,7 @@ export const groupByDay = (
 };
 
 export const upcomingDay = (task: Task, today: LocalDate): LocalDate | null => {
-  const days = [task.assignedDate, task.deadlineDate].filter(
-    (day): day is LocalDate => day !== null && day >= today,
-  );
+  const days = [task.assignedDate, task.deadlineDate].filter((day): day is LocalDate => day !== null && day >= today);
   return days.sort()[0] ?? null;
 };
 
@@ -55,10 +53,10 @@ export const sortTasks = <T extends Task>(
   direction: "asc" | "desc",
 ): readonly T[] => {
   if (sort === "default") return tasks;
-  const valueOf = (task: Task) => (sort === "importance" ? task.importance : task.expectedMinutes);
+  const sortValue = (task: Task) => (sort === "importance" ? task.importance : task.expectedMinutes);
   const sign = direction === "asc" ? 1 : -1;
   return tasks
-    .map((task, index) => ({ task, index, value: valueOf(task) }))
+    .map((task, index) => ({ task, index, value: sortValue(task) }))
     .sort((a, b) => {
       if (a.value === null || b.value === null) {
         if (a.value === b.value) return a.index - b.index;

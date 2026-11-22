@@ -1,4 +1,4 @@
-import { SocialStatus, type Person } from "@dueboard/api/rpc";
+import { type Person, SocialStatus } from "@dueboard/api/rpc";
 import { UsersRoundIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { ConnectionActions } from "@/components/connection-actions";
@@ -68,9 +68,7 @@ export function PeopleList({
   people,
   empty,
 }: {
-  people:
-    | readonly { readonly key: string; readonly person: Person; readonly status: SocialStatus }[]
-    | undefined;
+  people: readonly { readonly key: string; readonly person: Person; readonly status: SocialStatus }[] | undefined;
   empty: string;
 }) {
   if (!people) return <PeopleSkeleton />;

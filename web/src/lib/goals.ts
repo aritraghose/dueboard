@@ -1,5 +1,5 @@
 import { type Goal, type GoalLinkItem, goalPercent } from "@dueboard/api/rpc";
-import { type LocalDate, daysBetween } from "@/lib/dates";
+import { daysBetween, type LocalDate } from "@/lib/dates";
 
 export function withShownValue(goal: Goal, value: number): Goal {
   if (goal.progressMode === "slider") return { ...goal, progressPercent: value } as Goal;

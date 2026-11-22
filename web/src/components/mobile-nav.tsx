@@ -2,9 +2,9 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useRef } from "react";
 import { NavIcon } from "@/components/tibo-panel";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { type MenuUser, UserAvatar, UserMenuContent } from "@/components/user-menu";
 import { useTibo } from "@/hooks/use-tibo";
 import { MAIN_NAV } from "@/lib/nav";
-import { type MenuUser, UserAvatar, UserMenuContent } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
 
 const SWIPE_UP_PX = 36;
@@ -22,10 +22,7 @@ export function MobileNav({ user, className }: { user: MenuUser; className?: str
   return (
     <nav
       aria-label="Primary"
-      className={cn(
-        "fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40",
-        className,
-      )}
+      className={cn("fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40", className)}
       onTouchStart={(event) => {
         const touch = event.touches[0];
         start.current = touch ? { x: touch.clientX, y: touch.clientY } : null;

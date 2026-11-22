@@ -10,7 +10,7 @@ import type {
 } from "@dueboard/api/rpc";
 import { goalValue } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import * as Effect from "effect/Effect";
+import type * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Atom from "effect/reactivity/Atom";

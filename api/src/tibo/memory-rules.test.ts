@@ -3,17 +3,17 @@ import { startOfDayIn } from "./dates.ts";
 import { devSeedThread } from "./dev-seed.ts";
 import {
   CHUNK_MESSAGES,
+  type ChunkInput,
+  childLevel,
   chunkMessages,
   cosine,
   ftsQuery,
-  childLevel,
   parentPeriods,
   parseModelJson,
   periodEnd,
   periodLabel,
   periodStart,
   truncateToTokens,
-  type ChunkInput,
 } from "./memory-rules.ts";
 
 describe("summary periods", () => {
@@ -77,7 +77,10 @@ describe("chunkMessages", () => {
 
   test("caps a chunk's length", () => {
     const long = "word ".repeat(200);
-    const chunks = chunkMessages([message(1, "2025-03-02", long), message(2, "2025-03-02", long), message(3, "2025-03-02", long)], true);
+    const chunks = chunkMessages(
+      [message(1, "2025-03-02", long), message(2, "2025-03-02", long), message(3, "2025-03-02", long)],
+      true,
+    );
     expect(chunks.length).toBeGreaterThan(1);
   });
 
@@ -139,7 +142,9 @@ describe("dev seed", () => {
   test("oldest first, user first each day, bubbles share a turn", () => {
     const thread = devSeedThread();
     expect(thread.length).toBeGreaterThan(50);
-    expect(thread.every((message, index) => index === 0 || message.createdAt > thread[index - 1]!.createdAt)).toBe(true);
+    expect(thread.every((message, index) => index === 0 || message.createdAt > thread[index - 1]!.createdAt)).toBe(
+      true,
+    );
     expect(thread[0]!.role).toBe("user");
     const [, first, second] = thread;
     expect(first!.role).toBe("tibo");

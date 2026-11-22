@@ -1,8 +1,8 @@
 import type { Person } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { ClientOnly, Link, createFileRoute } from "@tanstack/react-router";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
+import { ClientOnly, createFileRoute, Link } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { MessageCircleQuestionIcon, UserRoundXIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AskThread, HeaderPill, ProfileButton } from "@/components/ask-thread";
@@ -14,9 +14,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { askPageAtom } from "@/hooks/use-ask";
 import { useMounted } from "@/hooks/use-mounted";
 import { useSocialActions } from "@/hooks/use-social";
-import { lastCheckedUser, rememberCheckedUser, type OnboardedUser } from "@/lib/session-cache";
-import { readSidebarOpen } from "@/lib/sidebar-state";
 import { canonical, seo } from "@/lib/seo";
+import { lastCheckedUser, type OnboardedUser, rememberCheckedUser } from "@/lib/session-cache";
+import { readSidebarOpen } from "@/lib/sidebar-state";
 import { getSessionUser } from "../session.ts";
 
 export const Route = createFileRoute("/@{$username}_/ask")({
@@ -80,7 +80,9 @@ function AskView({ username, signedIn, height }: { username: string; signedIn: b
           icon={UserRoundXIcon}
           title={missing ? "This Ask page isn't available" : "Couldn't load this Ask page"}
           description={
-            missing ? `There's no one called @${username}, or you can't see their page.` : "Check your connection, then try again."
+            missing
+              ? `There's no one called @${username}, or you can't see their page.`
+              : "Check your connection, then try again."
           }
         >
           {missing ? (

@@ -2,7 +2,7 @@ import type { FocusSession, Privacy } from "@dueboard/api/rpc";
 import { Link } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
-import { CheckIcon, PauseIcon, PlayIcon, PlusIcon, SquareIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, PauseIcon, PlayIcon, PlusIcon, SquareIcon, Trash2Icon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -34,17 +34,17 @@ import {
 import { failureMessage } from "@/hooks/use-tasks";
 import { formatTime } from "@/lib/dates";
 import {
+  cleanLabel,
   DEFAULT_MINUTES,
   EXTEND_PRESETS,
-  SESSION_LABEL_MAX_LENGTH,
-  SESSION_MINUTES_MAX,
-  START_PRESETS,
-  STATUS_LABEL,
-  cleanLabel,
   formatCountdown,
   formatFocused,
   formatMinutes,
   parseMinutes,
+  SESSION_LABEL_MAX_LENGTH,
+  SESSION_MINUTES_MAX,
+  START_PRESETS,
+  STATUS_LABEL,
   sessionName,
 } from "@/lib/sessions";
 import { cn } from "@/lib/utils";
@@ -58,8 +58,7 @@ export function SessionWidget({ sessions }: { sessions: readonly FocusSession[] 
   const remaining = active.remainingAt(now);
   const { reload } = useSessionActions();
 
-  const done =
-    finished && (!session || (session.id === finished.id && remaining === 0)) ? finished : null;
+  const done = finished && (!session || (session.id === finished.id && remaining === 0)) ? finished : null;
   const others = (sessions ?? []).filter((item) => item.id !== session?.id && item.id !== done?.id);
 
   let main: ReactNode;
@@ -87,7 +86,13 @@ export function SessionWidget({ sessions }: { sessions: readonly FocusSession[] 
   } else if (session && !starting) {
     main = <ActiveView session={session} remaining={remaining} now={now} onNew={() => setStarting(true)} />;
   } else {
-    main = <StartForm active={session} onStarted={() => setStarting(false)} onCancel={session ? () => setStarting(false) : undefined} />;
+    main = (
+      <StartForm
+        active={session}
+        onStarted={() => setStarting(false)}
+        onCancel={session ? () => setStarting(false) : undefined}
+      />
+    );
   }
 
   return (
@@ -116,14 +121,12 @@ function useRememberedMinutes() {
     try {
       const stored = parseMinutes(localStorage.getItem(MINUTES_KEY) ?? "");
       if (stored) setMinutes(stored);
-    } catch {
-    }
+    } catch {}
   }, []);
   const remember = (value: number) => {
     try {
       localStorage.setItem(MINUTES_KEY, String(value));
-    } catch {
-    }
+    } catch {}
   };
   return [minutes, setMinutes, remember] as const;
 }
@@ -307,7 +310,9 @@ function ReplaceDialog({
             {current && (
               <>
                 “{sessionName(current)}” is {current.status === "paused" ? "paused" : "running"} with{" "}
-                <span className="font-medium text-foreground tabular-nums">{formatCountdown(remainingAt(current, now))}</span>{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {formatCountdown(remainingAt(current, now))}
+                </span>{" "}
                 left. Starting a new session stops it, and it's saved as stopped.
               </>
             )}
@@ -352,7 +357,11 @@ function ActiveView({
   const share = planned > 0 ? Math.min(1, remaining / planned) : 0;
   const room = SESSION_MINUTES_MAX - session.plannedMinutes;
 
-  const act = async (kind: "toggle" | "extend" | "stop", call: () => Promise<Exit.Exit<unknown, unknown>>, failure: string) => {
+  const act = async (
+    kind: "toggle" | "extend" | "stop",
+    call: () => Promise<Exit.Exit<unknown, unknown>>,
+    failure: string,
+  ) => {
     setBusy(kind);
     const exit = await call();
     setBusy(null);
@@ -367,7 +376,10 @@ function ActiveView({
       <p className="flex max-w-full items-center gap-2 text-sm text-muted-foreground">
         <span
           aria-hidden="true"
-          className={cn("size-2 shrink-0 rounded-full", running ? "animate-focus-breathe bg-focus" : "bg-muted-foreground/50")}
+          className={cn(
+            "size-2 shrink-0 rounded-full",
+            running ? "animate-focus-breathe bg-focus" : "bg-muted-foreground/50",
+          )}
         />
         <span className="truncate">{running ? sessionName(session) : `Paused: ${sessionName(session)}`}</span>
       </p>
@@ -455,8 +467,8 @@ function ActiveView({
             <AlertDialogTitle>Stop this session?</AlertDialogTitle>
             <AlertDialogDescription>
               You've focused {formatFocused({ ...session, elapsedMs: planned - remaining })} of{" "}
-              {formatMinutes(session.plannedMinutes)}. It's saved as stopped, and only completed sessions count on
-              your activity graph.
+              {formatMinutes(session.plannedMinutes)}. It's saved as stopped, and only completed sessions count on your
+              activity graph.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -553,7 +565,10 @@ function DoneView({ session, onAgain }: { session: FocusSession; onAgain: () => 
       <span className="relative grid size-11 place-items-center rounded-full bg-success text-background">
         {!reduced && (
           <>
-            <span aria-hidden="true" className="absolute inset-0 animate-habit-burst rounded-full border-2 border-success" />
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 animate-habit-burst rounded-full border-2 border-success"
+            />
             <span
               aria-hidden="true"
               className="absolute inset-0 animate-habit-burst rounded-full border border-success [animation-delay:160ms]"
@@ -613,9 +628,7 @@ export function SessionList({
             {formatTime(session.startedAt, timeZone)}
           </span>
           <div className="flex min-w-0 flex-1 items-center gap-3 max-sm:flex-col max-sm:items-start max-sm:gap-0">
-            <span
-              className={cn("min-w-0 truncate sm:flex-1 max-sm:w-full", !session.label && "text-muted-foreground")}
-            >
+            <span className={cn("min-w-0 truncate sm:flex-1 max-sm:w-full", !session.label && "text-muted-foreground")}>
               {sessionName(session)}
             </span>
             <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
@@ -731,7 +744,12 @@ export function SessionSync() {
     const base = document.title.replace(TITLE_PREFIX, "");
     document.title = countdown ? `${countdown} · ${base}` : base;
   }, [countdown]);
-  useEffect(() => () => void (document.title = document.title.replace(TITLE_PREFIX, "")), []);
+  useEffect(
+    () => () => {
+      document.title = document.title.replace(TITLE_PREFIX, "");
+    },
+    [],
+  );
 
   return null;
 }

@@ -111,7 +111,9 @@ export class ProactiveStore {
   }
 
   get(key: AgentStateKey): string | null {
-    return this.sql.exec<{ value: string }>(`SELECT value FROM agent_state WHERE key = ?`, key).toArray()[0]?.value ?? null;
+    return (
+      this.sql.exec<{ value: string }>(`SELECT value FROM agent_state WHERE key = ?`, key).toArray()[0]?.value ?? null
+    );
   }
 
   getNumber(key: AgentStateKey): number | null {

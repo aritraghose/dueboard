@@ -1,5 +1,5 @@
 import type { TiboMemory, TiboMemoryKind } from "@dueboard/api/tibo";
-import { CalendarCheck2, CalendarClock, Heart, Info, Trash2, UserRound, type LucideIcon } from "lucide-react";
+import { CalendarCheck2, CalendarClock, Heart, Info, type LucideIcon, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,9 @@ export function TiboMemoryList({ labelledBy, compact = false }: { labelledBy?: s
     );
   }
   if (state.status !== "ready") {
-    return <p className="py-4 text-sm text-muted-foreground">Couldn't load what Tibo remembers. Reload to try again.</p>;
+    return (
+      <p className="py-4 text-sm text-muted-foreground">Couldn't load what Tibo remembers. Reload to try again.</p>
+    );
   }
   if (memories.length === 0) {
     return (

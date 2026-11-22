@@ -1,4 +1,5 @@
 import {
+  type AiUsage,
   ASK_DOCUMENT_MAX_BYTES,
   ASK_DOCUMENT_MAX_LENGTH,
   ASK_DOCUMENTS_MAX,
@@ -6,26 +7,25 @@ import {
   ASK_MONTHLY_ANSWER_CAP_MAX,
   ASK_QUESTION_RETENTION_DAYS,
   ASK_SHARED_CONTEXT_MAX_LENGTH,
-  PRIVACY,
-  RELAY_POLICY,
-  TIBO_DEADLINE_NUDGE_TIME,
-  TIBO_EVENING_TIMES,
-  TIBO_MORNING_TIMES,
-  type AiUsage,
   type AskQuestion,
   type AskSettings,
   type AskSettingsPatch,
+  PRIVACY,
   type Privacy,
+  RELAY_POLICY,
   type RelayPolicy,
-  type Settings as UserSettings,
   type SettingsPatch,
+  TIBO_DEADLINE_NUDGE_TIME,
+  TIBO_EVENING_TIMES,
+  TIBO_MORNING_TIMES,
+  type Settings as UserSettings,
 } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { ExternalLink, FileText, FileUp, Trash2, UserRound } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Page, PageHeader } from "@/components/page";
 import { PeopleList, PeopleLoadFailed, statusOf } from "@/components/people-lists";
@@ -42,12 +42,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -56,16 +50,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { resetLine, useAiUsage } from "@/hooks/use-ai-usage";
-import { CONVERT_ERROR, askQuestionsAtom, askSettingsAtom, useAskDocuments, useUpdateAskSettings } from "@/hooks/use-ask";
+import {
+  askQuestionsAtom,
+  askSettingsAtom,
+  CONVERT_ERROR,
+  useAskDocuments,
+  useUpdateAskSettings,
+} from "@/hooks/use-ask";
 import { useBootstrap, useTimeZone } from "@/hooks/use-bootstrap";
+import { useMounted } from "@/hooks/use-mounted";
 import { useUpdateSettings } from "@/hooks/use-settings";
 import { socialOverviewAtom, useSocialActions } from "@/hooks/use-social";
 import { failureMessage, useRun } from "@/hooks/use-tasks";
-import { useMounted } from "@/hooks/use-mounted";
 import { PRIVACY_ICON } from "@/lib/notes";
 import { PRIVACY_LABEL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
@@ -282,11 +288,7 @@ function General() {
 
   return (
     <Panel>
-      <Row
-        id="default-privacy"
-        title="Who sees new items"
-        description="You can change each item later."
-      >
+      <Row id="default-privacy" title="Who sees new items" description="You can change each item later.">
         <Choice
           labelledBy="default-privacy"
           options={PRIVACY_OPTIONS}
@@ -298,11 +300,7 @@ function General() {
           }}
         />
       </Row>
-      <Row
-        inline
-        title="Share new items to Live"
-        description="Private items show without details."
-      >
+      <Row inline title="Share new items to Live" description="Private items show without details.">
         <div className="flex items-center gap-2.5">
           <Label htmlFor="default-share" className="text-sm text-muted-foreground max-sm:sr-only">
             {(shownShare ?? true) ? "On Live" : "Off Live"}
@@ -335,10 +333,7 @@ function Connections() {
 
   return (
     <Panel>
-      <Row
-        title="Blocked accounts"
-        description="Accounts you block appear here."
-      >
+      <Row title="Blocked accounts" description="Accounts you block appear here.">
         <div className="w-full">
           {AsyncResult.isFailure(result) && !data ? (
             <PeopleLoadFailed what="the people you blocked" onRetry={() => void reload()} />
@@ -404,12 +399,7 @@ function Tibo() {
 
 type CheckInSettings = Pick<
   UserSettings,
-  | "tiboProactive"
-  | "tiboMorningPlan"
-  | "tiboMorningTime"
-  | "tiboDeadlineNudges"
-  | "tiboHabitCheck"
-  | "tiboEveningTime"
+  "tiboProactive" | "tiboMorningPlan" | "tiboMorningTime" | "tiboDeadlineNudges" | "tiboHabitCheck" | "tiboEveningTime"
 >;
 
 const clockLabel = (time: string, short = false) => {
@@ -444,7 +434,12 @@ function TiboCheckIns() {
     />
   );
 
-  const timeSelect = (key: "tiboMorningTime" | "tiboEveningTime", times: readonly string[], label: string, enabled: boolean) => (
+  const timeSelect = (
+    key: "tiboMorningTime" | "tiboEveningTime",
+    times: readonly string[],
+    label: string,
+    enabled: boolean,
+  ) => (
     <Select
       value={shown?.[key]}
       disabled={!shown || !on || !enabled}
@@ -497,7 +492,12 @@ function TiboCheckIns() {
         <CheckInRow
           title="Evening habit check"
           description="If habits are still due."
-          time={timeSelect("tiboEveningTime", TIBO_EVENING_TIMES, "Evening habit check time", shown?.tiboHabitCheck ?? false)}
+          time={timeSelect(
+            "tiboEveningTime",
+            TIBO_EVENING_TIMES,
+            "Evening habit check time",
+            shown?.tiboHabitCheck ?? false,
+          )}
           toggle={kindSwitch("tiboHabitCheck", "Evening habit check")}
         />
       </div>
@@ -538,7 +538,12 @@ const hourOf = (time: string) => {
 function CheckInDay({ settings }: { settings: CheckInSettings }) {
   const marks = [
     settings.tiboMorningPlan && { key: "morning", time: settings.tiboMorningTime, name: "morning plan", above: false },
-    settings.tiboDeadlineNudges && { key: "deadline", time: TIBO_DEADLINE_NUDGE_TIME, name: "deadline nudge", above: true },
+    settings.tiboDeadlineNudges && {
+      key: "deadline",
+      time: TIBO_DEADLINE_NUDGE_TIME,
+      name: "deadline nudge",
+      above: true,
+    },
     settings.tiboHabitCheck && { key: "evening", time: settings.tiboEveningTime, name: "habit check", above: false },
   ].filter((mark) => mark !== false);
   const description =
@@ -772,8 +777,8 @@ function AskWriting({ settings, saving, save }: { settings: AskSettings; saving:
       <div className="flex flex-col gap-0.5 py-4">
         <h2 className="font-medium">What your Ask page knows</h2>
         <p className="text-sm text-muted-foreground">
-          Only what you write here is used. It can't see your tasks, habits, goals, notes, sessions, chats with Tibo
-          or anything Tibo remembers. When something isn't covered, it says it doesn't know and points people to you.
+          Only what you write here is used. It can't see your tasks, habits, goals, notes, sessions, chats with Tibo or
+          anything Tibo remembers. When something isn't covered, it says it doesn't know and points people to you.
         </p>
       </div>
       <AskField
@@ -952,9 +957,7 @@ function AskFiles({ settings }: { settings: AskSettings }) {
         </p>
       )}
       {settings.documents.length === 0 && !reading ? (
-        <p className="pb-4 text-sm text-muted-foreground">
-          No files yet. Up to {ASK_DOCUMENTS_MAX} PDFs, 4 MB each.
-        </p>
+        <p className="pb-4 text-sm text-muted-foreground">No files yet. Up to {ASK_DOCUMENTS_MAX} PDFs, 4 MB each.</p>
       ) : (
         <ul aria-labelledby="ask-files" className="flex flex-col divide-y pb-2">
           {settings.documents.map((document) => (
@@ -986,8 +989,8 @@ function AskFiles({ settings }: { settings: AskSettings }) {
           <DialogHeader>
             <DialogTitle>Check the text from {review?.name}</DialogTitle>
             <DialogDescription>
-              This is what your Ask page will answer from, and visitors can be told any of it. Remove anything
-              private, like a phone number or address, before you save.
+              This is what your Ask page will answer from, and visitors can be told any of it. Remove anything private,
+              like a phone number or address, before you save.
             </DialogDescription>
           </DialogHeader>
           {review?.truncated && (
@@ -1108,7 +1111,10 @@ function AskQuestions() {
         ) : (
           <ul aria-label="Loading questions" className="flex flex-col gap-3 pb-5">
             {[0, 1].map((card) => (
-              <li key={card} className="flex flex-col gap-3 rounded-xl border border-bubble-tibo-border/70 bg-bubble-tibo/60 p-4">
+              <li
+                key={card}
+                className="flex flex-col gap-3 rounded-xl border border-bubble-tibo-border/70 bg-bubble-tibo/60 p-4"
+              >
                 <div className="flex items-center gap-2.5">
                   <Skeleton className="size-8 rounded-full bg-tibo-soft" />
                   <div className="flex flex-1 flex-col gap-1.5">
@@ -1162,7 +1168,10 @@ function AskQuestionCard({ question }: { question: AskQuestion }) {
             <span className="truncate text-sm font-semibold">Logged-out user</span>
           </span>
         )}
-        <time dateTime={question.createdAt.toISOString()} className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
+        <time
+          dateTime={question.createdAt.toISOString()}
+          className="shrink-0 text-xs whitespace-nowrap text-muted-foreground"
+        >
           {askedAt(question.createdAt)}
         </time>
       </div>
@@ -1192,11 +1201,7 @@ function Account() {
 
   return (
     <Panel>
-      <Row
-        inline
-        title="Delete your account"
-        description="Deletes everything. This can't be undone."
-      >
+      <Row inline title="Delete your account" description="Deletes everything. This can't be undone.">
         <Button variant="destructive" onClick={() => setOpen(true)}>
           Delete account
         </Button>
@@ -1225,9 +1230,7 @@ function DeleteAccountDialog({
     if (!matches || deleting) return;
     setDeleting(true);
     setError(null);
-    const exit = await run(
-      ApiClient.use((client) => client("DeleteAccount", { confirmUsername: typed })),
-    );
+    const exit = await run(ApiClient.use((client) => client("DeleteAccount", { confirmUsername: typed })));
     if (Exit.isFailure(exit)) {
       setDeleting(false);
       setError(failureMessage(exit, "Couldn't delete your account."));

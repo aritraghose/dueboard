@@ -1,4 +1,10 @@
-import { HABIT_DESCRIPTION_MAX_LENGTH, HABIT_TITLE_MAX_LENGTH, PRIVACY, type Habit, type Privacy } from "@dueboard/api/rpc";
+import {
+  HABIT_DESCRIPTION_MAX_LENGTH,
+  HABIT_TITLE_MAX_LENGTH,
+  type Habit,
+  PRIVACY,
+  type Privacy,
+} from "@dueboard/api/rpc";
 import * as Exit from "effect/Exit";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
@@ -15,7 +21,7 @@ import type { HabitDialogTarget } from "@/hooks/use-habit-dialog";
 import { useHabitActions, useHabitColor } from "@/hooks/use-habits";
 import { failureMessage } from "@/hooks/use-tasks";
 import type { LocalDate } from "@/lib/dates";
-import { DEFAULT_DRAFT, type ScheduleDraft, draftFor, draftProblem, toSchedule } from "@/lib/habits";
+import { DEFAULT_DRAFT, draftFor, draftProblem, type ScheduleDraft, toSchedule } from "@/lib/habits";
 import { PRIVACY_HINT, PRIVACY_LABEL } from "@/lib/privacy";
 
 type Values = {
@@ -96,28 +102,25 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
     setSaving(true);
     const description = values.description.trim() ? values.description : null;
     const schedule = toSchedule(values.schedule);
-    let exit;
-    if (habit) {
-      const scheduleChanged = JSON.stringify(schedule) !== JSON.stringify(toSchedule(draftFor(habit)));
-      exit = await actions.update({
-        id: habit.id,
-        ...(title !== habit.title ? { title } : {}),
-        ...(description !== habit.description ? { description } : {}),
-        ...(scheduleChanged ? { schedule } : {}),
-        ...(values.startDate !== habit.startDate ? { startDate: values.startDate } : {}),
-        ...(values.privacy !== habit.privacy ? { privacy: values.privacy } : {}),
-        ...(values.shareToLive !== habit.shareToLive ? { shareToLive: values.shareToLive } : {}),
-      });
-    } else {
-      exit = await actions.create({
-        title,
-        description,
-        schedule,
-        startDate: values.startDate,
-        privacy: values.privacy,
-        shareToLive: values.shareToLive,
-      });
-    }
+    const scheduleChanged = habit !== null && JSON.stringify(schedule) !== JSON.stringify(toSchedule(draftFor(habit)));
+    const exit = habit
+      ? await actions.update({
+          id: habit.id,
+          ...(title !== habit.title ? { title } : {}),
+          ...(description !== habit.description ? { description } : {}),
+          ...(scheduleChanged ? { schedule } : {}),
+          ...(values.startDate !== habit.startDate ? { startDate: values.startDate } : {}),
+          ...(values.privacy !== habit.privacy ? { privacy: values.privacy } : {}),
+          ...(values.shareToLive !== habit.shareToLive ? { shareToLive: values.shareToLive } : {}),
+        })
+      : await actions.create({
+          title,
+          description,
+          schedule,
+          startDate: values.startDate,
+          privacy: values.privacy,
+          shareToLive: values.shareToLive,
+        });
     if (Exit.isSuccess(exit) && goals.drafts && goals.saved) {
       const failure = await syncGoals("habit", exit.value.id, goals.saved, goals.drafts);
       if (failure) toast.error(failure);
@@ -139,7 +142,9 @@ function HabitForm({ habit, today, onClose }: { habit: Habit | null; today: Loca
       }}
     >
       <header className="flex flex-col gap-2 border-b p-4 pr-12">
-        <DialogTitle className="text-sm font-medium text-muted-foreground">{habit ? "Edit habit" : "New habit"}</DialogTitle>
+        <DialogTitle className="text-sm font-medium text-muted-foreground">
+          {habit ? "Edit habit" : "New habit"}
+        </DialogTitle>
         <DialogDescription className="sr-only">
           Name the habit and pick how often it's due; everything else is optional.
         </DialogDescription>

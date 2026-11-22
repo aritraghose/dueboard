@@ -1,23 +1,13 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  ilike,
-  like,
-  notExists,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, isNotNull, like, notExists, or, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import { Activity, AskSettingsTable, Blocks, ConnectionRequests, Connections, UserSettings } from "../../schema.ts";
+import { pointsOf } from "../activity/points.ts";
+import { deleteAskQuestionsBetween } from "../ask/ask.ts";
 import { AuthUsers } from "../core/auth-users.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
-import { UserNotFound, decodeInput } from "../core/model.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
+import { decodeInput, UserNotFound } from "../core/model.ts";
+import { RateLimiter } from "../core/rate-limiter.ts";
+import { cancelRelaysBetween } from "../relays/relays.ts";
 import {
   BlockedPerson,
   CONNECTION_REQUESTS_PER_DAY,
@@ -26,6 +16,7 @@ import {
   ConnectionRequest,
   ConnectionRequestNotFound,
   ConnectionRequestRef,
+  type ConnectionState,
   PEOPLE_SEARCH_LIMIT,
   Person,
   PersonResult,
@@ -36,20 +27,10 @@ import {
   SocialOverview,
   SocialStatus,
   UsernameRef,
-  type ConnectionState,
 } from "./model.ts";
-import { deleteAskQuestionsBetween } from "../ask/ask.ts";
-import { RateLimiter } from "../core/rate-limiter.ts";
-import {
-  connectionState,
-  normalizeUsername,
-  orderedPair,
-  searchPatterns,
-} from "./social-rules.ts";
-import { pointsOf } from "../activity/points.ts";
-import { cancelRelaysBetween } from "../relays/relays.ts";
 import { onRequestAccepted, onRequestSent } from "./notification-rules.ts";
 import { deleteNotificationsBetween, recordNotifications } from "./notifications.ts";
+import { connectionState, normalizeUsername, orderedPair, searchPatterns } from "./social-rules.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -68,11 +49,9 @@ type UserRow = {
   readonly image: string | null;
 };
 
-const toPerson = (row: UserRow) =>
-  new Person({ username: row.username ?? "", name: row.name, image: row.image });
+const toPerson = (row: UserRow) => new Person({ username: row.username ?? "", name: row.name, image: row.image });
 
-const status = (state: ConnectionState, requestId: string | null = null) =>
-  new SocialStatus({ state, requestId });
+const status = (state: ConnectionState, requestId: string | null = null) => new SocialStatus({ state, requestId });
 
 const userNotFound = (username: string) =>
   new UserNotFound({ message: `There's no one called @${username.replace(/^@/, "")}.`, username });
@@ -172,8 +151,7 @@ const statusesFor = (tx: Executor, viewerId: string, otherIds: ReadonlyArray<str
         pendingOut: outgoing !== undefined,
         pendingIn: incoming !== undefined,
       });
-      const requestId =
-        state === "pending_in" ? incoming!.id : state === "pending_out" ? outgoing!.id : null;
+      const requestId = state === "pending_in" ? incoming!.id : state === "pending_out" ? outgoing!.id : null;
       result.set(id, status(state, requestId));
     }
     return result;
@@ -197,10 +175,7 @@ export const isBlocked = Effect.fn("isBlocked")(function* (a: string, b: string)
   return viewerBlocked || blockedViewer;
 });
 
-export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function* (
-  userId: string,
-  input: UsernameRef,
-) {
+export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function* (userId: string, input: UsernameRef) {
   const { username } = yield* decodeInput(UsernameRef)(input);
   const limiter = yield* RateLimiter;
   if (!(yield* limiter.allow("connectionRequest", userId))) {
@@ -252,7 +227,12 @@ export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function
         yield* tx
           .update(ConnectionRequests)
           .set({ status: "accepted", respondedAt: now })
-          .where(inArray(ConnectionRequests.id, pending.map((row) => row.id)));
+          .where(
+            inArray(
+              ConnectionRequests.id,
+              pending.map((row) => row.id),
+            ),
+          );
         yield* connect(tx, userId, target.id, now);
         yield* recordNotifications(
           tx,
@@ -277,9 +257,7 @@ export const sendConnectionRequest = Effect.fn("sendConnectionRequest")(function
         });
       }
       const id = newId();
-      yield* tx
-        .insert(ConnectionRequests)
-        .values({ id, fromUserId: userId, toUserId: target.id, createdAt: now });
+      yield* tx.insert(ConnectionRequests).values({ id, fromUserId: userId, toUserId: target.id, createdAt: now });
       yield* recordNotifications(tx, onRequestSent({ id, fromUserId: userId, toUserId: target.id }));
       return status("pending_out", id);
     }),
@@ -316,10 +294,7 @@ export const acceptConnectionRequest = Effect.fn("acceptConnectionRequest")(func
             eq(ConnectionRequests.status, "pending"),
             or(
               and(eq(ConnectionRequests.id, requestId), eq(ConnectionRequests.toUserId, userId)),
-              and(
-                eq(ConnectionRequests.fromUserId, userId),
-                eq(ConnectionRequests.toUserId, found.fromUserId),
-              ),
+              and(eq(ConnectionRequests.fromUserId, userId), eq(ConnectionRequests.toUserId, found.fromUserId)),
             ),
           ),
         )
@@ -379,10 +354,7 @@ export const cancelConnectionRequest = Effect.fn("cancelConnectionRequest")(func
   return status("none");
 });
 
-export const removeConnection = Effect.fn("removeConnection")(function* (
-  userId: string,
-  input: UsernameRef,
-) {
+export const removeConnection = Effect.fn("removeConnection")(function* (userId: string, input: UsernameRef) {
   const { username } = yield* decodeInput(UsernameRef)(input);
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
@@ -445,9 +417,7 @@ export const unblockUser = Effect.fn("unblockUser")(function* (userId: string, i
   return yield* transaction(db, (tx) =>
     Effect.gen(function* () {
       const target = yield* findUser(tx, username);
-      yield* tx
-        .delete(Blocks)
-        .where(and(eq(Blocks.blockerId, userId), eq(Blocks.blockedId, target.id)));
+      yield* tx.delete(Blocks).where(and(eq(Blocks.blockerId, userId), eq(Blocks.blockedId, target.id)));
       return status(target.id === userId ? "self" : "none");
     }),
   );
@@ -486,9 +456,7 @@ export const listIncomingRequests = Effect.fn("listIncomingRequests")(function* 
     )
     .orderBy(desc(ConnectionRequests.createdAt))
     .pipe(orDieOnDbError);
-  return rows.map(
-    (row) => new ConnectionRequest({ id: row.requestId, person: toPerson(row), createdAt: row.sentAt }),
-  );
+  return rows.map((row) => new ConnectionRequest({ id: row.requestId, person: toPerson(row), createdAt: row.sentAt }));
 });
 
 export const listOutgoingRequests = Effect.fn("listOutgoingRequests")(function* (userId: string) {
@@ -506,9 +474,7 @@ export const listOutgoingRequests = Effect.fn("listOutgoingRequests")(function* 
     )
     .orderBy(desc(ConnectionRequests.createdAt))
     .pipe(orDieOnDbError);
-  return rows.map(
-    (row) => new ConnectionRequest({ id: row.requestId, person: toPerson(row), createdAt: row.sentAt }),
-  );
+  return rows.map((row) => new ConnectionRequest({ id: row.requestId, person: toPerson(row), createdAt: row.sentAt }));
 });
 
 export const listBlocked = Effect.fn("listBlocked")(function* (userId: string) {
@@ -536,10 +502,7 @@ export const getSocialOverview = Effect.fn("getSocialOverview")(function* (userI
   return new SocialOverview(lists);
 });
 
-export const searchPeople = Effect.fn("searchPeople")(function* (
-  userId: string,
-  input: SearchPeopleInput,
-) {
+export const searchPeople = Effect.fn("searchPeople")(function* (userId: string, input: SearchPeopleInput) {
   const { query } = yield* decodeInput(SearchPeopleInput)(input);
   const patterns = searchPatterns(query);
   if (!patterns) return [];
@@ -579,9 +542,7 @@ export const searchPeople = Effect.fn("searchPeople")(function* (
         userId,
         rows.map((row) => row.id),
       );
-      return rows.map(
-        (row) => new PersonResult({ person: toPerson(row), status: statuses.get(row.id)! }),
-      );
+      return rows.map((row) => new PersonResult({ person: toPerson(row), status: statuses.get(row.id)! }));
     }),
   );
 });
@@ -598,12 +559,7 @@ const profileCounts = (tx: Executor, ownerId: string) =>
       .where(
         and(
           eq(Activity.userId, ownerId),
-          inArray(Activity.kind, [
-            "task_settled",
-            "habit_completed",
-            "goal_completed",
-            "session_completed",
-          ]),
+          inArray(Activity.kind, ["task_settled", "habit_completed", "goal_completed", "session_completed"]),
         ),
       )
       .groupBy(Activity.kind);
@@ -618,10 +574,7 @@ const profileCounts = (tx: Executor, ownerId: string) =>
     });
   });
 
-export const getProfile = Effect.fn("getProfile")(function* (
-  viewerId: string | null,
-  input: UsernameRef,
-) {
+export const getProfile = Effect.fn("getProfile")(function* (viewerId: string | null, input: UsernameRef) {
   const { username } = yield* decodeInput(UsernameRef)(input);
   const db = yield* Database;
   return yield* transaction(db, (tx) =>

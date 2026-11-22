@@ -7,15 +7,15 @@ import {
   CheckIcon,
   CircleAlertIcon,
   FlameIcon,
+  type LucideIcon,
   NotebookPenIcon,
   TagIcon,
   TimerIcon,
   Trash2Icon,
-  type LucideIcon,
 } from "lucide-react";
 import * as React from "react";
-import { GoalBar, GoalMeta } from "@/components/goal-progress";
 import { GoalDialog } from "@/components/goal-dialog";
+import { GoalBar, GoalMeta } from "@/components/goal-progress";
 import { HabitDialog } from "@/components/habit-dialog";
 import { HabitRing } from "@/components/habit-ring";
 import { TaskDialog } from "@/components/task-card";
@@ -23,10 +23,10 @@ import { TaskMeta } from "@/components/task-list";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Trace, TraceIcon, TraceLine } from "@/components/ui/trace";
 import { useTimeZone } from "@/hooks/use-bootstrap";
-import { goalAtom, useGoalColor } from "@/hooks/use-goals";
 import { useGoalDialog } from "@/hooks/use-goal-dialog";
-import { habitAtom, useHabitColor } from "@/hooks/use-habits";
+import { goalAtom, useGoalColor } from "@/hooks/use-goals";
 import { useHabitDialog } from "@/hooks/use-habit-dialog";
+import { habitAtom, useHabitColor } from "@/hooks/use-habits";
 import { useToday } from "@/hooks/use-now";
 import { useTaskDialog } from "@/hooks/use-task-dialog";
 import { taskAtom, useTagMap, useTaskActions } from "@/hooks/use-tasks";
@@ -58,7 +58,13 @@ export function TiboItemsProvider({ children }: { children: React.ReactNode }) {
       {children}
       {today && (
         <>
-          <TaskDialog target={task.target} open={task.open} version={task.version} onOpenChange={task.setOpen} today={today} />
+          <TaskDialog
+            target={task.target}
+            open={task.open}
+            version={task.version}
+            onOpenChange={task.setOpen}
+            today={today}
+          />
           <HabitDialog
             target={habit.target}
             open={habit.open}
@@ -66,7 +72,13 @@ export function TiboItemsProvider({ children }: { children: React.ReactNode }) {
             onOpenChange={habit.setOpen}
             today={today}
           />
-          <GoalDialog target={goal.target} open={goal.open} version={goal.version} onOpenChange={goal.setOpen} today={today} />
+          <GoalDialog
+            target={goal.target}
+            open={goal.open}
+            version={goal.version}
+            onOpenChange={goal.setOpen}
+            today={today}
+          />
         </>
       )}
     </ItemsContext.Provider>
@@ -114,7 +126,12 @@ export function TiboReceipts({ receipts }: { receipts: readonly TiboReceipt[] })
 }
 
 const titleOf = (receipt: TiboReceipt) =>
-  receipt.item?.title ?? receipt.text.slice(receipt.text.indexOf(":") + 1).split(" · ")[0]?.trim() ?? receipt.text;
+  receipt.item?.title ??
+  receipt.text
+    .slice(receipt.text.indexOf(":") + 1)
+    .split(" · ")[0]
+    ?.trim() ??
+  receipt.text;
 
 function ItemCard({ receipt, item }: { receipt: TiboReceipt; item: TiboItemRef }) {
   if (receipt.verb === "Deleted") return <Gone receipt={receipt} />;
@@ -309,7 +326,15 @@ function GoalItem({ id, receipt }: { id: string; receipt: TiboReceipt }) {
   );
 }
 
-function LinkItem({ to, icon: Icon, receipt }: { to: "/notes" | "/sessions" | "/tags"; icon: LucideIcon; receipt: TiboReceipt }) {
+function LinkItem({
+  to,
+  icon: Icon,
+  receipt,
+}: {
+  to: "/notes" | "/sessions" | "/tags";
+  icon: LucideIcon;
+  receipt: TiboReceipt;
+}) {
   return (
     <Link
       to={to}

@@ -1,5 +1,5 @@
 import type { NotificationItem } from "@dueboard/api/rpc";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { BellIcon, CheckIcon, SearchIcon, UserCheckIcon, UserPlusIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ConnectionActions } from "@/components/connection-actions";

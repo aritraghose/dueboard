@@ -1,14 +1,14 @@
-import { eq, sql, type SQL } from "drizzle-orm";
+import { eq, type SQL, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import { Activity, HabitCheckins, UserSettings } from "../../schema.ts";
 import { AuthUsers } from "../core/auth-users.ts";
-import { FALLBACK_TIME_ZONE, todayIn, type LocalDate } from "../core/dates.ts";
-import { Database, orDieOnDbError, type Executor } from "../core/database.ts";
+import { Database, type Executor, orDieOnDbError } from "../core/database.ts";
+import { FALLBACK_TIME_ZONE, type LocalDate, todayIn } from "../core/dates.ts";
 import { decodeInput } from "../core/model.ts";
 import { Person } from "../social/model.ts";
+import { connectedSql, notBlockedSql } from "../social/visibility.ts";
 import { GetLeaderboardInput, LEADERBOARD_SIZE, Leaderboard, LeaderboardEntry } from "./model.ts";
 import { periodStart } from "./points-rules.ts";
-import { connectedSql, notBlockedSql } from "../social/visibility.ts";
 
 const scores = (from: LocalDate | null, userId: string | null): SQL => {
   const activityFrom = from ? sql` and ${Activity.localDate} >= ${from}` : sql``;
@@ -39,10 +39,7 @@ type RankedRow = {
   image: string | null;
 };
 
-export const getLeaderboard = Effect.fn("getLeaderboard")(function* (
-  viewerId: string,
-  input: GetLeaderboardInput,
-) {
+export const getLeaderboard = Effect.fn("getLeaderboard")(function* (viewerId: string, input: GetLeaderboardInput) {
   const { scope, period } = yield* decodeInput(GetLeaderboardInput)(input);
   const db = yield* Database;
   const [settings] = yield* db

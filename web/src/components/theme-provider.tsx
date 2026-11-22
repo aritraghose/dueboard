@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 
 export type Theme = "dark" | "light" | "system";
 
@@ -16,8 +16,7 @@ const ThemeProviderContext = createContext<ThemeProviderState | undefined>(undef
 const systemQuery = "(prefers-color-scheme: dark)";
 
 function applyTheme(theme: Theme) {
-  const resolved =
-    theme === "system" ? (window.matchMedia(systemQuery).matches ? "dark" : "light") : theme;
+  const resolved = theme === "system" ? (window.matchMedia(systemQuery).matches ? "dark" : "light") : theme;
   const root = window.document.documentElement;
   root.classList.remove("light", "dark");
   root.classList.add(resolved);
@@ -46,11 +45,7 @@ export function ThemeProvider({
     setThemeState(next);
   };
 
-  return (
-    <ThemeProviderContext.Provider value={{ theme, setTheme }}>
-      {children}
-    </ThemeProviderContext.Provider>
-  );
+  return <ThemeProviderContext.Provider value={{ theme, setTheme }}>{children}</ThemeProviderContext.Provider>;
 }
 
 export function useTheme() {

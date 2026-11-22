@@ -63,7 +63,9 @@ export interface DomainError {
   readonly details?: Record<string, unknown>;
 }
 
-export type DomainResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: DomainError };
+export type DomainResult =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly error: DomainError };
 
 export interface AiUsageJson {
   readonly used: number;
@@ -137,7 +139,9 @@ export const tiboClient = (domain: DomainBinding) => ({
   wipesDone: (userIds: readonly string[]) => domain.wipesDone(userIds),
 });
 
-export type RelayResult<A> = { readonly ok: true; readonly value: A } | { readonly ok: false; readonly error: DomainError };
+export type RelayResult<A> =
+  | { readonly ok: true; readonly value: A }
+  | { readonly ok: false; readonly error: DomainError };
 
 const relayCall = async <A>(call: () => Promise<DomainResult>): Promise<RelayResult<A>> => {
   try {
@@ -155,8 +159,7 @@ export const relayClient = (domain: DomainBinding, actorId: string) => ({
   get: (relayId: string) => relayCall<RelayJson>(() => domain.relayGet(actorId, relayId)),
   delivered: (relayId: string) => relayCall<RelayJson>(() => domain.relayDelivered(actorId, relayId)),
   hold: (relayId: string) => relayCall<null>(() => domain.relayHold(actorId, relayId)),
-  answer: (relayId: string, answer: string) =>
-    relayCall<RelayJson>(() => domain.relayAnswer(actorId, relayId, answer)),
+  answer: (relayId: string, answer: string) => relayCall<RelayJson>(() => domain.relayAnswer(actorId, relayId, answer)),
   decline: (relayId: string) => relayCall<RelayJson>(() => domain.relayDecline(actorId, relayId)),
   ack: (relayId: string, status: RelayStatus) => relayCall<null>(() => domain.relayAck(actorId, relayId, status)),
   list: () => relayCall<RelayJson[]>(() => domain.relayList(actorId)),

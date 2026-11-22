@@ -1,10 +1,11 @@
 import { and, asc, count, desc, eq, ilike, lt, or, type SQL } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Notes, UserSettings, type NoteRow } from "../../schema.ts";
+import { type NoteRow, Notes, UserSettings } from "../../schema.ts";
 import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { Database, type Executor, newId, orDieOnDbError, transaction } from "../core/database.ts";
 import { LocalDate, todayIn } from "../core/dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
-import { Id, InvalidInput, decodeInput } from "../core/model.ts";
+import { decodeInput, Id, InvalidInput } from "../core/model.ts";
+import { titleSearchPattern } from "../tasks/tasks-rules.ts";
 import {
   CreateNoteInput,
   ListNotesInput,
@@ -19,7 +20,6 @@ import {
   UpdateNoteInput,
 } from "./model.ts";
 import { decodeNoteCursor, encodeNoteCursor, groupByDay, noteDateError } from "./notes-rules.ts";
-import { titleSearchPattern } from "../tasks/tasks-rules.ts";
 
 export const toNote = (row: NoteRow): Note =>
   new Note({
@@ -131,10 +131,7 @@ export const deleteNote = Effect.fn("deleteNote")(function* (userId: string, id:
   );
 });
 
-export const listNotesForDay = Effect.fn("listNotesForDay")(function* (
-  userId: string,
-  date: LocalDate,
-) {
+export const listNotesForDay = Effect.fn("listNotesForDay")(function* (userId: string, date: LocalDate) {
   const day = yield* decodeInput(LocalDate)(date);
   const db = yield* Database;
   const rows = yield* db
@@ -171,11 +168,7 @@ export const listNotes = Effect.fn("listNotes")(function* (userId: string, input
       ? or(
           lt(Notes.localDate, cursor.localDate),
           and(eq(Notes.localDate, cursor.localDate), lt(Notes.createdAt, cursor.createdAt)),
-          and(
-            eq(Notes.localDate, cursor.localDate),
-            eq(Notes.createdAt, cursor.createdAt),
-            lt(Notes.id, cursor.id),
-          ),
+          and(eq(Notes.localDate, cursor.localDate), eq(Notes.createdAt, cursor.createdAt), lt(Notes.id, cursor.id)),
         )
       : undefined,
   ];

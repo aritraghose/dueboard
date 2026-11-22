@@ -3,11 +3,11 @@ import { ALCHEMY_DEV } from "alchemy";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
-import type { DomainBinding } from "./domain-client.ts";
-import { DEV_PORTS } from "./dev-ports.ts";
-import DomainWorker from "./DomainWorker.ts";
-import { LIMITS, bindingProps } from "./limits.ts";
 import { TURNSTILE_TEST_SECRET, TURNSTILE_TEST_SITE_KEY } from "./ask/turnstile.ts";
+import DomainWorker from "./DomainWorker.ts";
+import { DEV_PORTS } from "./dev-ports.ts";
+import type { DomainBinding } from "./domain-client.ts";
+import { bindingProps, LIMITS } from "./limits.ts";
 import { EMBEDDING_DIMENSIONS } from "./tibo/embeddings.ts";
 
 export const Gateway = Cloudflare.AI.Gateway("Gateway", {
@@ -30,7 +30,10 @@ export const MEMORY_METADATA = [
 export const TiboFiles = Cloudflare.R2.Bucket("TiboFiles", {
   publicAccess: false,
   lifecycleRules: [
-    { id: "abort-incomplete-uploads", abortMultipartUploadsTransition: { condition: { type: "Age", maxAge: 24 * 60 * 60 } } },
+    {
+      id: "abort-incomplete-uploads",
+      abortMultipartUploadsTransition: { condition: { type: "Age", maxAge: 24 * 60 * 60 } },
+    },
   ],
 });
 
@@ -46,9 +49,14 @@ export const AskTurnstile = Effect.flatMap(siteHostname, (hostname) =>
   Cloudflare.Turnstile.Widget("AskTurnstile", { domains: [hostname], mode: "managed" }),
 );
 
-const turnstile = (dev: string | Redacted.Redacted<string>, deployed: (widget: Effect.Success<typeof AskTurnstile>) => unknown) =>
-  Effect.flatMap(ALCHEMY_DEV, (isDev): Effect.Effect<unknown, never, never> =>
-    isDev ? Effect.succeed(dev) : (Effect.map(AskTurnstile, deployed) as Effect.Effect<unknown, never, never>),
+const turnstile = (
+  dev: string | Redacted.Redacted<string>,
+  deployed: (widget: Effect.Success<typeof AskTurnstile>) => unknown,
+) =>
+  Effect.flatMap(
+    ALCHEMY_DEV,
+    (isDev): Effect.Effect<unknown, never, never> =>
+      isDev ? Effect.succeed(dev) : (Effect.map(AskTurnstile, deployed) as Effect.Effect<unknown, never, never>),
   ) as unknown as Effect.Effect<string>;
 
 const AgentWorker = Cloudflare.Worker("AgentWorker", {

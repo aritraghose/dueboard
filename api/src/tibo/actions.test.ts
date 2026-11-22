@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BULK_LIMIT, TurnLedger, receiptFor } from "./actions.ts";
+import { BULK_LIMIT, receiptFor, TurnLedger } from "./actions.ts";
 
 describe("TurnLedger", () => {
   test("changes past the bulk limit must wait, held ones included", () => {

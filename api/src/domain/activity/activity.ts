@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import * as Effect from "effect/Effect";
 import { Activity, UserSettings } from "../../schema.ts";
-import { FALLBACK_TIME_ZONE, localDateOf, type LocalDate } from "../core/dates.ts";
-import { newId, type Executor } from "../core/database.ts";
+import { type Executor, newId } from "../core/database.ts";
+import { FALLBACK_TIME_ZONE, type LocalDate, localDateOf } from "../core/dates.ts";
 import type { ActivityKind, ActivitySubject } from "./model.ts";
 
 export interface ActivityInput {
@@ -16,10 +16,7 @@ export interface ActivityInput {
   readonly meta?: Record<string, unknown>;
 }
 
-export const recordActivity = Effect.fn("recordActivity")(function* (
-  tx: Executor,
-  input: ActivityInput,
-) {
+export const recordActivity = Effect.fn("recordActivity")(function* (tx: Executor, input: ActivityInput) {
   const occurredAt = input.occurredAt ?? new Date();
   let timeZone = input.timeZone;
   if (!timeZone && !input.localDate) {

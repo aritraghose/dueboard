@@ -1,8 +1,4 @@
-import {
-  TIBO_FILE_NAME_MAX_LENGTH,
-  type TiboAttachment,
-  type TiboAttachmentKind,
-} from "./protocol.ts";
+import { TIBO_FILE_NAME_MAX_LENGTH, type TiboAttachment, type TiboAttachmentKind } from "./protocol.ts";
 
 export const TIBO_STORAGE_MAX_BYTES = 500 * 1024 * 1024;
 export const TIBO_UPLOADS_PER_DAY = 100;
@@ -19,8 +15,7 @@ export function cleanFileName(header: string | null): string {
   let name = "";
   try {
     name = decodeURIComponent(header ?? "");
-  } catch {
-  }
+  } catch {}
   name = name
     .replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069/\\]/g, "")
     .replace(/\s+/g, " ")
@@ -44,10 +39,13 @@ const startsWith = (bytes: Uint8Array, signature: readonly number[], offset = 0)
 const ascii = (text: string) => [...text].map((char) => char.charCodeAt(0));
 
 export function sniff(bytes: Uint8Array, name: string): { kind: TiboAttachmentKind; mediaType: string } {
-  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return { kind: "image", mediaType: "image/png" };
+  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    return { kind: "image", mediaType: "image/png" };
   if (startsWith(bytes, [0xff, 0xd8, 0xff])) return { kind: "image", mediaType: "image/jpeg" };
-  if (startsWith(bytes, ascii("GIF87a")) || startsWith(bytes, ascii("GIF89a"))) return { kind: "image", mediaType: "image/gif" };
-  if (startsWith(bytes, ascii("RIFF")) && startsWith(bytes, ascii("WEBP"), 8)) return { kind: "image", mediaType: "image/webp" };
+  if (startsWith(bytes, ascii("GIF87a")) || startsWith(bytes, ascii("GIF89a")))
+    return { kind: "image", mediaType: "image/gif" };
+  if (startsWith(bytes, ascii("RIFF")) && startsWith(bytes, ascii("WEBP"), 8))
+    return { kind: "image", mediaType: "image/webp" };
   if (startsWith(bytes, ascii("%PDF-"))) return { kind: "pdf", mediaType: "application/pdf" };
   const extension = extensionOf(name);
   const container = startsWith(bytes, [0x50, 0x4b, 0x03, 0x04]) || startsWith(bytes, [0xd0, 0xcf, 0x11, 0xe0]);
@@ -86,7 +84,8 @@ export function imageSize(bytes: Uint8Array, mediaType: string): { width: number
     if (mediaType === "image/gif" && fits(10)) return ok(view.getUint16(6, true), view.getUint16(8, true));
     if (mediaType === "image/webp" && fits(30)) {
       const chunk = String.fromCharCode(...bytes.subarray(12, 16));
-      if (chunk === "VP8X") return ok(1 + (view.getUint32(24, true) & 0xffffff), 1 + (view.getUint32(27, true) & 0xffffff));
+      if (chunk === "VP8X")
+        return ok(1 + (view.getUint32(24, true) & 0xffffff), 1 + (view.getUint32(27, true) & 0xffffff));
       if (chunk === "VP8 ") return ok(view.getUint16(26, true) & 0x3fff, view.getUint16(28, true) & 0x3fff);
       if (chunk === "VP8L") {
         const bits = view.getUint32(21, true);
@@ -105,8 +104,7 @@ export function imageSize(bytes: Uint8Array, mediaType: string): { width: number
         offset += 2 + view.getUint16(offset + 2);
       }
     }
-  } catch {
-  }
+  } catch {}
   return null;
 }
 
@@ -129,7 +127,8 @@ export function serveHeaders(attachment: TiboAttachment, download: boolean): Hea
     "referrer-policy": "no-referrer",
     "cache-control": "private, max-age=86400, immutable",
   });
-  if (attachment.kind !== "pdf") headers.set("content-security-policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+  if (attachment.kind !== "pdf")
+    headers.set("content-security-policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
   return headers;
 }
 
@@ -151,7 +150,9 @@ const escapeAttribute = (text: string) =>
   text.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const escapeText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-export const attachmentLine = (attachment: Pick<TiboAttachment, "name" | "kind" | "size"> & { readonly ref?: string }) =>
+export const attachmentLine = (
+  attachment: Pick<TiboAttachment, "name" | "kind" | "size"> & { readonly ref?: string },
+) =>
   `[Attached ${KIND_WORD[attachment.kind]}: "${attachment.name.replace(/"/g, "'")}", ${formatBytes(attachment.size)}${refPart(attachment)}]`;
 
 const refPart = (file: { readonly kind: TiboAttachmentKind; readonly ref?: string }) =>
@@ -173,7 +174,10 @@ export const fileLine = (file: FileLine) =>
 export const attachedFileBlock = (name: string, text: string, truncated: boolean) =>
   `<attached_file name="${escapeAttribute(name)}"${truncated ? ' truncated="true"' : ""}>\n${escapeText(text)}\n</attached_file>`;
 
-export const unreadableNote = (attachment: Pick<TiboAttachment, "name" | "kind">, reason: "kind" | "budget" | "missing") =>
+export const unreadableNote = (
+  attachment: Pick<TiboAttachment, "name" | "kind">,
+  reason: "kind" | "budget" | "missing",
+) =>
   `[The file "${attachment.name.replace(/"/g, "'")}" ${
     reason === "kind"
       ? "is a kind you can't open: you only know its name"

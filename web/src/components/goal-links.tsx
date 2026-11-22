@@ -80,7 +80,14 @@ function LinkRow({
         <AmountInput value={amount} label={amountLabel} onChange={onAmount} />
         <span className="max-sm:hidden">{note}</span>
       </span>
-      <Button type="button" variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label={`Remove ${title}`} onClick={onRemove}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted-foreground"
+        aria-label={`Remove ${title}`}
+        onClick={onRemove}
+      >
         <XIcon />
       </Button>
     </li>
@@ -117,9 +124,7 @@ export function GoalLinksPanel({
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          Linked habits and tasks move this goal on their own.
-        </p>
+        <p className="text-xs text-muted-foreground">Linked habits and tasks move this goal on their own.</p>
       )}
       <ItemPicker
         linked={links}
@@ -489,4 +494,3 @@ function NewCountGoal({
     </div>
   );
 }
-

@@ -18,8 +18,7 @@ export function useViewOptions(key: string) {
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored) setView({ ...DEFAULT_VIEW, ...(JSON.parse(stored) as Partial<ViewOptions>) });
-    } catch {
-    }
+    } catch {}
   }, [storageKey]);
 
   const update = useCallback(
@@ -28,8 +27,7 @@ export function useViewOptions(key: string) {
         const next = { ...current, ...patch };
         try {
           localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-        }
+        } catch {}
         return next;
       }),
     [storageKey],

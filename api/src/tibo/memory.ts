@@ -132,7 +132,9 @@ export class MemoryStore {
   }
 
   get(key: StateKey): string | null {
-    return this.sql.exec<{ value: string }>(`SELECT value FROM memory_state WHERE key = ?`, key).toArray()[0]?.value ?? null;
+    return (
+      this.sql.exec<{ value: string }>(`SELECT value FROM memory_state WHERE key = ?`, key).toArray()[0]?.value ?? null
+    );
   }
 
   getNumber(key: StateKey): number {
@@ -195,7 +197,13 @@ export class MemoryStore {
       .map(toSummary);
   }
 
-  saveSummary(input: { level: SummaryLevel; periodStart: string; text: string; throughMessageId: string; throughSeq: number }) {
+  saveSummary(input: {
+    level: SummaryLevel;
+    periodStart: string;
+    text: string;
+    throughMessageId: string;
+    throughSeq: number;
+  }) {
     this.sql.exec(
       `INSERT INTO summaries (level, period_start, text, through_message_id, through_seq, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
@@ -357,13 +365,20 @@ export class MemoryStore {
   }
 
   markChunksEmbedded(ids: readonly string[]) {
-    for (const id of ids) this.sql.exec(`UPDATE message_chunks SET embedding_model = ? WHERE id = ?`, EMBEDDING_MODEL, id);
+    for (const id of ids)
+      this.sql.exec(`UPDATE message_chunks SET embedding_model = ? WHERE id = ?`, EMBEDDING_MODEL, id);
   }
 
   allVectorIds(): string[] {
     return [
-      ...this.sql.exec<{ id: string }>(`SELECT id FROM memories`).toArray().map((row) => memoryVectorId(row.id)),
-      ...this.sql.exec<{ id: string }>(`SELECT id FROM message_chunks`).toArray().map((row) => chunkVectorId(row.id)),
+      ...this.sql
+        .exec<{ id: string }>(`SELECT id FROM memories`)
+        .toArray()
+        .map((row) => memoryVectorId(row.id)),
+      ...this.sql
+        .exec<{ id: string }>(`SELECT id FROM message_chunks`)
+        .toArray()
+        .map((row) => chunkVectorId(row.id)),
     ];
   }
 

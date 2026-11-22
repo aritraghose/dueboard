@@ -1,31 +1,25 @@
-import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, lte, or, type SQL, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import {
-  Activity,
-  FocusSessionSegments,
-  FocusSessions,
-  UserSettings,
-  type FocusSessionRow,
-} from "../../schema.ts";
+import { Activity, type FocusSessionRow, FocusSessionSegments, FocusSessions, UserSettings } from "../../schema.ts";
 import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { Database, type Executor, newId, transaction } from "../core/database.ts";
 import { FALLBACK_TIME_ZONE, LocalDate, localDateOf, todayIn } from "../core/dates.ts";
-import { Database, newId, transaction, type Executor } from "../core/database.ts";
-import { Id, InvalidInput, decodeInput } from "../core/model.ts";
+import { decodeInput, Id, InvalidInput } from "../core/model.ts";
+import { decodeNoteCursor, encodeNoteCursor, groupByDay } from "../notes/notes-rules.ts";
 import {
   ActiveSessionExists,
   ExtendSessionInput,
   FocusSession,
   ListSessionsInput,
   SESSION_PAGE_SIZE_DEFAULT,
+  type SessionAction,
   SessionDay,
   SessionNotFound,
   SessionPage,
-  SessionTransitionNotAllowed,
   SessionsForDay,
+  SessionTransitionNotAllowed,
   StartSessionInput,
-  type SessionAction,
 } from "./model.ts";
-import { decodeNoteCursor, encodeNoteCursor, groupByDay } from "../notes/notes-rules.ts";
 import {
   computeEndsAt,
   elapsed,
@@ -33,8 +27,8 @@ import {
   extendError,
   focusedMinutes,
   remaining,
-  transitionError,
   type Segment,
+  transitionError,
 } from "./session-rules.ts";
 
 const ACTIVE = ["running", "paused"] as const;
@@ -42,11 +36,7 @@ const ACTIVE = ["running", "paused"] as const;
 const SWEEP_BATCH = 200;
 const SWEEP_MAX_BATCHES = 25;
 
-export const toSession = (
-  row: FocusSessionRow,
-  segments: ReadonlyArray<Segment>,
-  now: Date,
-): FocusSession => {
+export const toSession = (row: FocusSessionRow, segments: ReadonlyArray<Segment>, now: Date): FocusSession => {
   const ended = row.status === "completed" || row.status === "stopped";
   return new FocusSession({
     id: row.id,
@@ -66,8 +56,7 @@ export const toSession = (
   });
 };
 
-const notFound = (id: string) =>
-  new SessionNotFound({ message: "That session no longer exists.", id });
+const notFound = (id: string) => new SessionNotFound({ message: "That session no longer exists.", id });
 
 const findSession = (tx: Executor, userId: string, id: string, lock = false) =>
   Effect.gen(function* () {
@@ -110,9 +99,7 @@ const closeOpenSegment = (tx: Executor, sessionId: string, at: Date) =>
   tx
     .update(FocusSessionSegments)
     .set({ endedAt: at })
-    .where(
-      and(eq(FocusSessionSegments.sessionId, sessionId), isNull(FocusSessionSegments.endedAt)),
-    );
+    .where(and(eq(FocusSessionSegments.sessionId, sessionId), isNull(FocusSessionSegments.endedAt)));
 
 export const completeExpiredSessions = Effect.fn("completeExpiredSessions")(function* (
   tx: Executor,
@@ -206,10 +193,7 @@ const stopRow = (tx: Executor, row: FocusSessionRow, now: Date, timeZone?: strin
     return stopped!;
   });
 
-export const startSession = Effect.fn("startSession")(function* (
-  userId: string,
-  input: StartSessionInput,
-) {
+export const startSession = Effect.fn("startSession")(function* (userId: string, input: StartSessionInput) {
   const values = yield* decodeInput(StartSessionInput)(input);
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
@@ -319,9 +303,7 @@ export const pauseSession = Effect.fn("pauseSession")(function* (userId: string,
 export const resumeSession = Effect.fn("resumeSession")(function* (userId: string, id: string) {
   return yield* changeSession(userId, id, "resume", (tx, row, now) =>
     Effect.gen(function* () {
-      yield* tx
-        .insert(FocusSessionSegments)
-        .values({ id: newId(), sessionId: row.id, startedAt: now });
+      yield* tx.insert(FocusSessionSegments).values({ id: newId(), sessionId: row.id, startedAt: now });
       const segments = (yield* loadSegments(tx, [row.id])).get(row.id) ?? [];
       const [updated] = yield* tx
         .update(FocusSessions)
@@ -333,10 +315,7 @@ export const resumeSession = Effect.fn("resumeSession")(function* (userId: strin
   );
 });
 
-export const extendSession = Effect.fn("extendSession")(function* (
-  userId: string,
-  input: ExtendSessionInput,
-) {
+export const extendSession = Effect.fn("extendSession")(function* (userId: string, input: ExtendSessionInput) {
   const { id, minutes } = yield* decodeInput(ExtendSessionInput)(input);
   return yield* changeSession(userId, id, "extend", (tx, row, now) =>
     Effect.gen(function* () {
@@ -369,9 +348,7 @@ export const deleteSession = Effect.fn("deleteSession")(function* (userId: strin
     Effect.gen(function* () {
       yield* findSession(tx, userId, id, true);
       yield* deleteActivityFor(tx, "session", id);
-      yield* tx
-        .delete(FocusSessions)
-        .where(and(eq(FocusSessions.id, id), eq(FocusSessions.userId, userId)));
+      yield* tx.delete(FocusSessions).where(and(eq(FocusSessions.id, id), eq(FocusSessions.userId, userId)));
       return id;
     }),
   );
@@ -393,10 +370,7 @@ export const getActiveSession = Effect.fn("getActiveSession")(function* (userId:
   );
 });
 
-export const listSessionsForDay = Effect.fn("listSessionsForDay")(function* (
-  userId: string,
-  date: LocalDate,
-) {
+export const listSessionsForDay = Effect.fn("listSessionsForDay")(function* (userId: string, date: LocalDate) {
   const day = yield* decodeInput(LocalDate)(date);
   const db = yield* Database;
   return yield* transaction(db, (tx) =>
@@ -415,10 +389,7 @@ export const listSessionsForDay = Effect.fn("listSessionsForDay")(function* (
   );
 });
 
-export const listSessions = Effect.fn("listSessions")(function* (
-  userId: string,
-  input: ListSessionsInput,
-) {
+export const listSessions = Effect.fn("listSessions")(function* (userId: string, input: ListSessionsInput) {
   const filters = yield* decodeInput(ListSessionsInput)(input);
   const cursor = filters.cursor === undefined ? undefined : decodeNoteCursor(filters.cursor);
   if (cursor === null) {
@@ -429,10 +400,7 @@ export const listSessions = Effect.fn("listSessions")(function* (
     cursor
       ? or(
           lt(FocusSessions.localDate, cursor.localDate),
-          and(
-            eq(FocusSessions.localDate, cursor.localDate),
-            lt(FocusSessions.startedAt, cursor.createdAt),
-          ),
+          and(eq(FocusSessions.localDate, cursor.localDate), lt(FocusSessions.startedAt, cursor.createdAt)),
           and(
             eq(FocusSessions.localDate, cursor.localDate),
             eq(FocusSessions.startedAt, cursor.createdAt),

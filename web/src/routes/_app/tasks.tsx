@@ -1,6 +1,6 @@
 import type { ListTasksInput, Task } from "@dueboard/api/rpc";
 import { useAtomValue } from "@effect/atom-react";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import {
   CalendarClockIcon,
@@ -15,24 +15,32 @@ import {
 import { LayoutGroup } from "motion/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CreateButton, Page, PageEmpty, PageHeader } from "@/components/page";
-import { TaskDialog } from "@/components/task-card";
 import { TagChip } from "@/components/tag-chip";
 import { TagFilter } from "@/components/tag-filter";
+import { TaskDialog } from "@/components/task-card";
 import { TaskList } from "@/components/task-list";
-import { ViewControls } from "@/components/view-controls";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ViewControls } from "@/components/view-controls";
 import { useTimeZone } from "@/hooks/use-bootstrap";
-import { useToday } from "@/hooks/use-now";
 import { useKeyShortcut } from "@/hooks/use-key-shortcut";
+import { useToday } from "@/hooks/use-now";
 import { useTaskDialog } from "@/hooks/use-task-dialog";
-import { type ViewOptions, useViewOptions } from "@/hooks/use-view-options";
-import { taskListAtom, unscheduledAtom, useOptimisticStatus, useTagMap, useTags, useTaskActions, useWithoutRemoved } from "@/hooks/use-tasks";
+import {
+  taskListAtom,
+  unscheduledAtom,
+  useOptimisticStatus,
+  useTagMap,
+  useTags,
+  useTaskActions,
+  useWithoutRemoved,
+} from "@/hooks/use-tasks";
+import { useViewOptions, type ViewOptions } from "@/hooks/use-view-options";
 import { type LocalDate, localDateOf } from "@/lib/dates";
-import { type TaskGroup, dayHeading, groupByDay, groupByTag, sortTasks, upcomingDay } from "@/lib/tasks";
+import { dayHeading, groupByDay, groupByTag, sortTasks, type TaskGroup, upcomingDay } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 const VIEWS = ["all", "upcoming", "unscheduled", "settled"] as const;
@@ -105,7 +113,10 @@ function Tasks() {
 
       <div className="flex w-full flex-col gap-4 pb-8">
         <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={view} onValueChange={(next) => setSearch({ view: next === "all" ? undefined : (next as Exclude<View, "all">) })}>
+          <Tabs
+            value={view}
+            onValueChange={(next) => setSearch({ view: next === "all" ? undefined : (next as Exclude<View, "all">) })}
+          >
             <TabsList>
               {VIEWS.map((value) => (
                 <TabsTrigger key={value} value={value} className="px-2.5 max-sm:px-1.5 max-sm:text-[0.8125rem]">
@@ -114,7 +125,11 @@ function Tasks() {
               ))}
             </TabsList>
           </Tabs>
-          <TagFilter tags={tags} value={tagIds} onChange={(next) => setSearch({ tags: next.length ? next : undefined })} />
+          <TagFilter
+            tags={tags}
+            value={tagIds}
+            onChange={(next) => setSearch({ tags: next.length ? next : undefined })}
+          />
           <SearchField value={search.q ?? ""} onChange={(q) => setSearch({ q: q.trim() ? q : undefined })} />
           <ViewControls
             view={display}
@@ -224,7 +239,8 @@ function UnscheduledResults({ tagIds, query, today, onClearFilters, onOpenTask, 
     if (!AsyncResult.isSuccess(result)) return undefined;
     const needle = query?.toLowerCase();
     return result.value.open.filter(
-      (task) => (tagIds.length === 0 || tagIds.includes(task.tagId)) && (!needle || task.title.toLowerCase().includes(needle)),
+      (task) =>
+        (tagIds.length === 0 || tagIds.includes(task.tagId)) && (!needle || task.title.toLowerCase().includes(needle)),
     );
   }, [result, tagIds, query]);
 
@@ -355,7 +371,11 @@ function ResultList({
 
   if (failed && !tasks) {
     return (
-      <PageEmpty icon={ListChecksIcon} title="Couldn't load your tasks" description="Check your connection, then try again.">
+      <PageEmpty
+        icon={ListChecksIcon}
+        title="Couldn't load your tasks"
+        description="Check your connection, then try again."
+      >
         <Button variant="outline" size="sm" onClick={onRetry}>
           Try again
         </Button>
@@ -445,27 +465,13 @@ function EmptyResults({
       );
     case "unscheduled":
       return (
-        <PageEmpty
-          icon={CalendarOffIcon}
-          title="No unscheduled tasks"
-          description="Tasks without a date wait here."
-        />
+        <PageEmpty icon={CalendarOffIcon} title="No unscheduled tasks" description="Tasks without a date wait here." />
       );
     case "settled":
       return (
-        <PageEmpty
-          icon={CheckCheckIcon}
-          title="Nothing settled yet"
-          description="Tick a task's circle to settle it."
-        />
+        <PageEmpty icon={CheckCheckIcon} title="Nothing settled yet" description="Tick a task's circle to settle it." />
       );
     default:
-      return (
-        <PageEmpty
-          icon={ListChecksIcon}
-          title="No tasks yet"
-          description="Add one with New task, or press N."
-        />
-      );
+      return <PageEmpty icon={ListChecksIcon} title="No tasks yet" description="Add one with New task, or press N." />;
   }
 }
