@@ -7,13 +7,8 @@ import {
   startOfMonth,
   startOfWeek,
   type LocalDate,
-} from "./dates.ts";
-import type {
-  HabitDayStatus,
-  HabitPeriodUnit,
-  HabitSchedule,
-  HabitScheduleKind,
-} from "./model.ts";
+} from "../core/dates.ts";
+import type { HabitDayStatus, HabitPeriodUnit, HabitSchedule, HabitScheduleKind } from "./model.ts";
 
 export interface HabitRule {
   readonly scheduleKind: HabitScheduleKind;

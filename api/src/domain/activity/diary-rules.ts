@@ -1,4 +1,4 @@
-import { addDays, daysBetween, startOfWeek, type LocalDate } from "./dates.ts";
+import { addDays, daysBetween, startOfWeek, type LocalDate } from "../core/dates.ts";
 import type { ActivityKind } from "./model.ts";
 
 export const DIARY_KINDS = [

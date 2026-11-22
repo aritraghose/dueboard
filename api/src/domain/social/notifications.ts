@@ -1,8 +1,8 @@
 import { and, desc, eq, inArray, isNotNull, isNull, not, or } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { ConnectionRequests, Notifications } from "../schema.ts";
-import { AuthUsers } from "./auth-users.ts";
-import { Database, newId, orDieOnDbError, type Executor } from "./database.ts";
+import { ConnectionRequests, Notifications } from "../../schema.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { Database, newId, orDieOnDbError, type Executor } from "../core/database.ts";
 import {
   NOTIFICATIONS_LIST_LIMIT,
   NOTIFICATIONS_UNSEEN_CAP,

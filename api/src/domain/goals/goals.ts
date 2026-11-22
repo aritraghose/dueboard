@@ -11,10 +11,10 @@ import {
   type GoalLinkRow,
   type GoalProgressEventRow,
   type GoalRow,
-} from "../schema.ts";
-import { deleteActivityFor, recordActivity } from "./activity.ts";
-import { LocalDate, localDateOf } from "./dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+} from "../../schema.ts";
+import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { LocalDate, localDateOf } from "../core/dates.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
 import {
   completionChange,
   convertProgress,
@@ -28,6 +28,9 @@ import {
   withValue,
   type GoalProgress,
 } from "./goal-rules.ts";
+import { Id, InvalidInput, decodeInput } from "../core/model.ts";
+import { HabitNotFound } from "../habits/model.ts";
+import { TaskNotFound } from "../tasks/model.ts";
 import {
   AdjustGoalProgressInput,
   CreateGoalInput,
@@ -41,17 +44,12 @@ import {
   GoalProgressEvent,
   GoalSummary,
   GoalsForDay,
-  HabitNotFound,
-  Id,
-  InvalidInput,
   ItemGoal,
   LinkGoalItemInput,
   ListGoalsInput,
   SetGoalProgressInput,
-  TaskNotFound,
   UnlinkGoalItemInput,
   UpdateGoalInput,
-  decodeInput,
   type GoalLinkItem,
   type GoalProgressSource,
 } from "./model.ts";

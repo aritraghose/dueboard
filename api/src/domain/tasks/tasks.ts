@@ -1,15 +1,14 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, ne, or, type SQL } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Activity, Tasks, UserSettings, type TaskRow } from "../schema.ts";
-import { deleteActivityFor, recordActivity } from "./activity.ts";
-import { LocalDate } from "./dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
-import { deleteLinksFor, onTaskSettled, onTaskUnsettled } from "./goals.ts";
+import { Activity, Tasks, UserSettings, type TaskRow } from "../../schema.ts";
+import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { LocalDate } from "../core/dates.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { deleteLinksFor, onTaskSettled, onTaskUnsettled } from "../goals/goals.ts";
+import { Id, InvalidInput, decodeInput } from "../core/model.ts";
 import {
   CreateTaskInput,
   DayTask,
-  Id,
-  InvalidInput,
   ListTasksInput,
   ListUnscheduledTasksInput,
   SetTaskStatusInput,
@@ -20,9 +19,8 @@ import {
   TasksForDay,
   UnscheduledTasks,
   UpdateTaskInput,
-  decodeInput,
 } from "./model.ts";
-import { findDefaultTag, findTag } from "./tags.ts";
+import { findDefaultTag, findTag } from "../tags/tags.ts";
 import {
   dateRoleOn,
   decodeTaskCursor,

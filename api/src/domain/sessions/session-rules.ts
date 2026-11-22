@@ -1,4 +1,4 @@
-import type { LocalDate } from "./dates.ts";
+import type { LocalDate } from "../core/dates.ts";
 import { SESSION_MINUTES_MAX, type SessionAction, type SessionStatus } from "./model.ts";
 
 export interface Segment {

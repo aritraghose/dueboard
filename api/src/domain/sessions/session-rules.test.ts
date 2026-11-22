@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as Schema from "effect/Schema";
-import type { LocalDate } from "./dates.ts";
+import type { LocalDate } from "../core/dates.ts";
 import { ExtendSessionInput, SESSION_LABEL_MAX_LENGTH, StartSessionInput } from "./model.ts";
 import {
   canApply,

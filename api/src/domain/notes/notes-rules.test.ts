@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as Schema from "effect/Schema";
-import type { LocalDate } from "./dates.ts";
+import type { LocalDate } from "../core/dates.ts";
 import { CreateNoteInput, NOTE_BODY_MAX_LENGTH } from "./model.ts";
 import { decodeNoteCursor, encodeNoteCursor, groupByDay, noteDateError } from "./notes-rules.ts";
 

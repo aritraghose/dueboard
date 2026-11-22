@@ -1,4 +1,4 @@
-import type { Privacy } from "./model.ts";
+import type { Privacy } from "../core/model.ts";
 
 export type ViewerRelation = "self" | "connected" | "other" | "blocked";
 

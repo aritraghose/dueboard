@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Activity, UserSettings } from "../schema.ts";
-import { FALLBACK_TIME_ZONE, localDateOf, type LocalDate } from "./dates.ts";
-import { newId, type Executor } from "./database.ts";
+import { Activity, UserSettings } from "../../schema.ts";
+import { FALLBACK_TIME_ZONE, localDateOf, type LocalDate } from "../core/dates.ts";
+import { newId, type Executor } from "../core/database.ts";
 import type { ActivityKind, ActivitySubject } from "./model.ts";
 
 export interface ActivityInput {

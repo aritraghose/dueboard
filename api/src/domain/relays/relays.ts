@@ -1,10 +1,10 @@
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Blocks, Connections, Relays, UserSettings, type RelayRow } from "../schema.ts";
-import { AuthUsers } from "./auth-users.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+import { Blocks, Connections, Relays, UserSettings, type RelayRow } from "../../schema.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { Id, UserNotFound, decodeInput } from "../core/model.ts";
 import {
-  Id,
   RELAY_OPEN_STATUS,
   RELAY_UNITS_PER_SIDE,
   RelayClosed,
@@ -15,11 +15,9 @@ import {
   RelayRecipientUnclear,
   RelayText,
   SendRelayInput,
-  UserNotFound,
-  decodeInput,
   type RelayStatus,
 } from "./model.ts";
-import { RateLimiter } from "./rate-limiter.ts";
+import { RateLimiter } from "../core/rate-limiter.ts";
 import {
   expiresAtFor,
   isOpen,
@@ -28,8 +26,8 @@ import {
   relayDecision,
   syncAfter,
 } from "./relay-rules.ts";
-import { normalizeUsername } from "./social-rules.ts";
-import { canSpend } from "./usage.ts";
+import { normalizeUsername } from "../social/social-rules.ts";
+import { canSpend } from "../usage/usage.ts";
 
 const DAY_MS = 24 * 60 * 60_000;
 const HOLD_RETRY_MS = 30 * 60_000;

@@ -43,7 +43,7 @@
     "destroy": "alchemy destroy",
     "logs": "alchemy logs",
     "tail": "alchemy logs --tail",
-    "test": "bun test"
+    "test": "bun test src"
   },
   "dependencies": {
     "@ai-sdk/openai": "catalog:",

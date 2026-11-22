@@ -8,7 +8,7 @@ import type {
   EffectPgQueryResultHKT,
 } from "drizzle-orm/effect-postgres";
 import type { PgEffectDatabase } from "drizzle-orm/pg-core/effect";
-import type { relations } from "../schema.ts";
+import type { relations } from "../../schema.ts";
 
 type Relations = typeof relations;
 

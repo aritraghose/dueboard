@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { getTableName, isTable } from "drizzle-orm";
-import * as schema from "../schema.ts";
+import * as schema from "../../schema.ts";
 import { USER_OWNED_TABLES } from "./account.ts";
 
 const CASCADED = new Set(["habit_pauses", "focus_session_segments"]);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { LocalDate } from "./dates.ts";
+import type { LocalDate } from "../core/dates.ts";
 import {
   dayStatus,
   describeSchedule,

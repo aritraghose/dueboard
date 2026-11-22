@@ -1,4 +1,4 @@
-import { ASK_CONTEXT_EXCHANGES } from "../domain/ask-constants.ts";
+import { ASK_CONTEXT_EXCHANGES } from "../domain/ask/ask-constants.ts";
 import type { AskOwnerContext as AskOwnerFacts } from "../domain-client.ts";
 
 export const escapeTagText = (text: string): string =>

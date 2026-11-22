@@ -1,4 +1,4 @@
-import { AI_UNITS_PER_MESSAGE } from "../domain/usage-constants.ts";
+import { AI_UNITS_PER_MESSAGE } from "../domain/usage/usage-constants.ts";
 
 export const IMAGES_PER_DAY = 5;
 

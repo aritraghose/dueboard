@@ -1,19 +1,12 @@
 import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Activity, Blocks, FocusSessions, Goals, Habits, Notes, Tasks } from "../schema.ts";
-import { AuthUsers } from "./auth-users.ts";
-import { Database, orDieOnDbError } from "./database.ts";
-import {
-  GetProfileItemsInput,
-  InvalidInput,
-  PROFILE_ITEMS_PAGE_SIZE,
-  ProfileItem,
-  ProfileItemPage,
-  UserNotFound,
-  decodeInput,
-} from "./model.ts";
+import { Activity, Blocks, FocusSessions, Goals, Habits, Notes, Tasks } from "../../schema.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { Database, orDieOnDbError } from "../core/database.ts";
+import { InvalidInput, UserNotFound, decodeInput } from "../core/model.ts";
+import { GetProfileItemsInput, PROFILE_ITEMS_PAGE_SIZE, ProfileItem, ProfileItemPage } from "./model.ts";
 import { FEED_KINDS, decodeItemCursor, encodeItemCursor } from "./profile-rules.ts";
-import { normalizeUsername } from "./social-rules.ts";
+import { normalizeUsername } from "../social/social-rules.ts";
 import {
   activitySubjectExists,
   activitySubjectJoin,
@@ -21,7 +14,7 @@ import {
   activitySubjectTitle,
   privacyVisibleSql,
   viewerRelation,
-} from "./visibility.ts";
+} from "../social/visibility.ts";
 
 const notFound = (username: string) =>
   new UserNotFound({ message: `There's no one called @${username.replace(/^@/, "")}.`, username });

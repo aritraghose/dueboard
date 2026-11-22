@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { LocalDate } from "./dates.ts";
+import type { LocalDate } from "../core/dates.ts";
 import { DIARY_PAGE_DAYS, GRAPH_KINDS, graphRange, pickDiaryDays } from "./diary-rules.ts";
 
 const today = "2026-11-03" as LocalDate;

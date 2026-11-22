@@ -1,7 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import type { RelayJson } from "../domain-client.ts";
-import { RELAY_TTL_MS } from "../domain/relay-constants.ts";
+import { RELAY_TTL_MS } from "../domain/relays/relay-constants.ts";
 import type { ContextSection } from "./context.ts";
 import type { TiboRelayCard, TiboRelayStatus } from "./protocol.ts";
 

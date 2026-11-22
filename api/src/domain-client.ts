@@ -1,12 +1,12 @@
-import type { AskPrepared } from "./domain/ask.ts";
+import type { AskPrepared } from "./domain/ask/ask.ts";
 import type { AiUsageReason } from "./domain/model.ts";
-import type { RelayStatus } from "./domain/relay-constants.ts";
-import type { RelayJson, RelaySyncJson } from "./domain/relays.ts";
-import type { TiboEventJson, TiboProactiveContext } from "./domain/tibo.ts";
+import type { RelayStatus } from "./domain/relays/relay-constants.ts";
+import type { RelayJson, RelaySyncJson } from "./domain/relays/relays.ts";
+import type { TiboEventJson, TiboProactiveContext } from "./domain/tibo/tibo.ts";
 
-export type { AskOwnerContext, AskPrepared } from "./domain/ask.ts";
-export type { RelayJson, RelayPersonJson, RelaySyncJson } from "./domain/relays.ts";
-export type { TiboEventJson, TiboProactiveContext, TiboProactiveSettings } from "./domain/tibo.ts";
+export type { AskOwnerContext, AskPrepared } from "./domain/ask/ask.ts";
+export type { RelayJson, RelayPersonJson, RelaySyncJson } from "./domain/relays/relays.ts";
+export type { TiboEventJson, TiboProactiveContext, TiboProactiveSettings } from "./domain/tibo/tibo.ts";
 
 export const TIBO_RPCS = [
   "ListTags",

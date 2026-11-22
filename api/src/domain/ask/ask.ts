@@ -8,7 +8,7 @@ import {
   Blocks,
   UserSettings,
   type AskSettingsRow,
-} from "../schema.ts";
+} from "../../schema.ts";
 import {
   ASK_ANSWER_MAX_LENGTH,
   ASK_DOCUMENTS_MAX,
@@ -18,8 +18,10 @@ import {
   ASK_UNITS_PER_ANSWER,
 } from "./ask-constants.ts";
 import { askGate, askRetentionCutoff, cleanAskText, type AskGate } from "./ask-rules.ts";
-import { AuthUsers } from "./auth-users.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { InvalidInput, UserNotFound, decodeInput } from "../core/model.ts";
+import { Person, UsernameRef } from "../social/model.ts";
 import {
   AddAskDocumentInput,
   AskDocument,
@@ -30,15 +32,10 @@ import {
   AskQuestion,
   AskSettings,
   AskSettingsPatch,
-  InvalidInput,
-  Person,
-  UserNotFound,
-  UsernameRef,
-  decodeInput,
 } from "./model.ts";
-import { normalizeUsername } from "./social-rules.ts";
-import { canSpend, charge, timeZoneOf } from "./usage.ts";
-import { nextResetAt, periodOf } from "./usage-rules.ts";
+import { normalizeUsername } from "../social/social-rules.ts";
+import { canSpend, charge, timeZoneOf } from "../usage/usage.ts";
+import { nextResetAt, periodOf } from "../usage/usage-rules.ts";
 
 const findOwner = (db: Executor, input: string) =>
   Effect.gen(function* () {

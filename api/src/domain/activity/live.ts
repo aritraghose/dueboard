@@ -11,13 +11,14 @@ import {
   Notes,
   Tasks,
   UserSettings,
-} from "../schema.ts";
-import { AuthUsers } from "./auth-users.ts";
-import { Database, orDieOnDbError } from "./database.ts";
-import { FALLBACK_TIME_ZONE, addDays, todayIn } from "./dates.ts";
+} from "../../schema.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { Database, orDieOnDbError } from "../core/database.ts";
+import { FALLBACK_TIME_ZONE, addDays, todayIn } from "../core/dates.ts";
+import { InvalidInput, decodeInput } from "../core/model.ts";
+import { type UserColor } from "../tags/model.ts";
 import {
   GetLiveInput,
-  InvalidInput,
   LIVE_PAGE_SIZE,
   LiveActor,
   LiveEvent,
@@ -26,8 +27,6 @@ import {
   Path,
   PathEvent,
   PathEventMeta,
-  decodeInput,
-  type UserColor,
 } from "./model.ts";
 import { decodeItemCursor, encodeItemCursor } from "./profile-rules.ts";
 import {
@@ -38,7 +37,7 @@ import {
   activitySubjectTitle,
   liveActorSql,
   liveDisplay,
-} from "./visibility.ts";
+} from "../social/visibility.ts";
 
 export const focusedMinutes = sql<number | null>`(
   select round(sum(extract(epoch from coalesce(${FocusSessionSegments.endedAt}, now()) - ${FocusSessionSegments.startedAt})) / 60)::int

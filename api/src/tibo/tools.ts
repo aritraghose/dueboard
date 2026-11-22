@@ -7,7 +7,7 @@ import { TIBO_MEMORY_KINDS, type TiboMemoryKind } from "./protocol.ts";
 import { REMINDER_MESSAGE_MAX } from "./reminders.ts";
 import { IMAGES_PER_DAY, IMAGE_PROMPT_MAX, IMAGE_REFERENCES_MAX } from "./image-rules.ts";
 import { IMAGE_SHAPES, type ImageShape } from "../muse-image.ts";
-import { RELAY_MESSAGE_MAX_LENGTH } from "../domain/relay-constants.ts";
+import { RELAY_MESSAGE_MAX_LENGTH } from "../domain/relays/relay-constants.ts";
 import {
   IMPORTANCE,
   goalView,

@@ -8,17 +8,17 @@ import * as Schema from "effect/Schema";
 import * as Headers from "effect/http/Headers";
 import { Rpc, RpcMessage } from "effect/rpc";
 import { Hyperdrive } from "./database.ts";
-import { AuthAccounts } from "./domain/account.ts";
-import { Database } from "./domain/database.ts";
+import { AuthAccounts } from "./domain/account/account.ts";
+import { Database } from "./domain/core/database.ts";
 import { DEV_PORTS } from "./dev-ports.ts";
 import { AI_UNITS_PER_CHARGE_MAX, AiUsageReason, Id, RelayStatus, type AiUsage } from "./domain/model.ts";
-import { RateLimiter } from "./domain/rate-limiter.ts";
-import * as AskService from "./domain/ask.ts";
-import { ASK_ANSWER_MAX_LENGTH, ASK_QUESTION_MAX_LENGTH } from "./domain/ask-constants.ts";
-import * as RelayService from "./domain/relays.ts";
-import * as TiboService from "./domain/tibo.ts";
-import * as UsageService from "./domain/usage.ts";
-import { AiQuota } from "./domain/usage.ts";
+import { RateLimiter } from "./domain/core/rate-limiter.ts";
+import * as AskService from "./domain/ask/ask.ts";
+import { ASK_ANSWER_MAX_LENGTH, ASK_QUESTION_MAX_LENGTH } from "./domain/ask/ask-constants.ts";
+import * as RelayService from "./domain/relays/relays.ts";
+import * as TiboService from "./domain/tibo/tibo.ts";
+import * as UsageService from "./domain/usage/usage.ts";
+import { AiQuota } from "./domain/usage/usage.ts";
 import {
   TIBO_RPCS,
   type AiUsageJson,

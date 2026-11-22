@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { USER_COLOR } from "./model.ts";
+import { USER_COLOR } from "../tags/model.ts";
 import { randomUserColor } from "./settings.ts";
 
 describe("randomUserColor", () => {

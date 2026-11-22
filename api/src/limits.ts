@@ -37,14 +37,14 @@ export const LIMITS = {
     namespaceId: 1006,
     simple: { limit: 5, period: 60 },
     key: "user",
-    where: "ApiWorker: `domain/social.ts` through `RateLimiter`",
+    where: "ApiWorker: `domain/social/social.ts` through `RateLimiter`",
   }),
   relay: limit({
     name: "RELAY_RATE_LIMIT",
     namespaceId: 1007,
     simple: { limit: 5, period: 60 },
     key: "user",
-    where: "DomainWorker: `domain/relays.ts` through `RateLimiter`",
+    where: "DomainWorker: `domain/relays/relays.ts` through `RateLimiter`",
   }),
   publicRead: limit({
     name: "PUBLIC_READ_RATE_LIMIT",
@@ -86,7 +86,7 @@ export const LIMITS = {
     namespaceId: 1011,
     simple: { limit: 30, period: 60 },
     key: "user",
-    where: "ApiWorker: `domain/social.ts` through `RateLimiter`",
+    where: "ApiWorker: `domain/social/social.ts` through `RateLimiter`",
   }),
   web: limit({
     name: "WEB_RATE_LIMIT",

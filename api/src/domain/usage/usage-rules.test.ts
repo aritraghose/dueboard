@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { startOfDayInstant, type LocalDate } from "./dates.ts";
+import { startOfDayInstant, type LocalDate } from "../core/dates.ts";
 import { fits, limitFor, nextResetAt, periodOf, remainingUnits, toAiUsage } from "./usage-rules.ts";
 
 const d = (value: string) => value as LocalDate;

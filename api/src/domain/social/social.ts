@@ -14,9 +14,10 @@ import {
   sql,
 } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Activity, AskSettingsTable, Blocks, ConnectionRequests, Connections, UserSettings } from "../schema.ts";
-import { AuthUsers } from "./auth-users.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+import { Activity, AskSettingsTable, Blocks, ConnectionRequests, Connections, UserSettings } from "../../schema.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { UserNotFound, decodeInput } from "../core/model.ts";
 import {
   BlockedPerson,
   CONNECTION_REQUESTS_PER_DAY,
@@ -34,21 +35,19 @@ import {
   SocialLimitReached,
   SocialOverview,
   SocialStatus,
-  UserNotFound,
   UsernameRef,
-  decodeInput,
   type ConnectionState,
 } from "./model.ts";
-import { deleteAskQuestionsBetween } from "./ask.ts";
-import { RateLimiter } from "./rate-limiter.ts";
+import { deleteAskQuestionsBetween } from "../ask/ask.ts";
+import { RateLimiter } from "../core/rate-limiter.ts";
 import {
   connectionState,
   normalizeUsername,
   orderedPair,
   searchPatterns,
 } from "./social-rules.ts";
-import { pointsOf } from "./points.ts";
-import { cancelRelaysBetween } from "./relays.ts";
+import { pointsOf } from "../activity/points.ts";
+import { cancelRelaysBetween } from "../relays/relays.ts";
 import { onRequestAccepted, onRequestSent } from "./notification-rules.ts";
 import { deleteNotificationsBetween, recordNotifications } from "./notifications.ts";
 

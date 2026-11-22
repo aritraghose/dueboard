@@ -6,16 +6,15 @@ import {
   FocusSessions,
   UserSettings,
   type FocusSessionRow,
-} from "../schema.ts";
-import { deleteActivityFor, recordActivity } from "./activity.ts";
-import { FALLBACK_TIME_ZONE, LocalDate, localDateOf, todayIn } from "./dates.ts";
-import { Database, newId, transaction, type Executor } from "./database.ts";
+} from "../../schema.ts";
+import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { FALLBACK_TIME_ZONE, LocalDate, localDateOf, todayIn } from "../core/dates.ts";
+import { Database, newId, transaction, type Executor } from "../core/database.ts";
+import { Id, InvalidInput, decodeInput } from "../core/model.ts";
 import {
   ActiveSessionExists,
   ExtendSessionInput,
   FocusSession,
-  Id,
-  InvalidInput,
   ListSessionsInput,
   SESSION_PAGE_SIZE_DEFAULT,
   SessionDay,
@@ -24,10 +23,9 @@ import {
   SessionTransitionNotAllowed,
   SessionsForDay,
   StartSessionInput,
-  decodeInput,
   type SessionAction,
 } from "./model.ts";
-import { decodeNoteCursor, encodeNoteCursor, groupByDay } from "./notes-rules.ts";
+import { decodeNoteCursor, encodeNoteCursor, groupByDay } from "../notes/notes-rules.ts";
 import {
   computeEndsAt,
   elapsed,

@@ -1,4 +1,4 @@
-import type { LocalDate } from "./dates.ts";
+import type { LocalDate } from "../core/dates.ts";
 import type { TaskDateRole, TaskStatus } from "./model.ts";
 
 interface TaskDates {

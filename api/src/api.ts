@@ -11,12 +11,12 @@ import { RpcSerialization, RpcServer } from "effect/rpc";
 import { Auth } from "./auth.ts";
 import { Hyperdrive } from "./database.ts";
 import { DEV_PORTS } from "./dev-ports.ts";
-import { AuthAccounts } from "./domain/account.ts";
-import { Database } from "./domain/database.ts";
-import * as AskService from "./domain/ask.ts";
-import * as SessionsService from "./domain/sessions.ts";
-import { RateLimiter } from "./domain/rate-limiter.ts";
-import { AiQuota } from "./domain/usage.ts";
+import { AuthAccounts } from "./domain/account/account.ts";
+import { Database } from "./domain/core/database.ts";
+import * as AskService from "./domain/ask/ask.ts";
+import * as SessionsService from "./domain/sessions/sessions.ts";
+import { RateLimiter } from "./domain/core/rate-limiter.ts";
+import { AiQuota } from "./domain/usage/usage.ts";
 import { apiHandlers } from "./handlers.ts";
 import { LIMITS, bindingProps } from "./limits.ts";
 import {

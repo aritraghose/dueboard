@@ -1,6 +1,6 @@
 import { and, asc, count, eq } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Tags, Tasks, UserSettings, type TagRow } from "../schema.ts";
+import { Tags, Tasks, UserSettings, type TagRow } from "../../schema.ts";
 import {
   Database,
   isUniqueViolation,
@@ -8,7 +8,8 @@ import {
   orDieOnDbError,
   transaction,
   type Executor,
-} from "./database.ts";
+} from "../core/database.ts";
+import { decodeInput } from "../core/model.ts";
 import {
   CreateTagInput,
   MAX_TAGS_PER_USER,
@@ -18,7 +19,6 @@ import {
   TagNameTaken,
   TagNotFound,
   UpdateTagInput,
-  decodeInput,
   type SystemTagKind,
   type TagColor,
 } from "./model.ts";

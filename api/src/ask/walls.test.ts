@@ -17,7 +17,7 @@ describe("Ask agent walls", () => {
       for (const path of imports) {
         expect({ file, path, tibo: path.includes("/tibo/") || path.includes("tibo") }).toEqual({ file, path, tibo: false });
         expect({ file, path, global: path === "cloudflare:workers" }).toEqual({ file, path, global: false });
-        if (path.startsWith("../domain/")) expect({ file, path }).toEqual({ file, path: "../domain/ask-constants.ts" });
+        if (path.startsWith("../domain/")) expect({ file, path }).toEqual({ file, path: "../domain/ask/ask-constants.ts" });
       }
     }
   });

@@ -1,9 +1,9 @@
 import { and, eq, sql } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { AiUsageEvents, AiUsageTotals, UserSettings } from "../schema.ts";
-import { FALLBACK_TIME_ZONE, isValidTimeZone } from "./dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+import { AiUsageEvents, AiUsageTotals, UserSettings } from "../../schema.ts";
+import { FALLBACK_TIME_ZONE, isValidTimeZone } from "../core/dates.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
 import { AI_UNITS_PER_CHARGE_MAX, type AiUsageReason } from "./model.ts";
 import { fits, limitFor, periodOf, toAiUsage } from "./usage-rules.ts";
 

@@ -3,7 +3,7 @@ import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
-import { LocalDate } from "./domain/dates.ts";
+import { LocalDate } from "./domain/core/dates.ts";
 import {
   ActiveSessionExists,
   AiUsage,
@@ -107,11 +107,11 @@ import {
 } from "./domain/model.ts";
 
 export * from "./domain/model.ts";
-export { documentText } from "./domain/ask-rules.ts";
-export { isValidUsername, usernameProblem, type UsernameProblem } from "./domain/username-rules.ts";
-export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/dates.ts";
-export { computeEndsAt, elapsed, remaining } from "./domain/session-rules.ts";
-export { goalPercent, goalValue, isReached } from "./domain/goal-rules.ts";
+export { documentText } from "./domain/ask/ask-rules.ts";
+export { isValidUsername, usernameProblem, type UsernameProblem } from "./domain/social/username-rules.ts";
+export { LocalDate, addDays, localDateOf, startOfWeek, todayIn } from "./domain/core/dates.ts";
+export { computeEndsAt, elapsed, remaining } from "./domain/sessions/session-rules.ts";
+export { goalPercent, goalValue, isReached } from "./domain/goals/goal-rules.ts";
 export {
   dayStatus,
   describeSchedule,
@@ -119,7 +119,7 @@ export {
   periodFor,
   progressFor,
   streak,
-} from "./domain/habit-rules.ts";
+} from "./domain/habits/habit-rules.ts";
 
 export class CurrentUser extends Context.Service<
   CurrentUser,

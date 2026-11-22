@@ -12,7 +12,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import { Hyperdrive, NeonDatabase } from "./database.ts";
 import { USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH } from "./domain/model.ts";
-import { isValidUsername } from "./domain/username-rules.ts";
+import { isValidUsername } from "./domain/social/username-rules.ts";
 
 const makeAuth = Effect.gen(function* () {
   const baseURL = yield* Config.String("AUTH_BASE_URL").pipe(Config.option);

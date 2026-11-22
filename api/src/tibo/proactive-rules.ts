@@ -1,5 +1,5 @@
 import type { TiboProactiveSettings } from "../domain-client.ts";
-import { TIBO_DEADLINE_NUDGE_TIME } from "../domain/tibo-constants.ts";
+import { TIBO_DEADLINE_NUDGE_TIME } from "../domain/tibo/tibo-constants.ts";
 import type { ContextSection } from "./context.ts";
 import { addDays, dayIn, instantIn } from "./dates.ts";
 import type { DayJson } from "./views.ts";

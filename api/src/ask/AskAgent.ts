@@ -8,7 +8,7 @@ import {
   ASK_THREAD_MAX,
   ASK_VISITOR_HOURLY,
   ASK_VISITOR_IDLE_MS,
-} from "../domain/ask-constants.ts";
+} from "../domain/ask/ask-constants.ts";
 import type { AskPort } from "../domain-client.ts";
 import { logMuseUsage, museOptions, museSpark } from "../muse.ts";
 import { askMessages, askSystemPrompt } from "./prompt.ts";

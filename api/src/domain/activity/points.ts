@@ -1,19 +1,14 @@
 import { eq, sql, type SQL } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Activity, HabitCheckins, UserSettings } from "../schema.ts";
-import { AuthUsers } from "./auth-users.ts";
-import { FALLBACK_TIME_ZONE, todayIn, type LocalDate } from "./dates.ts";
-import { Database, orDieOnDbError, type Executor } from "./database.ts";
-import {
-  GetLeaderboardInput,
-  LEADERBOARD_SIZE,
-  Leaderboard,
-  LeaderboardEntry,
-  Person,
-  decodeInput,
-} from "./model.ts";
+import { Activity, HabitCheckins, UserSettings } from "../../schema.ts";
+import { AuthUsers } from "../core/auth-users.ts";
+import { FALLBACK_TIME_ZONE, todayIn, type LocalDate } from "../core/dates.ts";
+import { Database, orDieOnDbError, type Executor } from "../core/database.ts";
+import { decodeInput } from "../core/model.ts";
+import { Person } from "../social/model.ts";
+import { GetLeaderboardInput, LEADERBOARD_SIZE, Leaderboard, LeaderboardEntry } from "./model.ts";
 import { periodStart } from "./points-rules.ts";
-import { connectedSql, notBlockedSql } from "./visibility.ts";
+import { connectedSql, notBlockedSql } from "../social/visibility.ts";
 
 const scores = (from: LocalDate | null, userId: string | null): SQL => {
   const activityFrom = from ? sql` and ${Activity.localDate} >= ${from}` : sql``;

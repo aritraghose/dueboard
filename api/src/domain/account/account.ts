@@ -25,10 +25,11 @@ import {
   Tasks,
   TiboEvents,
   UserSettings,
-} from "../schema.ts";
-import { Database, transaction, type Executor } from "./database.ts";
-import { DeleteAccountInput, InvalidInput, decodeInput } from "./model.ts";
-import { queueTiboWipe } from "./tibo.ts";
+} from "../../schema.ts";
+import { Database, transaction, type Executor } from "../core/database.ts";
+import { InvalidInput, decodeInput } from "../core/model.ts";
+import { DeleteAccountInput } from "./model.ts";
+import { queueTiboWipe } from "../tibo/tibo.ts";
 
 export class AuthAccounts extends Context.Service<
   AuthAccounts,

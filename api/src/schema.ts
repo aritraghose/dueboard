@@ -70,7 +70,7 @@ import {
   type TiboMorningTime,
   type UserColor,
 } from "./domain/model.ts";
-import type { LocalDate } from "./domain/dates.ts";
+import type { LocalDate } from "./domain/core/dates.ts";
 
 const id = () => text("id").primaryKey();
 const userId = () => text("user_id").notNull();

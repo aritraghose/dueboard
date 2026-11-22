@@ -3,8 +3,8 @@
 import { Agent, getAgentByName, type Connection, type ConnectionContext, type WSMessage } from "agents";
 import { asSchema, generateText, isStepCount, streamText, type ToolSet } from "ai";
 import type { AgentEnv } from "../AgentWorker.ts";
-import { RELAY_UNITS_PER_SIDE } from "../domain/relay-constants.ts";
-import { AI_UNITS_PER_MESSAGE } from "../domain/usage-constants.ts";
+import { RELAY_UNITS_PER_SIDE } from "../domain/relays/relay-constants.ts";
+import { AI_UNITS_PER_MESSAGE } from "../domain/usage/usage-constants.ts";
 import {
   relayClient,
   tiboClient,

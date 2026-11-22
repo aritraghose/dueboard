@@ -9,11 +9,11 @@ import {
   type HabitCheckinRow,
   type HabitPauseRow,
   type HabitRow,
-} from "../schema.ts";
-import { deleteActivityFor, recordActivity } from "./activity.ts";
-import { LocalDate, addDays, startOfWeek, todayIn } from "./dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
-import { deleteLinksFor, onHabitCheckIn } from "./goals.ts";
+} from "../../schema.ts";
+import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { LocalDate, addDays, startOfWeek, todayIn } from "../core/dates.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { deleteLinksFor, onHabitCheckIn } from "../goals/goals.ts";
 import {
   dayStatus,
   describeSchedule,
@@ -26,6 +26,8 @@ import {
   type CheckinIndex,
   type HabitPause,
 } from "./habit-rules.ts";
+import { Id, InvalidInput, decodeInput } from "../core/model.ts";
+import { UpcomingHabit } from "../days/model.ts";
 import {
   CheckInNotAllowed,
   CreateHabitInput,
@@ -40,11 +42,7 @@ import {
   HabitSchedule,
   HabitSummary,
   HabitsForDay,
-  Id,
-  UpcomingHabit,
-  InvalidInput,
   UpdateHabitInput,
-  decodeInput,
 } from "./model.ts";
 
 export const toHabit = (row: HabitRow): Habit =>

@@ -1,13 +1,12 @@
 import { and, asc, count, desc, eq, ilike, lt, or, type SQL } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Notes, UserSettings, type NoteRow } from "../schema.ts";
-import { deleteActivityFor, recordActivity } from "./activity.ts";
-import { LocalDate, todayIn } from "./dates.ts";
-import { Database, newId, orDieOnDbError, transaction, type Executor } from "./database.ts";
+import { Notes, UserSettings, type NoteRow } from "../../schema.ts";
+import { deleteActivityFor, recordActivity } from "../activity/activity.ts";
+import { LocalDate, todayIn } from "../core/dates.ts";
+import { Database, newId, orDieOnDbError, transaction, type Executor } from "../core/database.ts";
+import { Id, InvalidInput, decodeInput } from "../core/model.ts";
 import {
   CreateNoteInput,
-  Id,
-  InvalidInput,
   ListNotesInput,
   MAX_NOTES_PER_DAY,
   NOTE_PAGE_SIZE_DEFAULT,
@@ -18,10 +17,9 @@ import {
   NotePage,
   NotesForDay,
   UpdateNoteInput,
-  decodeInput,
 } from "./model.ts";
 import { decodeNoteCursor, encodeNoteCursor, groupByDay, noteDateError } from "./notes-rules.ts";
-import { titleSearchPattern } from "./tasks-rules.ts";
+import { titleSearchPattern } from "../tasks/tasks-rules.ts";
 
 export const toNote = (row: NoteRow): Note =>
   new Note({

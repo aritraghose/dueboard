@@ -1,5 +1,5 @@
-import type { LocalDate } from "./dates.ts";
-import { isLocalDate } from "./dates.ts";
+import type { LocalDate } from "../core/dates.ts";
+import { isLocalDate } from "../core/dates.ts";
 
 export interface NoteCursor {
   readonly localDate: LocalDate;

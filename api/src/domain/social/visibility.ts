@@ -1,8 +1,9 @@
 import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import * as Effect from "effect/Effect";
-import { Activity, Blocks, Connections, FocusSessions, Goals, Habits, Notes, Tasks } from "../schema.ts";
-import type { LiveScope, Privacy } from "./model.ts";
+import { Activity, Blocks, Connections, FocusSessions, Goals, Habits, Notes, Tasks } from "../../schema.ts";
+import type { LiveScope } from "../activity/model.ts";
+import type { Privacy } from "../core/model.ts";
 import { areConnected, isBlocked } from "./social.ts";
 import { relationOf, visiblePrivacies, type ViewerRelation } from "./visibility-rules.ts";
 

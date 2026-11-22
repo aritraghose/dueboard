@@ -1,11 +1,13 @@
 import { and, eq, ne } from "drizzle-orm";
 import * as Effect from "effect/Effect";
-import { Tags, UserSettings, type UserSettingsRow } from "../schema.ts";
-import { FALLBACK_TIME_ZONE, isValidTimeZone } from "./dates.ts";
-import { Database, newId, orDieOnDbError, transaction } from "./database.ts";
-import { Settings, SettingsPatch, TIBO_PROACTIVE_KEYS, USER_COLOR, decodeInput, type UserColor } from "./model.ts";
-import { SYSTEM_TAGS, listTags } from "./tags.ts";
-import { queueTiboEvent } from "./tibo.ts";
+import { Tags, UserSettings, type UserSettingsRow } from "../../schema.ts";
+import { FALLBACK_TIME_ZONE, isValidTimeZone } from "../core/dates.ts";
+import { Database, newId, orDieOnDbError, transaction } from "../core/database.ts";
+import { decodeInput } from "../core/model.ts";
+import { USER_COLOR, type UserColor } from "../tags/model.ts";
+import { Settings, SettingsPatch, TIBO_PROACTIVE_KEYS } from "./model.ts";
+import { SYSTEM_TAGS, listTags } from "../tags/tags.ts";
+import { queueTiboEvent } from "../tibo/tibo.ts";
 
 const toSettings = (row: UserSettingsRow): Settings =>
   new Settings({

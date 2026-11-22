@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Privacy } from "./model.ts";
+import type { Privacy } from "../core/model.ts";
 import {
   canSeeItem,
   canSeeOnLive,

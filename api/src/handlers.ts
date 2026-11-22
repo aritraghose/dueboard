@@ -1,21 +1,21 @@
 import * as Effect from "effect/Effect";
-import * as AccountService from "./domain/account.ts";
-import * as AskService from "./domain/ask.ts";
-import * as DaysService from "./domain/days.ts";
-import * as DiaryService from "./domain/diary.ts";
-import * as GoalsService from "./domain/goals.ts";
-import * as HabitsService from "./domain/habits.ts";
-import * as LiveService from "./domain/live.ts";
-import * as NotesService from "./domain/notes.ts";
-import * as NotificationsService from "./domain/notifications.ts";
-import * as PointsService from "./domain/points.ts";
-import * as ProfileItemsService from "./domain/profile-items.ts";
-import * as SessionsService from "./domain/sessions.ts";
-import * as SettingsService from "./domain/settings.ts";
-import * as SocialService from "./domain/social.ts";
-import * as TagsService from "./domain/tags.ts";
-import * as TasksService from "./domain/tasks.ts";
-import * as UsageService from "./domain/usage.ts";
+import * as AccountService from "./domain/account/account.ts";
+import * as AskService from "./domain/ask/ask.ts";
+import * as DaysService from "./domain/days/days.ts";
+import * as DiaryService from "./domain/activity/diary.ts";
+import * as GoalsService from "./domain/goals/goals.ts";
+import * as HabitsService from "./domain/habits/habits.ts";
+import * as LiveService from "./domain/activity/live.ts";
+import * as NotesService from "./domain/notes/notes.ts";
+import * as NotificationsService from "./domain/social/notifications.ts";
+import * as PointsService from "./domain/activity/points.ts";
+import * as ProfileItemsService from "./domain/activity/profile-items.ts";
+import * as SessionsService from "./domain/sessions/sessions.ts";
+import * as SettingsService from "./domain/account/settings.ts";
+import * as SocialService from "./domain/social/social.ts";
+import * as TagsService from "./domain/tags/tags.ts";
+import * as TasksService from "./domain/tasks/tasks.ts";
+import * as UsageService from "./domain/usage/usage.ts";
 import { ApiRpcs, BootstrapResult, CurrentUser, Viewer } from "./rpc.ts";
 
 export const apiHandlers = ApiRpcs.of({
