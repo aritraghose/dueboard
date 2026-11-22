@@ -1,10 +1,63 @@
 {
-  "version": "8",
+  "type": "diff",
+  "version": "9",
   "dialect": "postgres",
   "id": "50fa9fa2-9c84-4ca6-99d8-f15aca6ef72a",
   "prevIds": [
     "e4aba64a-663b-481f-930b-31cdb1e4b942"
   ],
-  "ddl": [],
-  "renames": []
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "todos"
+      ],
+      "writes": [
+        "s|tbl|public.todos",
+        "n|tbl|public.todos",
+        "e|tbl|public.todos",
+        "n|rel|public.todos",
+        "n|type|public.todos"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"todos\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"todos\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"todos\",\"user_id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"todos\",\"text\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"todos\",\"done\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"todos\",\"created_at\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"todos_user_id_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"todos\",\"todos_pkey\"]"
+    }
+  ]
 }

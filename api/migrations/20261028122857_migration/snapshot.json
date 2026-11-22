@@ -1,18 +1,63 @@
 {
+  "type": "base",
+  "version": "9",
   "dialect": "postgres",
   "id": "e4aba64a-663b-481f-930b-31cdb1e4b942",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
-  "version": "8",
-  "ddl": [
+  "footprints": [
     {
-      "isRlsEnabled": false,
-      "name": "todos",
-      "entityType": "tables",
-      "schema": "public"
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "todos"
+      ],
+      "writes": [
+        "s|tbl|public.todos",
+        "n|tbl|public.todos",
+        "e|tbl|public.todos",
+        "n|rel|public.todos",
+        "n|type|public.todos",
+        "n|rel|public.todos_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
     },
     {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "todos",
+        "todos_user_id_idx"
+      ],
+      "writes": [
+        "s|idx|public.todos_user_id_idx",
+        "n|idx|public.todos_user_id_idx",
+        "e|idx|public.todos_user_id_idx",
+        "n|rel|public.todos_user_id_idx"
+      ],
+      "reads": [
+        "n|tbl|public.todos",
+        "n|sch|public",
+        "n|col|public.todos.user_id"
+      ]
+    }
+  ],
+  "ddl": [
+    {
+      "schema": "public",
+      "name": "todos",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "public",
+      "table": "todos",
+      "name": "id",
       "type": "serial",
       "typeSchema": null,
       "notNull": true,
@@ -20,25 +65,12 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "todos"
+      "entityType": "columns"
     },
     {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
+      "schema": "public",
+      "table": "todos",
       "name": "user_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "todos"
-    },
-    {
       "type": "text",
       "typeSchema": null,
       "notNull": true,
@@ -46,12 +78,25 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "text",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "todos"
+      "entityType": "columns"
     },
     {
+      "schema": "public",
+      "table": "todos",
+      "name": "text",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "public",
+      "table": "todos",
+      "name": "done",
       "type": "boolean",
       "typeSchema": null,
       "notNull": true,
@@ -59,12 +104,12 @@
       "default": "false",
       "generated": null,
       "identity": null,
-      "name": "done",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "todos"
+      "entityType": "columns"
     },
     {
+      "schema": "public",
+      "table": "todos",
+      "name": "created_at",
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -72,12 +117,12 @@
       "default": "now()",
       "generated": null,
       "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "todos"
+      "entityType": "columns"
     },
     {
+      "schema": "public",
+      "table": "todos",
+      "name": "todos_user_id_idx",
       "nameExplicit": true,
       "columns": [
         {
@@ -93,21 +138,17 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "todos_user_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "todos"
+      "entityType": "indexes"
     },
     {
+      "schema": "public",
+      "table": "todos",
+      "name": "todos_pkey",
       "columns": [
         "id"
       ],
       "nameExplicit": false,
-      "name": "todos_pkey",
-      "schema": "public",
-      "table": "todos",
       "entityType": "pks"
     }
-  ],
-  "renames": []
+  ]
 }
