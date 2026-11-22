@@ -176,8 +176,6 @@ All versions live in the root `package.json` `catalog`; add packages with `bun a
 
 - `alchemy` + `@alchemy.run/*` (exact beta peers).
 - `effect` + `@effect/*` (same patch).
-- `drizzle-orm` + `drizzle-kit` pinned to `1.0.0-rc.5-ab785fc` (`latest` is the old 0.x).
+- `drizzle-orm` + `drizzle-kit` pinned to `1.0.0-rc.5` (`latest` is the old 0.x).
 - `better-auth` pinned to `1.7.5`; pass it explicitly when adding to a workspace.
 - `@tanstack/react-start` must match its exact `@tanstack/react-router` version.
-
-`@alchemy.run/cloudflare@2.0.0-beta.84` is patched (`patches/`) with the dev-server fix from [alchemy-run/alchemy#2525](https://github.com/alchemy-run/alchemy/pull/2525). Remove the patch once a release includes it.
