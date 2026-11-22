@@ -121,9 +121,19 @@ const FEATURES: readonly FeatureItem[] = [
 ];
 
 const STORY_MS = 6000;
-const TICK_MS = 50;
 
-function FeatureIcon({ feature, active, size = "md" }: { feature: FeatureItem; active: boolean; size?: "sm" | "md" }) {
+function FeatureIcon({
+  feature,
+  active,
+  onPrimary = false,
+  size = "md",
+}: {
+  feature: FeatureItem;
+  active: boolean;
+  /** The icon sits on a filled primary surface, such as the selected pill. */
+  onPrimary?: boolean;
+  size?: "sm" | "md";
+}) {
   if (feature.tiboLogo) {
     return <TiboMark idle={false} className={size === "sm" ? "size-4 shrink-0" : "size-5 shrink-0"} />;
   }
@@ -134,7 +144,11 @@ function FeatureIcon({ feature, active, size = "md" }: { feature: FeatureItem; a
       className={cn(
         size === "sm" ? "size-3.5 shrink-0" : "size-4 shrink-0",
         "transition-colors",
-        active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+        onPrimary
+          ? "text-primary-foreground"
+          : active
+            ? "text-primary"
+            : "text-muted-foreground group-hover:text-foreground",
       )}
     />
   );
@@ -143,31 +157,44 @@ function FeatureIcon({ feature, active, size = "md" }: { feature: FeatureItem; a
 export function FeatureShowcase() {
   const reduced = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [run, setRun] = useState(0);
   const [manualPaused, setManualPaused] = useState(false);
   const [stageHover, setStageHover] = useState(false);
-  const elapsedRef = useRef(0);
+  const [inView, setInView] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const pillsRef = useRef<HTMLDivElement>(null);
 
   const active = FEATURES[activeIndex]!;
-  const paused = Boolean(reduced) || manualPaused || stageHover;
-  const progress = reduced ? 1 : Math.min(1, elapsedMs / STORY_MS);
+  const paused = Boolean(reduced) || manualPaused || stageHover || !inView;
+  // The story timer is the CSS animation on the active progress bar: nothing re-renders while it runs.
+  const progressStyle = { animationDuration: `${STORY_MS}ms`, animationPlayState: paused ? "paused" : "running" };
 
   useEffect(() => {
-    if (paused) return;
-    const id = window.setInterval(() => {
-      const next = elapsedRef.current + TICK_MS;
-      if (next >= STORY_MS) {
-        elapsedRef.current = 0;
-        setElapsedMs(0);
-        setActiveIndex((index) => (index + 1) % FEATURES.length);
-      } else {
-        elapsedRef.current = next;
-        setElapsedMs(next);
+    const section = sectionRef.current;
+    if (!section) return;
+    const observer = new IntersectionObserver(([entry]) => setInView(entry?.isIntersecting ?? false));
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
+
+  // Panels differ in height. Keep the tallest one seen at this width so the page below stops jumping.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    let width = stage.offsetWidth;
+    const observer = new ResizeObserver(() => {
+      if (stage.offsetWidth !== width) {
+        width = stage.offsetWidth;
+        stage.style.minHeight = "";
+        return;
       }
-    }, TICK_MS);
-    return () => window.clearInterval(id);
-  }, [paused]);
+      const height = stage.offsetHeight;
+      if (height > (Number.parseFloat(stage.style.minHeight) || 0)) stage.style.minHeight = `${height}px`;
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const scroller = pillsRef.current;
@@ -178,19 +205,17 @@ export function FeatureShowcase() {
   }, [activeIndex, reduced]);
 
   const selectIndex = (index: number) => {
-    elapsedRef.current = 0;
-    setElapsedMs(0);
+    setRun((value) => value + 1);
     setActiveIndex(index);
   };
 
   const step = (delta: number) => {
-    elapsedRef.current = 0;
-    setElapsedMs(0);
+    setRun((value) => value + 1);
     setActiveIndex((index) => (index + delta + FEATURES.length) % FEATURES.length);
   };
 
   return (
-    <section id="features" aria-labelledby="features-heading" className="scroll-mt-24 py-16 sm:py-24">
+    <section ref={sectionRef} id="features" aria-labelledby="features-heading" className="scroll-mt-24 py-16 sm:py-24">
       <div className="flex items-end justify-between gap-4">
         <h2 id="features-heading" className="text-section font-[630] text-balance">
           Everything inside Dueboard.
@@ -214,7 +239,7 @@ export function FeatureShowcase() {
       {/* Instagram-Story-style 8-segment progress bar */}
       <div role="group" aria-label="Feature progress" className="mt-6 grid grid-cols-8 gap-1.5 sm:gap-2">
         {FEATURES.map((feature, index) => {
-          const fill = index < activeIndex ? 1 : index === activeIndex ? progress : 0;
+          const isActive = index === activeIndex;
           return (
             <button
               key={feature.id}
@@ -225,10 +250,21 @@ export function FeatureShowcase() {
               className="group py-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="block h-1.5 w-full overflow-hidden rounded-full bg-foreground/12 transition-colors group-hover:bg-foreground/22">
-                <span
-                  className="block h-full w-full origin-left rounded-full bg-primary transition-[transform] duration-75 ease-linear"
-                  style={{ transform: `scaleX(${fill})` }}
-                />
+                {isActive && !reduced ? (
+                  <span
+                    key={run}
+                    className="block h-full w-full origin-left animate-story-progress rounded-full bg-primary"
+                    style={progressStyle}
+                    onAnimationEnd={() => setActiveIndex((current) => (current + 1) % FEATURES.length)}
+                  />
+                ) : (
+                  <span
+                    className={cn(
+                      "block h-full w-full origin-left rounded-full bg-primary",
+                      index > activeIndex && "scale-x-0",
+                    )}
+                  />
+                )}
               </span>
             </button>
           );
@@ -255,7 +291,7 @@ export function FeatureShowcase() {
                 {feature.tiboLogo ? (
                   <TiboMark idle={false} className="size-4 shrink-0" />
                 ) : (
-                  <FeatureIcon feature={feature} active={false} size="sm" />
+                  <FeatureIcon feature={feature} active={false} onPrimary={isActive} size="sm" />
                 )}
                 {feature.title}
               </button>
@@ -269,7 +305,9 @@ export function FeatureShowcase() {
               <FeatureIcon feature={active} active size="sm" />
               {active.title}
             </span>
-            <p className="text-xs leading-relaxed text-pretty text-muted-foreground">{active.summary}</p>
+            <p className="min-h-[4lh] text-xs leading-relaxed sm:min-h-[2lh] text-pretty text-muted-foreground">
+              {active.summary}
+            </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
@@ -348,8 +386,9 @@ export function FeatureShowcase() {
                 {isActive && (
                   <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-[3px] bg-foreground/8">
                     <span
-                      className="block h-full w-full origin-left bg-primary transition-[transform] duration-75 ease-linear"
-                      style={{ transform: `scaleX(${progress})` }}
+                      key={run}
+                      className={cn("block h-full w-full origin-left bg-primary", !reduced && "animate-story-progress")}
+                      style={reduced ? undefined : progressStyle}
                     />
                   </span>
                 )}
@@ -359,6 +398,7 @@ export function FeatureShowcase() {
         </div>
 
         <div
+          ref={stageRef}
           id={`feature-panel-${active.id}`}
           role="tabpanel"
           aria-labelledby={`feature-tab-${active.id}`}
@@ -366,7 +406,7 @@ export function FeatureShowcase() {
           onPointerLeave={() => setStageHover(false)}
           onFocusCapture={() => setStageHover(true)}
           onBlurCapture={() => setStageHover(false)}
-          className="relative flex min-h-[30rem] flex-col lg:min-h-[36rem]"
+          className="relative flex min-h-[30rem] min-w-0 flex-col lg:min-h-[36rem]"
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -375,7 +415,7 @@ export function FeatureShowcase() {
               animate={{ opacity: 1, y: 0 }}
               exit={reduced ? undefined : { opacity: 0, y: -4 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
-              className="flex flex-1 flex-col"
+              className="flex min-w-0 flex-1 flex-col"
             >
               {active.id === "plan" && <TasksHabitsGoalsPanel />}
               {active.id === "live" && <ConnectionsLivePanel />}

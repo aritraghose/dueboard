@@ -278,6 +278,15 @@
       opacity: 0;
     }
   }
+  --animate-story-progress: story-progress 6s linear both;
+  @keyframes story-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
   --animate-focus-breathe: focus-breathe 2.4s ease-in-out infinite;
   @keyframes focus-breathe {
     0%,
