@@ -149,6 +149,7 @@ bun run dev:web   # terminal 2, open the printed websiteUrl
 3. Copy `api/.env.example` to:
    - `api/.env` (dev): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
    - `api/.env.<stage>` (each deployed stage, such as `.env.staging`): the same, plus `AUTH_BASE_URL` set to that stage's website origin. All `.env*` files but the template are gitignored.
+   - The `production` stage uses `api/.env.prod`. Never name a stage file `.env.production`, `.env.development`, `.env.test` or `.env.local`: Bun loads those by itself, and `alchemy dev` runs with `NODE_ENV=production`, so a `.env.production` would override `api/.env` in local dev.
 
 ### Deploy
 
