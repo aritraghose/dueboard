@@ -22,6 +22,7 @@ import { isLocalDate, type LocalDate, todayIn } from "@/lib/dates";
 import { canonical, seo } from "@/lib/seo";
 import { lastCheckedUser, type OnboardedUser, rememberCheckedUser } from "@/lib/session-cache";
 import { readSidebarOpen } from "@/lib/sidebar-state";
+import { cn } from "@/lib/utils";
 import { getSessionUser } from "../session.ts";
 
 const TABS = [
@@ -232,7 +233,13 @@ function ProfileCard({ profile, signedIn }: { profile: Profile; signedIn: boolea
       <div className="flex flex-col gap-4 px-5 pb-5">
         <div className="-mt-11 flex flex-wrap items-end justify-between gap-3">
           <PersonAvatar person={person} className="size-22 text-2xl ring-4 ring-card" />
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div
+            className={cn(
+              "flex flex-wrap items-center justify-end gap-2",
+              // Signed out, the buttons are too wide to sit beside the avatar on a phone: give them their own full row.
+              !signedIn && "max-sm:w-full max-sm:*:flex-1",
+            )}
+          >
             {profile.askEnabled && (
               <Button asChild variant="outline">
                 <Link to="/@{$username}/ask" params={{ username: person.username }}>
