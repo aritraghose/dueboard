@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "api", "runtimeExecutable": "sh", "runtimeArgs": ["-c", "cd api && bun run dev"], "port": 1337 },
+    { "name": "web", "runtimeExecutable": "sh", "runtimeArgs": ["-c", "cd web && bun run dev"], "port": 1339 }
+  ]
+}
